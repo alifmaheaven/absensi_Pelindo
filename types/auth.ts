@@ -1,0 +1,73 @@
+import { IMeta } from "./theme";
+
+export interface IUser {
+  id: string;
+  company_id: null;
+  role_id: string;
+  contract_id: null;
+  location_id: null;
+  site_id: null;
+  code: string;
+  name: string;
+  email: string;
+  password: string;
+  phone: null;
+  start_user: null;
+  end_user: null;
+  first_login: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: null;
+  x1: null;
+  x2: null;
+  x3: null;
+  x4: null;
+  x5: null;
+  x6: null;
+  x7: null;
+  x8: null;
+  x9: null;
+  x10: null;
+  x11: null;
+  x12: null;
+  x13: null;
+  x14: null;
+  x15: null;
+  x16: null;
+  x17: null;
+  x18: null;
+  x19: null;
+  x20: null;
+}
+
+export interface IPermission {
+  id: string;
+  role_id: string;
+  access_id: string;
+  code: string;
+  name: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: null;
+  x1: null;
+  x2: null;
+  x3: null;
+  x4: null;
+  x5: null;
+  x6: null;
+  x7: null;
+  x8: null;
+  x9: null;
+  x10: null;
+  x11: null;
+  x12: null;
+  x13: null;
+  x14: null;
+  x15: null;
+  x16: null;
+  x17: null;
+  x18: null;
+  x19: null;
+  x20: null;
+}

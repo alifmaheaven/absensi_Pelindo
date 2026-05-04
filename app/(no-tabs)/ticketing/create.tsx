@@ -366,8 +366,11 @@ export default function TicketingCreateScreen() {
       router.replace("/ticketing");
     } catch (error) {
       const err = error as THttpErrorResult;
-      console.error(err);
-      showToast("Gagal create ticket!", "error");
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Gagal Create Ticket",
+        err?.message || "Terjadi kesalahan, coba lagi.",
+      );
     } finally {
       setLoadingSubmit(false);
     }

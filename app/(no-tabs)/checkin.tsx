@@ -84,13 +84,36 @@ export default function CheckinScreen() {
         setSiteData(sites ? sites : []);
 
         const statuses: IAttendanceStatus[] = statusRes.data?.data || [];
-        const checkinStatus = statuses.find(
+        // Try finding checkin status: first by known code, then by name keywords
+        let checkinStatus = statuses.find(
           (s) => s.code === ATTENDANCE_STATUS_CODE_CHECKIN,
         );
+        if (!checkinStatus) {
+          checkinStatus = statuses.find((s) => {
+            const name = s.name?.toLowerCase() ?? "";
+            const code = s.code?.toLowerCase() ?? "";
+            return (
+              name.includes("hadir") ||
+              name.includes("check") ||
+              name.includes("attend") ||
+              name.includes("masuk") ||
+              code.includes("hadir") ||
+              code.includes("checkin") ||
+              code.includes("attend") ||
+              code.includes("masuk")
+            );
+          });
+        }
+        if (!checkinStatus && statuses.length > 0) {
+          checkinStatus = statuses[0];
+        }
         if (checkinStatus) {
           setCheckinStatusId(checkinStatus.id);
         } else {
-          console.error("Check-in status not found in attendance_status table");
+          Alert.alert(
+            "Error",
+            "Attendance status tidak ditemukan. Hubungi admin untuk setup attendance status terlebih dahulu.",
+          );
         }
       } catch (error) {
         console.error("Error fetching sites:", error);
@@ -332,8 +355,11 @@ export default function CheckinScreen() {
       router.replace("/");
     } catch (error) {
       const err = error as THttpErrorResult;
-      console.error(err);
-      showToast("Gagal Check In!", "error");
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Gagal Check In",
+        err?.message || "Terjadi kesalahan, coba lagi.",
+      );
     } finally {
       setLoadingSubmit(false);
     }

@@ -53,11 +53,26 @@ export default function IzinScreen() {
 
         const statusMap: Record<string, string> = {};
         let checkinStatusId = "";
+        const checkinStatus = status.find((s) => s.code === ATTENDANCE_STATUS_CODE_CHECKIN)
+          ?? status.find((s) => {
+            const name = s.name?.toLowerCase() ?? "";
+            const code = s.code?.toLowerCase() ?? "";
+            return (
+              name.includes("hadir") ||
+              name.includes("check") ||
+              name.includes("attend") ||
+              name.includes("masuk") ||
+              code.includes("hadir") ||
+              code.includes("checkin") ||
+              code.includes("attend") ||
+              code.includes("masuk")
+            );
+          });
+        if (checkinStatus) {
+          checkinStatusId = checkinStatus.id;
+        }
         status.forEach((item) => {
           statusMap[item.id] = item.name;
-          if (item.code === ATTENDANCE_STATUS_CODE_CHECKIN) {
-            checkinStatusId = item.id;
-          }
         });
 
         const attendanceWithStatus = attendance

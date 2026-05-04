@@ -83,7 +83,21 @@ export default function LeaveScreen() {
 
         setStatusData(
           status
-            ? status.filter((s) => s.code !== ATTENDANCE_STATUS_CODE_CHECKIN)
+            ? status.filter((s) => {
+                const name = s.name?.toLowerCase() ?? "";
+                const code = s.code?.toLowerCase() ?? "";
+                const isCheckin =
+                  code === ATTENDANCE_STATUS_CODE_CHECKIN ||
+                  name.includes("hadir") ||
+                  name.includes("check") ||
+                  name.includes("attend") ||
+                  name.includes("masuk") ||
+                  code.includes("hadir") ||
+                  code.includes("checkin") ||
+                  code.includes("attend") ||
+                  code.includes("masuk");
+                return !isCheckin;
+              })
             : [],
         );
         setSiteData(sites ? sites : []);
@@ -285,8 +299,11 @@ export default function LeaveScreen() {
       router.replace("/");
     } catch (error) {
       const err = error as THttpErrorResult;
-      console.error(err);
-      showToast("Gagal Check In!", "error");
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Gagal",
+        err?.message || "Terjadi kesalahan, coba lagi.",
+      );
     } finally {
       setLoadingSubmit(false);
     }

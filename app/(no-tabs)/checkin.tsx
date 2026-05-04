@@ -106,15 +106,18 @@ export default function CheckinScreen() {
     const lat = Number(location?.coords.latitude);
     const lon = Number(location?.coords.longitude);
 
-    if (isNaN(lat) || isNaN(lon)) return [];
+    if (isNaN(lat) || isNaN(lon)) return sites.map((s) => ({ ...s, distance: Infinity, inRange: false }));
 
-    const limitedSites = sites.slice(0, MAX_SITES_PROXIMITY);
-    const match = limitedSites.find((s) => {
-      return (
-        getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance
-      );
-    });
-    return match ? [match] : [];
+    const withDistance = sites
+      .slice(0, MAX_SITES_PROXIMITY)
+      .map((s) => ({
+        ...s,
+        distance: getDistanceInMeters(lat, lon, s.latitude, s.longitude),
+        inRange: getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance,
+      }))
+      .sort((a, b) => a.distance - b.distance);
+
+    return withDistance;
   }, [siteData, location]);
 
   useEffect(() => {
@@ -392,24 +395,25 @@ export default function CheckinScreen() {
             {/* Select Location */}
             <Text style={styles.sectionTitle}>Select Location</Text>
 
-            {sitesList?.length === 0 ? (
+            {location && sitesList?.length === 0 ? (
               <View style={styles.emptyStateContainer}>
                 <Text style={styles.emptyStateEmoji}>📍</Text>
                 <Text style={styles.emptyStateText}>
-                  Tidak ada lokasi absen di sekitar Anda
+                  Tidak ada lokasi absen terdaftar
                 </Text>
                 <Text style={styles.emptyStateSubText}>
-                  Pastikan Anda berada di lokasi yang terdaftar
+                  Hubungi admin untuk menambahkan lokasi
                 </Text>
               </View>
             ) : (
-              sitesList?.map((item) => (
+              sitesList?.map((item: any) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[
                     styles.locationOption,
                     selectedLocation === item.id &&
                       styles.locationOptionSelected,
+                    item.inRange === false && styles.locationOptionOutOfRange,
                   ]}
                   onPress={() => setSelectedLocation(item.id)}
                   activeOpacity={0.7}
@@ -428,12 +432,22 @@ export default function CheckinScreen() {
                     </View>
                   </View>
                   <View style={styles.locationTextContainer}>
-                    <Text style={styles.locationTitle}>{item.name}</Text>
+                    <View style={styles.locationTitleRow}>
+                      <Text style={styles.locationTitle}>{item.name}</Text>
+                      {item.inRange === false && (
+                        <Text style={styles.outOfRangeBadge}>Di luar jangkauan</Text>
+                      )}
+                    </View>
                     <Text style={styles.locationAddress}>
                       {item.description}
                     </Text>
                     <Text style={styles.locationCoords}>
                       {item.longitude}, {item.latitude}
+                      {item.distance != null && isFinite(item.distance)
+                        ? " • " + (item.distance < 1000
+                          ? Math.round(item.distance) + " m"
+                          : (item.distance / 1000).toFixed(1) + " km")
+                        : ""}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -696,6 +710,9 @@ const styles = StyleSheet.create({
     borderColor: "#1e90ff",
     backgroundColor: "#f8fbff",
   },
+  locationOptionOutOfRange: {
+    opacity: 0.6,
+  },
   radioContainer: {
     marginRight: 14,
     marginTop: 2,
@@ -721,11 +738,27 @@ const styles = StyleSheet.create({
   locationTextContainer: {
     flex: 1,
   },
+  locationTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
   locationTitle: {
     fontSize: 14,
     fontWeight: "bold",
     color: "#333",
-    marginBottom: 4,
+    flex: 1,
+  },
+  outOfRangeBadge: {
+    fontSize: 10,
+    color: "#e67e22",
+    backgroundColor: "#fef3e2",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    overflow: "hidden",
+    fontWeight: "600",
   },
   locationAddress: {
     fontSize: 12,

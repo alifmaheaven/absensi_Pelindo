@@ -1,4 +1,5 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
+import DatePicker from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast";
 import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE, ATTENDANCE_STATUS_CODE_CHECKIN } from "@/constants";
 import { useRequest } from "@/hooks/use-request";
@@ -56,6 +57,7 @@ export default function LeaveScreen() {
   const [statusData, setStatusData] = useState<IAttendanceStatus[]>([]);
   const [loadingImage, setLoadingImage] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
   const [attendanceSelected, setAttendanceSelected] = useState("");
   const { user } = useAuthStore();
@@ -372,16 +374,27 @@ export default function LeaveScreen() {
 
             {/* Tanggal Izin/Cuti */}
             <Text style={styles.sectionTitle}>Tanggal Izin/Cuti</Text>
-            <View style={styles.dateContainer}>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#999"
-                value={leaveDate}
-                onChangeText={setLeaveDate}
-                keyboardType="numbers-and-punctuation"
-              />
-            </View>
+            <TouchableOpacity
+              style={styles.dateContainer}
+              onPress={() => setDatePickerVisible(true)}
+            >
+              <View style={styles.dateRow}>
+                <Ionicons name="calendar-outline" size={20} color="#1e90ff" />
+                <Text style={leaveDate ? styles.dateValue : styles.datePlaceholder}>
+                  {leaveDate || "Pilih tanggal"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <DatePicker
+              visible={datePickerVisible}
+              value={leaveDate}
+              onConfirm={(date) => {
+                setLeaveDate(date);
+                setDatePickerVisible(false);
+              }}
+              onClose={() => setDatePickerVisible(false)}
+            />
 
             {/* Notes */}
             <Text style={styles.sectionTitle}>Notes</Text>
@@ -757,11 +770,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#f0f0f0",
     marginBottom: 24,
-  },
-  dateInput: {
     padding: 16,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dateValue: {
     fontSize: 14,
     color: "#333",
+  },
+  datePlaceholder: {
+    fontSize: 14,
+    color: "#999",
   },
 
   // Notes

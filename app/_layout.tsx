@@ -19,35 +19,48 @@ export default function RootLayout() {
 
   async function checkVersion() {
     try {
+      console.log("[VersionCheck] Fetching latest version...");
       const latest = await getLatestVersion();
-      if (!latest?.code) return;
+      console.log("[VersionCheck] Latest:", JSON.stringify(latest));
+
+      if (!latest?.code) {
+        console.log("[VersionCheck] No version code, skipping");
+        return;
+      }
 
       const storedCode = await getVersionCode();
+      console.log("[VersionCheck] Stored code:", storedCode);
 
       if (!storedCode) {
-        // First launch — store current version, no popup
+        console.log("[VersionCheck] First launch, saving code:", latest.code);
         await saveVersionCode(latest.code);
         return;
       }
 
+      console.log("[VersionCheck] Comparing:", latest.code, "vs", storedCode);
+
       if (latest.code !== storedCode) {
-        Alert.alert(
-          "Update Available",
-          `A new version (${latest.name}) is available. Please update to continue using the app.`,
-          [
-            { text: "Later", style: "cancel" },
-            {
-              text: "Download",
-              onPress: () => {
-                const url = latest.url;
-                if (url) Linking.openURL(url);
+        console.log("[VersionCheck] New version detected, showing alert");
+        // Small delay to ensure navigation has settled before showing alert
+        setTimeout(() => {
+          Alert.alert(
+            "Update Available",
+            `A new version (${latest.name}) is available. Please update to continue using the app.`,
+            [
+              { text: "Later", style: "cancel" },
+              {
+                text: "Download",
+                onPress: () => {
+                  const url = latest.url;
+                  if (url) Linking.openURL(url);
+                },
               },
-            },
-          ]
-        );
+            ]
+          );
+        }, 1000);
       }
-    } catch {
-      // Silently fail — don't block the user if version check fails
+    } catch (err) {
+      console.error("[VersionCheck] Error:", JSON.stringify(err));
     }
   }
 

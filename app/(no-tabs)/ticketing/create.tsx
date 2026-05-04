@@ -133,7 +133,7 @@ export default function TicketingCreateScreen() {
                 const windowEnd = new Date(
                   checkinDate.getTime() + ATTENDANCE_WINDOW_HOURS * 60 * 60 * 1000,
                 );
-                return now > checkinDate && now < windowEnd;
+                return now > checkinDate && now < windowEnd && !item.checkout;
               })
               ?.map((item) => ({
                 ...item,
@@ -347,7 +347,7 @@ export default function TicketingCreateScreen() {
         company_id: user?.company_id || "",
         contract_id: user?.contract_id || "",
         site_id: user?.site_id || "",
-        code: "",
+        code: `TKT-${Date.now()}`,
         status_id: defaultStatusId,
         start_ticket: getNowJakarta(),
 

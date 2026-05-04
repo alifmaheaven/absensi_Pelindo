@@ -311,7 +311,7 @@ export default function CheckinScreen() {
         site_id: selectedLocation || "",
         name: "attendance",
         description: notes || "Attendance",
-        code: "",
+        code: `CHK-${Date.now()}`,
         checkin: new Date().toLocaleString("sv-SE", {
           timeZone: TIMEZONE,
         }),

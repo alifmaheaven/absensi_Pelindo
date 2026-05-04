@@ -1,6 +1,6 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
-import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE } from "@/constants";
+import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE, ATTENDANCE_STATUS_CODE_CHECKIN } from "@/constants";
 import { useRequest } from "@/hooks/use-request";
 import { saveCheckInId } from "@/lib/storage";
 import {
@@ -49,6 +49,7 @@ export default function LeaveScreen() {
   const { showToast } = useToast();
 
   const [notes, setNotes] = useState("");
+  const [leaveDate, setLeaveDate] = useState("");
   const [images, setImages] = useState<IImage[]>([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
@@ -78,7 +79,11 @@ export default function LeaveScreen() {
         const sites = sitesRes.data?.data;
         const status = statusRes.data?.data;
 
-        setStatusData(status ? status : []);
+        setStatusData(
+          status
+            ? status.filter((s) => s.code !== ATTENDANCE_STATUS_CODE_CHECKIN)
+            : [],
+        );
         setSiteData(sites ? sites : []);
       } catch (error) {
         console.error("Error fetching sites:", error);
@@ -215,6 +220,11 @@ export default function LeaveScreen() {
       return;
     }
 
+    if (leaveDate == "") {
+      showToast("Pilih tanggal izin/cuti!", "error");
+      return;
+    }
+
     if (images.length === 0) {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
       return;
@@ -255,8 +265,8 @@ export default function LeaveScreen() {
         site_id: user?.site_id ?? "",
         name: "attendance",
         description: notes || "Attendance",
-        code: "",
-        checkin: new Date().toLocaleString("sv-SE", {
+        code: `LV-${Date.now()}`,
+        checkin: new Date(leaveDate).toLocaleString("sv-SE", {
           timeZone: TIMEZONE,
         }),
         attendance_status_id: attendanceSelected,
@@ -358,6 +368,19 @@ export default function LeaveScreen() {
                   ))}
                 </View>
               )}
+            </View>
+
+            {/* Tanggal Izin/Cuti */}
+            <Text style={styles.sectionTitle}>Tanggal Izin/Cuti</Text>
+            <View style={styles.dateContainer}>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#999"
+                value={leaveDate}
+                onChangeText={setLeaveDate}
+                keyboardType="numbers-and-punctuation"
+              />
             </View>
 
             {/* Notes */}
@@ -724,6 +747,20 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     fontWeight: "600",
+    color: "#333",
+  },
+
+  // Date Input
+  dateContainer: {
+    backgroundColor: "#fafafa",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    marginBottom: 24,
+  },
+  dateInput: {
+    padding: 16,
+    fontSize: 14,
     color: "#333",
   },
 

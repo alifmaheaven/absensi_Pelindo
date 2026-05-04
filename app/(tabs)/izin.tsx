@@ -1,3 +1,4 @@
+import { ATTENDANCE_STATUS_CODE_CHECKIN } from "@/constants";
 import { getAttendanceList, getAttendanceStatus } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance } from "@/types";
@@ -51,14 +52,20 @@ export default function IzinScreen() {
         const status = statusRes.data?.data || [];
 
         const statusMap: Record<string, string> = {};
+        let checkinStatusId = "";
         status.forEach((item) => {
           statusMap[item.id] = item.name;
+          if (item.code === ATTENDANCE_STATUS_CODE_CHECKIN) {
+            checkinStatusId = item.id;
+          }
         });
 
-        const attendanceWithStatus = attendance.map((item) => ({
-          ...item,
-          status: statusMap[item.attendance_status_id] || "Menunggu",
-        }));
+        const attendanceWithStatus = attendance
+          .filter((item) => item.attendance_status_id !== checkinStatusId)
+          .map((item) => ({
+            ...item,
+            status: statusMap[item.attendance_status_id] || "Menunggu",
+          }));
 
         setAttendanceData(attendanceWithStatus);
       } catch (error) {
@@ -81,7 +88,7 @@ export default function IzinScreen() {
     content = attendanceData?.map((item) => (
       <View key={item.id} style={styles.izinCard}>
         <View style={styles.izinHeader}>
-          <Text style={styles.izinType}>{item.name}</Text>
+          <Text style={styles.izinType}>{item.description}</Text>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>

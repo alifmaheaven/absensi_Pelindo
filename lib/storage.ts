@@ -3,6 +3,7 @@ import { Platform } from "react-native";
 
 const TOKEN_KEY = "user_token";
 const CHECKIN_ID_KEY = "checkin_id";
+const VERSION_CODE_KEY = "last_version_code";
 
 export async function saveToken(token: string) {
   if (Platform.OS === "web") {
@@ -48,4 +49,19 @@ export async function removeCheckInId() {
     return;
   }
   await SecureStore.deleteItemAsync(CHECKIN_ID_KEY);
+}
+
+export async function saveVersionCode(code: string) {
+  if (Platform.OS === "web") {
+    try { localStorage.setItem(VERSION_CODE_KEY, code); } catch (e) {}
+    return;
+  }
+  await SecureStore.setItemAsync(VERSION_CODE_KEY, code);
+}
+
+export async function getVersionCode(): Promise<string | null> {
+  if (Platform.OS === "web") {
+    try { return localStorage.getItem(VERSION_CODE_KEY); } catch (e) { return null; }
+  }
+  return await SecureStore.getItemAsync(VERSION_CODE_KEY);
 }

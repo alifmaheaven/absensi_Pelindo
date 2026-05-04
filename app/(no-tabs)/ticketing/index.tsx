@@ -449,7 +449,10 @@ const TicketItem = ({
 };
 
 const Badge = ({ text, variant }: BadgeProps) => {
-  const style = BADGE_VARIANT[variant];
+  const style = BADGE_VARIANT[variant] ?? {
+    bg: "#F0F0F0",
+    color: "#777",
+  };
 
   return (
     <View style={[styles.badge, { backgroundColor: style.bg }]}>

@@ -1,6 +1,14 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { useToast } from "@/components/ui/toast";
+import {
+  DEFAULT_PAGE_SIZE,
+  IMAGE_BASE_PATH,
+  IMAGE_MAX_WIDTH,
+  IMAGE_QUALITY,
+  MAX_SITES_PROXIMITY,
+  TIMEZONE,
+} from "@/constants";
 import { useRequest } from "@/hooks/use-request";
 import {
   deleteEvid,
@@ -66,12 +74,12 @@ export default function CheckoutScreen() {
   const [removedImages, setRemovedImages] = useState<IImage[]>([]);
 
   const { run: getSite } = useRequest(() =>
-    getAttendanceSite({ page: 1, per_page: 10 }),
+    getAttendanceSite({ page: 1, per_page: DEFAULT_PAGE_SIZE }),
   );
   const { run: getCheckIn } = useRequest(() =>
     getAttendanceList({
       page: 1,
-      per_page: 10,
+      per_page: DEFAULT_PAGE_SIZE,
       order_by_desc: ["created_at"],
       user_id_exact: [user?.id ?? ""],
     }),
@@ -104,7 +112,7 @@ export default function CheckoutScreen() {
 
     if (isNaN(lat) || isNaN(lon)) return [];
 
-    const limitedSites = sites.slice(0, 50);
+    const limitedSites = sites.slice(0, MAX_SITES_PROXIMITY);
     const match = limitedSites.find((s) => {
       return (
         getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance
@@ -164,7 +172,7 @@ export default function CheckoutScreen() {
           if (evidences?.length) {
             const evidencesData = evidences?.map((e) => ({
               id: e.id,
-              uri: new URL(`/public/images/${e.file}`, BASE_URL).toString(),
+              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
               path: e.file,
               link: e.file,
             }));
@@ -275,8 +283,8 @@ export default function CheckoutScreen() {
       }
 
       const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: 1280,
-        quality: 0.5,
+        maxWidth: IMAGE_MAX_WIDTH,
+        quality: IMAGE_QUALITY,
       });
       console.log("[PickImage] Compressed result:", compressed);
 
@@ -386,7 +394,7 @@ export default function CheckoutScreen() {
       await updateAttendance({
         id: checkInDataById?.id!,
         checkout: new Date().toLocaleString("sv-SE", {
-          timeZone: "Asia/Jakarta",
+          timeZone: TIMEZONE,
         }),
       });
 
@@ -507,23 +515,6 @@ export default function CheckoutScreen() {
                 </TouchableOpacity>
               ))
             )}
-
-            {/* Shift Information */}
-            <View style={styles.infoCard}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoIcon}>🕒</Text>
-                <Text style={styles.infoTitle}>Shift information</Text>
-              </View>
-              <View style={styles.infoDivider} />
-              <View style={styles.infoDetailRow}>
-                <Text style={styles.infoLabel}>Shift</Text>
-                <Text style={styles.infoValue}>Morning Shift</Text>
-              </View>
-              <View style={styles.infoDetailRow}>
-                <Text style={styles.infoLabel}>Time</Text>
-                <Text style={styles.infoValue}>09:00 - 17:00</Text>
-              </View>
-            </View>
 
             {/* Notes */}
             <Text style={styles.sectionTitle}>Notes (opsional)</Text>

@@ -1,3 +1,4 @@
+import { DEFAULT_WORK_HOURS } from "@/constants";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function getHourMinute(datetime?: string | null): string {
@@ -41,7 +42,7 @@ export function mapTimeToColor(
   }
 
   const scheduledTime = new Date(targetTime);
-  scheduledTime.setHours(type === "checkin" ? 9 : 17);
+  scheduledTime.setHours(type === "checkin" ? DEFAULT_WORK_HOURS.checkin : DEFAULT_WORK_HOURS.checkout);
   scheduledTime.setMinutes(0);
   scheduledTime.setSeconds(0);
   scheduledTime.setMilliseconds(0);

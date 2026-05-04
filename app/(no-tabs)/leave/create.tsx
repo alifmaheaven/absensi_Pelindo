@@ -1,5 +1,6 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
+import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE } from "@/constants";
 import { useRequest } from "@/hooks/use-request";
 import { saveCheckInId } from "@/lib/storage";
 import {
@@ -62,8 +63,8 @@ export default function LeaveScreen() {
     getAttendanceSite({
       page: 1,
       per_page: 10,
-      company_id_exact: [user?.company_id || ""],
-      site_id_exact: [user?.site_id || ""],
+      ...(user?.company_id ? { company_id_exact: [user?.company_id] } : {}),
+      ...(user?.site_id ? { site_id_exact: [user?.site_id] } : {}),
     }),
   );
 
@@ -150,8 +151,8 @@ export default function LeaveScreen() {
       }
 
       const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: 1280,
-        quality: 0.5,
+        maxWidth: IMAGE_MAX_WIDTH,
+        quality: IMAGE_QUALITY,
       });
       console.log("[PickImage] Compressed result:", compressed);
 
@@ -244,7 +245,8 @@ export default function LeaveScreen() {
         });
       }
 
-      const site = siteData?.[0];
+      const userSiteId = user?.site_id;
+      const site = (userSiteId ? siteData?.find((s) => s.id === userSiteId) : undefined) ?? siteData?.[0];
 
       const res = await createAttendance({
         user_id: user?.id ?? "",
@@ -255,7 +257,7 @@ export default function LeaveScreen() {
         description: notes || "Attendance",
         code: "",
         checkin: new Date().toLocaleString("sv-SE", {
-          timeZone: "Asia/Jakarta",
+          timeZone: TIMEZONE,
         }),
         attendance_status_id: attendanceSelected,
         evidence_group_id: groupId,

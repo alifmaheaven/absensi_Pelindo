@@ -1,6 +1,14 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { useToast } from "@/components/ui/toast";
+import {
+  ATTENDANCE_STATUS_CODE_CHECKIN,
+  DEFAULT_PAGE_SIZE,
+  IMAGE_MAX_WIDTH,
+  IMAGE_QUALITY,
+  MAX_SITES_PROXIMITY,
+  TIMEZONE,
+} from "@/constants";
 import { useRequest } from "@/hooks/use-request";
 import { saveCheckInId } from "@/lib/storage";
 import {
@@ -8,12 +16,13 @@ import {
   createGroupId,
   deleteEvidtmp,
   getAttendanceSite,
+  getAttendanceStatus,
   uploadEvid,
   uploadEvidGroupId,
   uploadEvidPermanent,
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
-import { IAttendanceSite, THttpErrorResult } from "@/types";
+import { IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
 import { compressImage, getDistanceInMeters } from "@/utils/utils";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -57,19 +66,32 @@ export default function CheckinScreen() {
   const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
   const [loadingImage, setLoadingImage] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [checkinStatusId, setCheckinStatusId] = useState<string>("");
   const { user } = useAuthStore();
 
   const { run: getSite } = useRequest(() =>
-    getAttendanceSite({ page: 1, per_page: 10 }),
+    getAttendanceSite({ page: 1, per_page: DEFAULT_PAGE_SIZE }),
+  );
+  const { run: getStatus } = useRequest(() =>
+    getAttendanceStatus({ page: 1, per_page: 100 }),
   );
 
   useEffect(() => {
     const fetchSites = async () => {
       try {
-        const res = await getSite();
-        const sites = res.data?.data;
-
+        const [siteRes, statusRes] = await Promise.all([getSite(), getStatus()]);
+        const sites = siteRes.data?.data;
         setSiteData(sites ? sites : []);
+
+        const statuses: IAttendanceStatus[] = statusRes.data?.data || [];
+        const checkinStatus = statuses.find(
+          (s) => s.code === ATTENDANCE_STATUS_CODE_CHECKIN,
+        );
+        if (checkinStatus) {
+          setCheckinStatusId(checkinStatus.id);
+        } else {
+          console.error("Check-in status not found in attendance_status table");
+        }
       } catch (error) {
         console.error("Error fetching sites:", error);
         setSiteData([]);
@@ -86,7 +108,7 @@ export default function CheckinScreen() {
 
     if (isNaN(lat) || isNaN(lon)) return [];
 
-    const limitedSites = sites.slice(0, 50);
+    const limitedSites = sites.slice(0, MAX_SITES_PROXIMITY);
     const match = limitedSites.find((s) => {
       return (
         getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance
@@ -187,8 +209,8 @@ export default function CheckinScreen() {
       }
 
       const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: 1280,
-        quality: 0.5,
+        maxWidth: IMAGE_MAX_WIDTH,
+        quality: IMAGE_QUALITY,
       });
       console.log("[PickImage] Compressed result:", compressed);
 
@@ -291,9 +313,9 @@ export default function CheckinScreen() {
         description: notes || "Attendance",
         code: "",
         checkin: new Date().toLocaleString("sv-SE", {
-          timeZone: "Asia/Jakarta",
+          timeZone: TIMEZONE,
         }),
-        attendance_status_id: "96d0c2f5-58cc-44e8-9297-91dd5bc69900",
+        attendance_status_id: checkinStatusId,
         evidence_group_id: groupId,
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
@@ -417,23 +439,6 @@ export default function CheckinScreen() {
                 </TouchableOpacity>
               ))
             )}
-
-            {/* Shift Information */}
-            <View style={styles.infoCard}>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoIcon}>🕒</Text>
-                <Text style={styles.infoTitle}>Shift information</Text>
-              </View>
-              <View style={styles.infoDivider} />
-              <View style={styles.infoDetailRow}>
-                <Text style={styles.infoLabel}>Shift</Text>
-                <Text style={styles.infoValue}>Morning Shift</Text>
-              </View>
-              <View style={styles.infoDetailRow}>
-                <Text style={styles.infoLabel}>Time</Text>
-                <Text style={styles.infoValue}>09:00 - 17:00</Text>
-              </View>
-            </View>
 
             {/* Notes */}
             <Text style={styles.sectionTitle}>Notes (opsional)</Text>

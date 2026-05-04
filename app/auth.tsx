@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useToast } from "@/components/ui/toast";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { useRequest } from "@/hooks/use-request";
@@ -30,6 +31,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [mcaptchaToken, setMcaptchaToken] = useState("");
   const webViewRef = useRef<WebView>(null);
@@ -84,7 +86,7 @@ export default function LoginScreen() {
       showToast(`Login berhasil! Email: ${email}`, "success");
       router.push("/(tabs)");
     } catch (error) {
-      console.error("Login failed:", error);
+      console.log("Login failed:", error);
 
       // Reset mCaptcha
       setMcaptchaToken("");
@@ -164,14 +166,26 @@ export default function LoginScreen() {
             {/* Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Masukkan password"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={{ justifyContent: "center" }}>
+                <TextInput
+                  style={[styles.input, { paddingRight: 50 }]}
+                  placeholder="Masukkan password"
+                  placeholderTextColor="#999"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity
+                  style={{ position: "absolute", right: 16 }}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye" : "eye-off"}
+                    size={22}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* mCaptcha Widget */}

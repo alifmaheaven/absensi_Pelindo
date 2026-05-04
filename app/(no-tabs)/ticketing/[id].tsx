@@ -2,6 +2,13 @@ import { ArrowLeft, ImageIcon } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
+  ATTENDANCE_WINDOW_HOURS,
+  IMAGE_BASE_PATH,
+  IMAGE_MAX_WIDTH,
+  IMAGE_QUALITY,
+  TIMEZONE,
+} from "@/constants";
+import {
   deleteEvid,
   deleteEvidtmp,
   getAttendanceOption,
@@ -59,29 +66,10 @@ interface Props {
   options: ITicketSeverity[];
 }
 
-const SEVERITY_COLORS: Record<
-  string,
-  { bg: string; border: string; text: string }
-> = {
-  Low: {
-    bg: "rgba(52, 199, 89, 0.15)",
-    border: "#34C759",
-    text: "#1E7F43",
-  },
-  Medium: {
-    bg: "rgba(255, 193, 7, 0.18)",
-    border: "#FFC107",
-    text: "#9A7B00",
-  },
-  High: {
-    bg: "rgba(255, 59, 48, 0.15)",
-    border: "#FF3B30",
-    text: "#B00020",
-  },
-};
+const DEFAULT_SEVERITY_COLOR = { bg: "rgba(150,150,150,0.15)", border: "#999", text: "#555" };
 
 const getNowJakarta = () =>
-  new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" });
+  new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE });
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -130,19 +118,19 @@ export default function TicketingEditScreen() {
             await Promise.all([
               getTicketDevice({
                 page: 1,
-                per_page: 99,
+                per_page: 100,
                 company_id_exact: [user?.company_id || ""],
                 user_id_exact: [user?.id || ""],
                 order_by_desc: ["created_at"],
               }),
               getAttendanceOption({
                 page: 1,
-                per_page: 99,
+                per_page: 100,
                 company_id_exact: [user?.company_id || ""],
                 user_id_exact: [user?.id || ""],
                 order_by_desc: ["created_at"],
               }),
-              getDataSeverity({ page: 1, per_page: 3 }),
+              getDataSeverity({ page: 1, per_page: 100 }),
               getDataEvid({
                 page: 1,
                 per_page: 100,
@@ -165,10 +153,10 @@ export default function TicketingEditScreen() {
               ?.filter((item) => {
                 const checkinDate = new Date(item.checkin);
                 const now = new Date();
-                const eightHoursLater = new Date(
-                  checkinDate.getTime() + 8 * 60 * 60 * 1000,
+                const windowEnd = new Date(
+                  checkinDate.getTime() + ATTENDANCE_WINDOW_HOURS * 60 * 60 * 1000,
                 );
-                return now > checkinDate && now < eightHoursLater;
+                return now > checkinDate && now < windowEnd;
               })
               ?.map((item) => ({
                 ...item,
@@ -185,7 +173,7 @@ export default function TicketingEditScreen() {
           if (evidsData?.length) {
             const evidencesData = evidsData?.map((e) => ({
               id: e?.id,
-              uri: new URL(`/public/images/${e.file}`, BASE_URL).toString(),
+              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
               path: e.file,
               link: e.file,
             }));
@@ -280,8 +268,8 @@ export default function TicketingEditScreen() {
       }
 
       const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: 1280,
-        quality: 0.5,
+        maxWidth: IMAGE_MAX_WIDTH,
+        quality: IMAGE_QUALITY,
       });
       console.log("[PickImage] Compressed result:", compressed);
 
@@ -412,10 +400,7 @@ export default function TicketingEditScreen() {
         contract_id: ticket?.contract_id || "",
         site_id: ticket?.site_id || "",
         code: ticket?.code || "",
-        status_id:
-          statusSelected ||
-          ticket?.status_id ||
-          "357ac48c-c1e0-43bf-a4ae-68e7caa2dfae",
+        status_id: statusSelected || ticket?.status_id || "",
         start_ticket: ticket?.start_ticket || "",
 
         evidence_group_id: groupId,
@@ -805,13 +790,25 @@ export default function TicketingEditScreen() {
   );
 }
 
+function parseSeverityColor(hex: string | undefined) {
+  if (!hex) return DEFAULT_SEVERITY_COLOR;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return {
+    bg: `rgba(${r},${g},${b},0.15)`,
+    border: hex,
+    text: hex,
+  };
+}
+
 export function SeveritySelector({ value, onChange, options }: Props) {
   return (
     <View style={styles.severityContainer}>
       {options?.length > 0 ? (
         options?.map((item) => {
           const isActive = value === item.id;
-          const color = SEVERITY_COLORS[item?.name] || SEVERITY_COLORS["Easy"];
+          const color = parseSeverityColor(item.color);
 
           return (
             <TouchableOpacity

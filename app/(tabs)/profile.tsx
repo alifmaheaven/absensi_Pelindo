@@ -22,11 +22,11 @@ export default function ProfileScreen() {
   const { showToast } = useToast();
 
   const menuItems = [
-    { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun" },
-    { icon: "🔔", label: "Notifikasi", subtitle: "Pengaturan notifikasi" },
-    { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan" },
-    { icon: "❓", label: "Bantuan", subtitle: "Pusat bantuan" },
-    { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}` },
+    { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => showToast("Segera hadir", "info") },
+    { icon: "🔔", label: "Notifikasi", subtitle: "Pengaturan notifikasi", onPress: () => showToast("Segera hadir", "info") },
+    { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan", onPress: () => showToast("Segera hadir", "info") },
+    { icon: "❓", label: "Bantuan", subtitle: "Pusat bantuan", onPress: () => showToast("Segera hadir", "info") },
+    { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => showToast("Segera hadir", "info") },
   ];
 
   const handleLogout = async () => {
@@ -54,7 +54,7 @@ export default function ProfileScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.menuCard}>
           {menuItems.map((item, index) => (
-            <TouchableOpacity key={index} style={styles.menuItem}>
+            <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
               <Text style={styles.menuIcon}>{item.icon}</Text>
               <View style={styles.menuContent}>
                 <Text style={styles.menuLabel}>{item.label}</Text>

@@ -1,59 +1,39 @@
+import { getAttendanceList } from "@/services/attendance";
+import { useAuthStore } from "@/stores/auth";
+import { IAttendance } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-const scheduleData = [
-  {
-    day: "Senin",
-    date: "06",
-    shift: "Pagi",
-    time: "08:00 - 17:00",
-    status: "active",
-  },
-  {
-    day: "Selasa",
-    date: "07",
-    shift: "Pagi",
-    time: "08:00 - 17:00",
-    status: "today",
-  },
-  {
-    day: "Rabu",
-    date: "08",
-    shift: "Pagi",
-    time: "08:00 - 17:00",
-    status: "upcoming",
-  },
-  {
-    day: "Kamis",
-    date: "09",
-    shift: "Pagi",
-    time: "08:00 - 17:00",
-    status: "upcoming",
-  },
-  {
-    day: "Jumat",
-    date: "10",
-    shift: "Pagi",
-    time: "08:00 - 16:00",
-    status: "upcoming",
-  },
-  { day: "Sabtu", date: "11", shift: "Libur", time: "-", status: "off" },
-  { day: "Minggu", date: "12", shift: "Libur", time: "-", status: "off" },
-];
+const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 
 export default function JadwalScreen() {
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case "today":
-        return { bg: "#1e90ff", text: "#fff" };
-      case "active":
-        return { bg: "#e3f2fd", text: "#1e90ff" };
-      case "off":
-        return { bg: "#ffebee", text: "#f44336" };
-      default:
-        return { bg: "#f5f5f5", text: "#666" };
+  const { user } = useAuthStore();
+  const [attendanceData, setAttendanceData] = useState<IAttendance[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchRecent() {
+      try {
+        setIsLoading(true);
+        const res = await getAttendanceList({
+          page: 1,
+          per_page: 7,
+          user_id_exact: [user?.id ?? ""],
+          order_by_desc: ["created_at"],
+        });
+        setAttendanceData(res.data?.data || []);
+      } catch (e) {
+        console.error("Failed to fetch attendance:", e);
+      } finally {
+        setIsLoading(false);
+      }
     }
-  };
+    fetchRecent();
+  }, [user?.id]);
+
+  const formatter = new Intl.DateTimeFormat("id-ID", { day: "numeric" });
+  const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" });
 
   return (
     <View style={styles.container}>
@@ -63,43 +43,56 @@ export default function JadwalScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Jadwal Kerja</Text>
-        <Text style={styles.headerSubtitle}>Januari 2026</Text>
+        <Text style={styles.headerTitle}>Riwayat Absensi</Text>
+        <Text style={styles.headerSubtitle}>{monthYear}</Text>
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {scheduleData.map((item, index) => {
-          const statusStyle = getStatusStyle(item.status);
-          return (
-            <View
-              key={index}
-              style={[
-                styles.scheduleCard,
-                item.status === "today" && styles.todayCard,
-              ]}
-            >
+        {isLoading ? (
+          <Text style={styles.loadingText}>Memuat...</Text>
+        ) : attendanceData.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Belum ada data absensi</Text>
+          </View>
+        ) : (
+          attendanceData.map((item) => {
+            const checkin = item.checkin ?? "";
+            const date = new Date(checkin);
+            const day = DAY_NAMES[date.getDay()];
+            const dateNum = formatter.format(date);
+            const isToday = new Date().toDateString() === date.toDateString();
+            const time = item.checkout
+              ? `${checkin.split(" ")[1]?.slice(0, 5) ?? "--"} - ${item.checkout.split(" ")[1]?.slice(0, 5) ?? "--"}`
+              : checkin.split(" ")[1]?.slice(0, 5) ?? "--:--";
+            const bg = isToday ? "#1e90ff" : "#e3f2fd";
+            const textColor = isToday ? "#fff" : "#1e90ff";
+
+            return (
               <View
-                style={[styles.dateBox, { backgroundColor: statusStyle.bg }]}
+                key={item.id}
+                style={[styles.scheduleCard, isToday && styles.todayCard]}
               >
-                <Text style={[styles.dateNumber, { color: statusStyle.text }]}>
-                  {item.date}
-                </Text>
-                <Text style={[styles.dayName, { color: statusStyle.text }]}>
-                  {item.day}
-                </Text>
-              </View>
-              <View style={styles.scheduleInfo}>
-                <Text style={styles.shiftLabel}>{item.shift}</Text>
-                <Text style={styles.timeText}>{item.time}</Text>
-              </View>
-              {item.status === "today" && (
-                <View style={styles.todayBadge}>
-                  <Text style={styles.todayText}>Hari Ini</Text>
+                <View style={[styles.dateBox, { backgroundColor: bg }]}>
+                  <Text style={[styles.dateNumber, { color: textColor }]}>
+                    {dateNum}
+                  </Text>
+                  <Text style={[styles.dayName, { color: textColor }]}>
+                    {day}
+                  </Text>
                 </View>
-              )}
-            </View>
-          );
-        })}
+                <View style={styles.scheduleInfo}>
+                  <Text style={styles.shiftLabel}>{item.name}</Text>
+                  <Text style={styles.timeText}>{time}</Text>
+                </View>
+                {isToday && (
+                  <View style={styles.todayBadge}>
+                    <Text style={styles.todayText}>Hari Ini</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
         <View style={{ height: 100 }} />
       </ScrollView>
     </View>
@@ -129,6 +122,20 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  loadingText: {
+    textAlign: "center",
+    color: "#666",
+    marginTop: 40,
+    fontSize: 14,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    paddingVertical: 60,
+  },
+  emptyText: {
+    color: "#666",
+    fontSize: 14,
   },
   scheduleCard: {
     backgroundColor: "#fff",

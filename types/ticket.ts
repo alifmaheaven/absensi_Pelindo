@@ -253,45 +253,6 @@ export interface ITicketSeverity {
   color: string;
 }
 
-export interface ITicketDevice {
-  id: string;
-  company_id: string;
-  contract_id: string;
-  service_id: string;
-  location_id: string;
-  site_id: string;
-  code: string;
-  name: string;
-  description: string;
-  serialnumber: string;
-  productnumber: string;
-  brand: string;
-  ip: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: null;
-  x1: null;
-  x2: null;
-  x3: null;
-  x4: null;
-  x5: null;
-  x6: null;
-  x7: null;
-  x8: null;
-  x9: null;
-  x10: null;
-  x11: null;
-  x12: null;
-  x13: null;
-  x14: null;
-  x15: null;
-  x16: null;
-  x17: null;
-  x18: null;
-  x19: null;
-  x20: null;
-}
-
 export interface ITicketStatus {
   id: string;
   code: string;

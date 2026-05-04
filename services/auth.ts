@@ -11,7 +11,6 @@ export async function login(payload: {
 
     return res.data;
   } catch (error) {
-    console.error('login');
     throw error;
   }
 }

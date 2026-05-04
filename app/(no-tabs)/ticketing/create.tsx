@@ -2,11 +2,18 @@ import { ArrowLeft, ImageIcon } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
+  ATTENDANCE_WINDOW_HOURS,
+  IMAGE_MAX_WIDTH,
+  IMAGE_QUALITY,
+  TIMEZONE,
+} from "@/constants";
+import {
   createEvidGroupId,
   createTicket,
   deleteEvidtmp,
   getAttendanceOption,
   getDataSeverity,
+  getDataStatus,
   getTicketDevice,
   uploadEvidGroupId,
   uploadEvidPermanent,
@@ -17,6 +24,7 @@ import {
   IAttendanceOptions,
   ITicketDevice,
   ITicketSeverity,
+  ITicketStatus,
   THttpErrorResult,
 } from "@/types";
 import { compressImage } from "@/utils/utils";
@@ -54,29 +62,10 @@ interface Props {
   options: ITicketSeverity[];
 }
 
-const SEVERITY_COLORS: Record<
-  string,
-  { bg: string; border: string; text: string }
-> = {
-  Low: {
-    bg: "rgba(52, 199, 89, 0.15)",
-    border: "#34C759",
-    text: "#1E7F43",
-  },
-  Medium: {
-    bg: "rgba(255, 193, 7, 0.18)",
-    border: "#FFC107",
-    text: "#9A7B00",
-  },
-  High: {
-    bg: "rgba(255, 59, 48, 0.15)",
-    border: "#FF3B30",
-    text: "#B00020",
-  },
-};
+const DEFAULT_SEVERITY_COLOR = { bg: "rgba(150,150,150,0.15)", border: "#999", text: "#555" };
 
 const getNowJakarta = () =>
-  new Date().toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" });
+  new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE });
 
 export default function TicketingCreateScreen() {
   const router = useRouter();
@@ -105,43 +94,46 @@ export default function TicketingCreateScreen() {
     IAttendanceOptions[]
   >([]);
   const [severitys, setSeveritys] = useState<ITicketSeverity[]>([]);
+  const [defaultStatusId, setDefaultStatusId] = useState<string>("");
 
   useFocusEffect(
     useCallback(() => {
       async function fetchData() {
         try {
           setLoadingSkeleton(true);
-          const [devices, attendanceOptions, severitys] = await Promise.all([
+          const [devices, attendanceOptions, severitys, statuses] = await Promise.all([
             getTicketDevice({
               page: 1,
-              per_page: 99,
+              per_page: 100,
               company_id_exact: [user?.company_id || ""],
               user_id_exact: [user?.id || ""],
               order_by_desc: ["created_at"],
             }),
             getAttendanceOption({
               page: 1,
-              per_page: 99,
+              per_page: 100,
               company_id_exact: [user?.company_id || ""],
               user_id_exact: [user?.id || ""],
               order_by_desc: ["created_at"],
             }),
-            getDataSeverity({ page: 1, per_page: 3 }),
+            getDataSeverity({ page: 1, per_page: 100 }),
+            getDataStatus({ page: 1, per_page: 100 }),
           ]);
 
           const device = devices.data?.data || [];
           const attendanceOption = attendanceOptions.data?.data || [];
           const severityData = severitys.data?.data || [];
+          const statusData: ITicketStatus[] = statuses.data?.data || [];
 
           const attendanceOptionFilter =
             attendanceOption
               ?.filter((item) => {
                 const checkinDate = new Date(item.checkin);
                 const now = new Date();
-                const eightHoursLater = new Date(
-                  checkinDate.getTime() + 8 * 60 * 60 * 1000,
+                const windowEnd = new Date(
+                  checkinDate.getTime() + ATTENDANCE_WINDOW_HOURS * 60 * 60 * 1000,
                 );
-                return now > checkinDate && now < eightHoursLater;
+                return now > checkinDate && now < windowEnd;
               })
               ?.map((item) => ({
                 ...item,
@@ -152,6 +144,13 @@ export default function TicketingCreateScreen() {
 
           const sortSeverity =
             severityData?.sort((a, b) => a.code.localeCompare(b.code)) || [];
+
+          const openStatus = statusData.find((s) => s.code?.toLowerCase() === "open");
+          if (openStatus) {
+            setDefaultStatusId(openStatus.id);
+          } else if (statusData.length > 0) {
+            setDefaultStatusId(statusData[0].id);
+          }
 
           setSeveritys(sortSeverity);
           setDeviceData(device);
@@ -232,8 +231,8 @@ export default function TicketingCreateScreen() {
       }
 
       const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: 1280,
-        quality: 0.5,
+        maxWidth: IMAGE_MAX_WIDTH,
+        quality: IMAGE_QUALITY,
       });
       console.log("[PickImage] Compressed result:", compressed);
 
@@ -349,7 +348,7 @@ export default function TicketingCreateScreen() {
         contract_id: user?.contract_id || "",
         site_id: user?.site_id || "",
         code: "",
-        status_id: "357ac48c-c1e0-43bf-a4ae-68e7caa2dfae",
+        status_id: defaultStatusId,
         start_ticket: getNowJakarta(),
 
         evidence_group_id: groupId,
@@ -693,13 +692,25 @@ export default function TicketingCreateScreen() {
   );
 }
 
+function parseSeverityColor(hex: string | undefined) {
+  if (!hex) return DEFAULT_SEVERITY_COLOR;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return {
+    bg: `rgba(${r},${g},${b},0.15)`,
+    border: hex,
+    text: hex,
+  };
+}
+
 export function SeveritySelector({ value, onChange, options }: Props) {
   return (
     <View style={styles.severityContainer}>
       {options?.length > 0 ? (
         options?.map((item) => {
           const isActive = value === item.id;
-          const color = SEVERITY_COLORS[item?.name] || SEVERITY_COLORS["Easy"];
+          const color = parseSeverityColor(item.color);
 
           return (
             <TouchableOpacity

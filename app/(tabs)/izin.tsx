@@ -12,6 +12,19 @@ import {
   View,
 } from "react-native";
 
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Disetujui":
+      return "#4CAF50";
+    case "Menunggu":
+      return "#FF9800";
+    case "Ditolak":
+      return "#F44336";
+    default:
+      return "#666";
+  }
+};
+
 export default function IzinScreen() {
   const { user } = useAuthStore();
   const [attendanceData, setAttendanceData] = useState<
@@ -58,19 +71,6 @@ export default function IzinScreen() {
     fetchAttendance();
   }, [user?.id]);
 
-  // const getStatusColor = (status: string) => {
-  //   switch (status) {
-  //     case "Disetujui":
-  //       return "#4CAF50";
-  //     case "Menunggu":
-  //       return "#FF9800";
-  //     case "Ditolak":
-  //       return "#F44336";
-  //     default:
-  //       return "#666";
-  //   }
-  // };
-
   let content: React.ReactNode;
 
   if (isLoading) {
@@ -82,12 +82,12 @@ export default function IzinScreen() {
       <View key={item.id} style={styles.izinCard}>
         <View style={styles.izinHeader}>
           <Text style={styles.izinType}>{item.name}</Text>
-          <View style={styles.statusBadge}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
         <View style={styles.izinDetails}>
-          <Text style={styles.izinDate}>📅 {item.checkin}</Text>
+          <Text style={styles.izinDate}>📅 {item.checkin ?? "--"}</Text>
         </View>
       </View>
     ));
@@ -177,27 +177,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  summaryRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: "center",
-  },
-  summaryNumber: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    color: "#666",
-  },
   applyButton: {
     backgroundColor: "#1e90ff",
     borderRadius: 12,
@@ -242,6 +221,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    backgroundColor: "#666",
   },
   statusText: {
     fontSize: 11,
@@ -255,11 +235,6 @@ const styles = StyleSheet.create({
   izinDate: {
     fontSize: 13,
     color: "#666",
-  },
-  izinDays: {
-    fontSize: 13,
-    color: "#666",
-    fontWeight: "500",
   },
 
   skeletonCard: {

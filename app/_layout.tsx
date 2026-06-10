@@ -1,7 +1,7 @@
 import { ToastProvider } from "@/components/ui/toast";
-import { getVersionCode, saveVersionCode } from "@/lib/storage";
 import { getLatestVersion } from "@/services/version";
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
@@ -23,23 +23,15 @@ export default function RootLayout() {
       const latest = await getLatestVersion();
       console.debug("[VersionCheck] Latest:", JSON.stringify(latest));
 
-      if (!latest?.code) {
-        console.debug("[VersionCheck] No version code, skipping");
+      if (!latest?.name) {
+        console.debug("[VersionCheck] No version name, skipping");
         return;
       }
 
-      const storedCode = await getVersionCode();
-      console.debug("[VersionCheck] Stored code:", storedCode);
+      const currentNativeVersion = Constants.expoConfig?.version || "1.0.0";
+      console.debug("[VersionCheck] Current native version:", currentNativeVersion);
 
-      if (!storedCode) {
-        console.debug("[VersionCheck] First launch, saving code:", latest.code);
-        await saveVersionCode(latest.code);
-        return;
-      }
-
-      console.debug("[VersionCheck] Comparing:", latest.code, "vs", storedCode);
-
-      if (latest.code !== storedCode) {
+      if (latest.name !== currentNativeVersion) {
         console.debug("[VersionCheck] New version detected, showing alert");
         // Small delay to ensure navigation has settled before showing alert
         setTimeout(() => {

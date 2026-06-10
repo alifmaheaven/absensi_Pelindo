@@ -80,13 +80,17 @@ export default function LoginScreen() {
       const res = await loginReq();
 
       if (res.data?.token) {
-        saveToken(res.data.token);
+        // Selalu simpan token — rememberMe hanya kontrol apakah
+        // token persisten setelah app restart atau tidak.
+        // Tapi SecureStore tetap perlu token agar auth guard & axios
+        // interceptor bisa baca saat session berjalan.
+        await saveToken(res.data.token);
       }
 
-      showToast(`Login berhasil! Email: ${email}`, "success");
-      router.push("/(tabs)");
+      showToast(`Login berhasil!`, "success");
+      router.replace("/(tabs)");
     } catch (error) {
-      console.log("Login failed:", error);
+      console.debug("Login failed:", error);
 
       // Reset mCaptcha
       setMcaptchaToken("");
@@ -160,6 +164,7 @@ export default function LoginScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                maxLength={254}
               />
             </View>
 
@@ -174,6 +179,7 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
+                  maxLength={128}
                 />
                 <TouchableOpacity
                   style={{ position: "absolute", right: 16 }}

@@ -19,28 +19,28 @@ export default function RootLayout() {
 
   async function checkVersion() {
     try {
-      console.log("[VersionCheck] Fetching latest version...");
+      console.debug("[VersionCheck] Fetching latest version...");
       const latest = await getLatestVersion();
-      console.log("[VersionCheck] Latest:", JSON.stringify(latest));
+      console.debug("[VersionCheck] Latest:", JSON.stringify(latest));
 
       if (!latest?.code) {
-        console.log("[VersionCheck] No version code, skipping");
+        console.debug("[VersionCheck] No version code, skipping");
         return;
       }
 
       const storedCode = await getVersionCode();
-      console.log("[VersionCheck] Stored code:", storedCode);
+      console.debug("[VersionCheck] Stored code:", storedCode);
 
       if (!storedCode) {
-        console.log("[VersionCheck] First launch, saving code:", latest.code);
+        console.debug("[VersionCheck] First launch, saving code:", latest.code);
         await saveVersionCode(latest.code);
         return;
       }
 
-      console.log("[VersionCheck] Comparing:", latest.code, "vs", storedCode);
+      console.debug("[VersionCheck] Comparing:", latest.code, "vs", storedCode);
 
       if (latest.code !== storedCode) {
-        console.log("[VersionCheck] New version detected, showing alert");
+        console.debug("[VersionCheck] New version detected, showing alert");
         // Small delay to ensure navigation has settled before showing alert
         setTimeout(() => {
           Alert.alert(

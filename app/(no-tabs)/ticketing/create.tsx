@@ -168,11 +168,17 @@ export default function TicketingCreateScreen() {
   );
 
   const pickImage = async (source: "camera" | "gallery") => {
+    // Gallery is disabled - camera only
+    if (source !== "camera") {
+      Alert.alert('Error', 'Hanya kamera yang diizinkan untuk mengambil gambar.');
+      setLoadingImage(false);
+      return;
+    }
     setLoadingImage(true);
 
     try {
       const isCamera = source === "camera";
-      console.log(`[PickImage] Starting... Source: ${source}`);
+      console.debug(`[PickImage] Starting... Source: ${source}`);
 
       const getPermission = isCamera
         ? ImagePicker.getCameraPermissionsAsync
@@ -188,13 +194,13 @@ export default function TicketingCreateScreen() {
 
       // 1. Cek Status Izin Saat Ini
       let { status, canAskAgain } = await getPermission();
-      console.log(
+      console.debug(
         `[PickImage] Initial Status: ${status}, CanAskAgain: ${canAskAgain}`,
       );
 
       // 2. Jika belum ditentukan (Undetermined), minta izin
       if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
-        console.log("[PickImage] Requesting Permission...");
+        console.debug("[PickImage] Requesting Permission...");
         const newPermission = await requestPermission();
         status = newPermission.status;
       }
@@ -215,7 +221,7 @@ export default function TicketingCreateScreen() {
       }
 
       // 4. Jika Diizinkan (Granted), Buka Picker
-      console.log("[PickImage] Launching picker...");
+      console.debug("[PickImage] Launching picker...");
       const result = await launchPicker({
         mediaTypes: ["images"],
         allowsEditing: false,
@@ -234,7 +240,7 @@ export default function TicketingCreateScreen() {
         maxWidth: IMAGE_MAX_WIDTH,
         quality: IMAGE_QUALITY,
       });
-      console.log("[PickImage] Compressed result:", compressed);
+      console.debug("[PickImage] Compressed result:", compressed);
 
       try {
         const res = await uploadEvidtmp({
@@ -242,7 +248,7 @@ export default function TicketingCreateScreen() {
           name: `image-${Date.now()}.jpg`,
           type: "image/jpeg",
         } as any);
-        console.log("[PickImage] Upload result:", res);
+        console.debug("[PickImage] Upload result:", res);
 
         if (compressed?.uri) {
           setImages((prev) => [
@@ -271,7 +277,7 @@ export default function TicketingCreateScreen() {
       const newImages = [...images];
       const target = images[index];
       if (target?.path) await deleteEvidtmp({ links: [target.path] });
-      console.log("Image deleted");
+      console.debug("Image deleted");
       newImages.splice(index, 1);
       setImages(newImages);
     } catch (error) {
@@ -324,14 +330,14 @@ export default function TicketingCreateScreen() {
       });
 
       const groupId = group.data?.id ?? "";
-      console.log("Group ID", groupId);
+      console.debug("Group ID", groupId);
 
       for (const img of images) {
         const uploaded = await uploadEvidPermanent({ links: [img.path] });
         const file = uploaded.data?.links?.[0];
 
         if (!file) continue;
-        console.log("File uploaded", file);
+        console.debug("File uploaded", file);
 
         await uploadEvidGroupId({
           name: `Ticket ${user?.name}`,
@@ -359,7 +365,7 @@ export default function TicketingCreateScreen() {
         description: notes,
       });
 
-      console.log("Ticket created");
+      console.debug("Ticket created");
 
       showToast("Berhasil create ticket!", "success");
 
@@ -438,6 +444,7 @@ export default function TicketingCreateScreen() {
                   value={title}
                   onChangeText={setTitle}
                   textAlignVertical="top"
+                  maxLength={200}
                 />
               </View>
 
@@ -557,6 +564,7 @@ export default function TicketingCreateScreen() {
                   value={notes}
                   onChangeText={setNotes}
                   textAlignVertical="top"
+                  maxLength={2000}
                 />
               </View>
 

@@ -34,7 +34,7 @@ export async function handleHttpError(
     router.replace("/auth");
   }
 
-  console.log('handleHttpError', axiosError.response?.data);
+  console.error('HTTP Error:', axiosError.response?.status);
 
   const responseMessage =
     axiosError.response?.data?.message ||

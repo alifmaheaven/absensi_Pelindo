@@ -189,7 +189,7 @@ export async function getEvid(payload: { file_exact: string }): Promise<
   >
 > {
   try {
-    const response = await axios.get("/evidence/", { data: payload });
+    const response = await axios.get("/evidence/", { params: payload });
 
     return response.data;
   } catch (error) {

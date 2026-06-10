@@ -4,6 +4,7 @@ import { getToken } from "./storage"; // helper untuk ambil token dari storage
 
 const API = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL, // ganti dengan API kamu
+  timeout: 30000, // 30 seconds
   headers: {
     "Content-Type": "application/json",
   },

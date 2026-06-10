@@ -216,15 +216,15 @@ const TicketingScreen = () => {
       setTicketMeta((prev) => ({
         ...prev,
         total: meta?.total || 0,
-        page: ticketMeta.page + 1,
+        page: prev.page + 1,
         total_pages: meta?.total_pages || 0,
       }));
 
-      if (ticketMeta.page >= (meta?.total_pages || 0)) {
+      if ((ticketMeta.page + 1) >= (meta?.total_pages || 0)) {
         setHasMore(false);
       }
     } catch (error) {
-      console.log(error);
+      console.debug(error);
     } finally {
       setLoading(false);
     }
@@ -312,7 +312,7 @@ const TicketingScreen = () => {
         setHasMore(false);
       }
     } catch (error) {
-      console.log(error);
+      console.debug(error);
     } finally {
       setRefreshing(false);
     }

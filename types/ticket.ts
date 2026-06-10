@@ -294,7 +294,6 @@ export interface IAttendanceOptions {
   name: string;
   description: string;
   longitude: number;
-  langitude: null;
   checkin: string;
   checkout: string;
   created_at: string;

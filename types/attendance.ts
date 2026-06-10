@@ -9,7 +9,7 @@ export interface IAttendance {
   name: string;
   description: string;
   longitude: number;
-  langitude: number;
+  longitude: number;
   latitude: number;
   checkin: string | null;
   checkout: null | string;

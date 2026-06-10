@@ -161,7 +161,7 @@ export default function CheckinScreen() {
 
         if (mounted) setLocation(loc);
       } catch (e) {
-        console.log("Location error:", e);
+        console.debug("Location error:", e);
       } finally {
         if (mounted) setLoadingLocation(false);
       }
@@ -173,10 +173,16 @@ export default function CheckinScreen() {
   }, []);
 
   const pickImage = async (source: "camera" | "gallery") => {
+    // Gallery is disabled - camera only
+    if (source !== "camera") {
+      Alert.alert('Error', 'Hanya kamera yang diizinkan untuk mengambil gambar.');
+      setLoadingImage(false);
+      return;
+    }
     setLoadingImage(true);
     try {
       const isCamera = source === "camera";
-      console.log(`[PickImage] Starting... Source: ${source}`);
+      console.debug(`[PickImage] Starting... Source: ${source}`);
 
       const getPermission = isCamera
         ? ImagePicker.getCameraPermissionsAsync
@@ -192,13 +198,13 @@ export default function CheckinScreen() {
 
       // 1. Cek Status Izin Saat Ini
       let { status, canAskAgain } = await getPermission();
-      console.log(
+      console.debug(
         `[PickImage] Initial Status: ${status}, CanAskAgain: ${canAskAgain}`,
       );
 
       // 2. Jika belum ditentukan (Undetermined), minta izin
       if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
-        console.log("[PickImage] Requesting Permission...");
+        console.debug("[PickImage] Requesting Permission...");
         const newPermission = await requestPermission();
         status = newPermission.status;
       }
@@ -219,7 +225,7 @@ export default function CheckinScreen() {
       }
 
       // 4. Jika Diizinkan (Granted), Buka Picker
-      console.log("[PickImage] Launching picker...");
+      console.debug("[PickImage] Launching picker...");
       const result = await launchPicker({
         mediaTypes: ["images"],
         allowsEditing: false,
@@ -238,7 +244,7 @@ export default function CheckinScreen() {
         maxWidth: IMAGE_MAX_WIDTH,
         quality: IMAGE_QUALITY,
       });
-      console.log("[PickImage] Compressed result:", compressed);
+      console.debug("[PickImage] Compressed result:", compressed);
 
       try {
         const res = await uploadEvid({
@@ -246,7 +252,7 @@ export default function CheckinScreen() {
           name: `image-${Date.now()}.jpg`,
           type: "image/jpeg",
         } as any);
-        console.log("[PickImage] Upload result:", res);
+        console.debug("[PickImage] Upload result:", res);
 
         if (compressed?.uri) {
           setImages((prev) => [
@@ -275,7 +281,7 @@ export default function CheckinScreen() {
       const newImages = [...images];
       const target = images[index];
       if (target?.path) await deleteEvidtmp({ links: [target.path] });
-      console.log("Image deleted");
+      console.debug("Image deleted");
       newImages.splice(index, 1);
       setImages(newImages);
     } catch (error) {
@@ -299,6 +305,13 @@ export default function CheckinScreen() {
       return;
     }
 
+    // Validasi inRange
+    const selectedSite = sitesList.find(s => s.id === selectedLocation);
+    if (!selectedSite?.inRange) {
+      Alert.alert('Error', 'You must be within range of the selected site to check in.');
+      return;
+    }
+
     // Validasi gambar wajib minimal 1
     if (images.length === 0) {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
@@ -313,14 +326,14 @@ export default function CheckinScreen() {
       });
 
       const groupId = group.data?.id ?? "";
-      console.log("Group ID", groupId);
+      console.debug("Group ID", groupId);
 
       for (const img of images) {
         const uploaded = await uploadEvidPermanent({ links: [img.path] });
         const file = uploaded.data?.links?.[0];
 
         if (!file) continue;
-        console.log("File uploaded", file);
+        console.debug("File uploaded", file);
 
         await uploadEvidGroupId({
           name: `Attendance ${user?.name}`,
@@ -346,7 +359,7 @@ export default function CheckinScreen() {
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
       });
-      console.log("Attendance created");
+      console.debug("Attendance created");
 
       await saveCheckInId(res.data?.id ?? "");
 
@@ -492,6 +505,7 @@ export default function CheckinScreen() {
                 value={notes}
                 onChangeText={setNotes}
                 textAlignVertical="top"
+                maxLength={2000}
               />
             </View>
 

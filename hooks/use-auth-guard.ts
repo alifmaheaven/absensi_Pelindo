@@ -6,11 +6,13 @@ type GuardType = "auth" | "guest";
 
 export function useAuthGuard(type: GuardType) {
   const [checking, setChecking] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
 
     const checkToken = async () => {
+      setIsLoading(true);
       try {
         const token = await getToken();
 
@@ -23,10 +25,14 @@ export function useAuthGuard(type: GuardType) {
 
         // 🚫 Halaman login (guest only)
         if (type === "guest" && token) {
+          // Only redirect after token check is definitively complete
           router.replace("/(tabs)");
         }
       } finally {
-        if (mounted) setChecking(false);
+        if (mounted) {
+          setIsLoading(false);
+          setChecking(false);
+        }
       }
     };
 
@@ -37,5 +43,5 @@ export function useAuthGuard(type: GuardType) {
     };
   }, [type]);
 
-  return { checking };
+  return { checking, isLoading };
 }

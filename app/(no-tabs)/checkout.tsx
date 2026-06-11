@@ -4,29 +4,23 @@ import { useToast } from "@/components/ui/toast";
 import {
   DEFAULT_PAGE_SIZE,
   IMAGE_BASE_PATH,
-  IMAGE_MAX_WIDTH,
-  IMAGE_QUALITY,
-  MAX_SITES_PROXIMITY,
   TIMEZONE,
 } from "@/constants";
+import { useImagePicker } from "@/hooks/useImagePicker";
+import { useLocationCheck } from "@/hooks/useLocationCheck";
 import { useRequest } from "@/hooks/use-request";
 import {
   deleteEvid,
-  deleteEvidtmp,
   getAttendanceList,
-  getAttendanceSite,
   getEvidGroupId,
   updateAttendance,
   uploadEvid,
-  uploadEvidGroupId,
   uploadEvidPermanent,
+  uploadEvidGroupId,
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
-import { IAttendance, IAttendanceSite, THttpErrorResult } from "@/types";
-import { compressImage, getDistanceInMeters } from "@/utils/utils";
-import * as ImagePicker from "expo-image-picker";
+import { IAttendance, THttpErrorResult } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -34,7 +28,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -48,34 +41,38 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
-interface IImage {
-  id: string | null;
-  uri: string;
-  path: string;
-  link: string;
-}
-
 export default function CheckoutScreen() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [location, setLocation] = useState<Location.LocationObject | null>(
-    null,
-  );
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
-  const [images, setImages] = useState<IImage[]>([]);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
-  const [loadingImage, setLoadingImage] = useState(false);
-  const [loadingSubmit, setLoadingSubmit] = useState(false);
   const { user } = useAuthStore();
-  const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
-  const [removedImages, setRemovedImages] = useState<IImage[]>([]);
 
-  const { run: getSite } = useRequest(() =>
-    getAttendanceSite({ page: 1, per_page: DEFAULT_PAGE_SIZE }),
-  );
+  // --- Hooks ---
+  const {
+    location,
+    loadingLocation,
+    nearbySites,
+    selectedLocation,
+    setSelectedLocation,
+    locationString,
+  } = useLocationCheck();
+
+  const {
+    images,
+    loadingImage,
+    isModalVisible,
+    pickImage,
+    removeImage,
+    openModal,
+    closeModal,
+    setImages,
+  } = useImagePicker();
+
+  // --- State ---
+  const [notes, setNotes] = useState("");
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
+  const [removedImages, setRemovedImages] = useState<Array<{ id: string | null; path: string }>>([]);
+
   const { run: getCheckIn } = useRequest(() =>
     getAttendanceList({
       page: 1,
@@ -85,284 +82,82 @@ export default function CheckoutScreen() {
     }),
   );
 
+  // Find today's check-in record
   const checkInDataById = useMemo(() => {
-    const checkIn = checkInData;
-    if (!checkIn?.length) return null;
-
-    const today = new Date();
-    const todayDate = today.toISOString().split("T")[0]; // yyyy-mm-dd
-
-    const checkInById = checkInData.find((c) => {
-      if (!c.created_at) return false;
-
-      // Ambil tanggal dari "2025-12-25 12:15:06.978681"
-      const createdDate = c.created_at.split(" ")[0];
-
-      return createdDate === todayDate;
-    });
-
-    return checkInById ? checkInById : null;
+    if (!checkInData?.length) return null;
+    const today = new Date().toISOString().split("T")[0];
+    return checkInData.find((c) => c.created_at?.split(" ")[0] === today) || null;
   }, [checkInData]);
 
-  const sitesList = useMemo(() => {
-    const sites = siteData;
-    if (!sites?.length) return [];
-    const lat = Number(location?.coords.latitude);
-    const lon = Number(location?.coords.longitude);
-
-    if (isNaN(lat) || isNaN(lon)) return [];
-
-    const limitedSites = sites.slice(0, MAX_SITES_PROXIMITY);
-    const match = limitedSites.find((s) => {
-      return (
-        getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance
-      );
-    });
-    return match ? [match] : [];
-  }, [siteData, location]);
-
+  // Load check-in data + evidence on mount
   useEffect(() => {
-    const fetchSites = async () => {
-      try {
-        const res = await getSite();
-        const sites = res.data?.data;
-
-        setSiteData(sites ? sites : []);
-      } catch (error) {
-        console.error("Error fetching sites:", error);
-        setSiteData([]);
-      }
-    };
-
     const fetchCheckIn = async () => {
       try {
         const res = await getCheckIn();
-        const checkIn = res.data?.data || [];
-
-        setCheckInData(checkIn ? checkIn : []);
+        setCheckInData(res.data?.data || []);
       } catch (error) {
         console.error("Error fetching checkIn:", error);
         setCheckInData([]);
       }
     };
-
     fetchCheckIn();
-    fetchSites();
   }, []);
 
   useEffect(() => {
-    if (checkInDataById) {
-      setSelectedLocation(checkInDataById.site_id);
-      setNotes(checkInDataById.description);
-      setLoadingImage(true);
-      const fetchEvid = async () => {
-        try {
-          const evidData = await getEvidGroupId({
-            page: 1,
-            per_page: 5,
-            evidence_group_id_exact: [checkInDataById.evidence_group_id],
-          });
-
-          if (!evidData?.data?.data) return;
-
-          const evidences = evidData?.data?.data?.filter(
-            (e) => e.evidence_group_id === checkInDataById.evidence_group_id,
-          );
-
-          if (evidences?.length) {
-            const evidencesData = evidences?.map((e) => ({
-              id: e.id,
-              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
-              path: e.file,
-              link: e.file,
-            }));
-
-            setImages(evidencesData ? evidencesData : []);
-          }
-        } catch (error) {
-          console.error(error);
-        } finally {
-          setLoadingImage(false);
-        }
-      };
-
-      fetchEvid();
-    }
-  }, [checkInDataById]);
-
-  useEffect(() => {
-    let mounted = true;
+    if (!checkInDataById) return;
+    setSelectedLocation(checkInDataById.site_id);
+    setNotes(checkInDataById.description || "");
 
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== "granted") {
-          showToast("Izin lokasi diperlukan", "error");
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+        const evidData = await getEvidGroupId({
+          page: 1,
+          per_page: 5,
+          evidence_group_id_exact: [checkInDataById.evidence_group_id],
         });
-
-        if (mounted) setLocation(loc);
-      } catch (e) {
-        console.debug("Location error:", e);
-      } finally {
-        if (mounted) setLoadingLocation(false);
+        const evidences = evidData?.data?.data?.filter(
+          (e) => e.evidence_group_id === checkInDataById.evidence_group_id,
+        );
+        if (evidences?.length) {
+          setImages(
+            evidences.map((e) => ({
+              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
+              path: e.file,
+              link: e.file,
+            })),
+          );
+        }
+      } catch (error) {
+        console.error(error);
       }
     })();
+  }, [checkInDataById]);
 
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const pickImage = async (source: "camera" | "gallery") => {
-    // Gallery is disabled - camera only
-    if (source !== "camera") {
-      Alert.alert('Error', 'Hanya kamera yang diizinkan untuk mengambil gambar.');
-      setLoadingImage(false);
-      return;
-    }
-    setLoadingImage(true);
-
-    try {
-      const isCamera = source === "camera";
-      console.debug(`[PickImage] Starting... Source: ${source}`);
-
-      const getPermission = isCamera
-        ? ImagePicker.getCameraPermissionsAsync
-        : ImagePicker.getMediaLibraryPermissionsAsync;
-
-      const requestPermission = isCamera
-        ? ImagePicker.requestCameraPermissionsAsync
-        : ImagePicker.requestMediaLibraryPermissionsAsync;
-
-      const launchPicker = isCamera
-        ? ImagePicker.launchCameraAsync
-        : ImagePicker.launchImageLibraryAsync;
-
-      // 1. Cek Status Izin Saat Ini
-      let { status, canAskAgain } = await getPermission();
-      console.debug(
-        `[PickImage] Initial Status: ${status}, CanAskAgain: ${canAskAgain}`,
-      );
-
-      // 2. Jika belum ditentukan (Undetermined), minta izin
-      if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
-        console.debug("[PickImage] Requesting Permission...");
-        const newPermission = await requestPermission();
-        status = newPermission.status;
-      }
-
-      // 3. Jika Ditolak (Denied), arahkan ke Settings
-      if (status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert(
-          "Izin Diperlukan",
-          `Aplikasi membutuhkan akses ${
-            isCamera ? "Kamera" : "Galeri"
-          } untuk fitur ini. Mohon aktifkan di pengaturan.`,
-          [
-            { text: "Batal", style: "cancel" },
-            { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
-          ],
-        );
-        return;
-      }
-
-      // 4. Jika Diizinkan (Granted), Buka Picker
-      console.debug("[PickImage] Launching picker...");
-      const result = await launchPicker({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      setIsModalVisible(false);
-
-      if (result.canceled) {
-        setLoadingImage(false);
-        return;
-      }
-
-      const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: IMAGE_MAX_WIDTH,
-        quality: IMAGE_QUALITY,
-      });
-      console.debug("[PickImage] Compressed result:", compressed);
-
-      try {
-        const res = await uploadEvid({
-          uri: compressed?.uri,
-          name: `image-${Date.now()}.jpg`,
-          type: "image/jpeg",
-        } as any);
-        console.debug("[PickImage] Upload result:", res);
-
-        if (compressed?.uri) {
-          setImages((prev) => [
-            ...prev,
-            {
-              id: null,
-              uri: compressed.uri,
-              path: res.data?.[0]?.path ?? "",
-              link: res.data?.[0]?.link ?? "",
-            },
-          ]);
-        }
-      } finally {
-        setLoadingImage(false);
-      }
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("[PickImage Error]", err);
-      Alert.alert("Error", "Gagal: " + (err?.message || "Unknown error"));
-      setLoadingImage(false);
-    }
+  // Upload service adapter for useImagePicker
+  const uploadService = {
+    uploadTemp: async (file: any) => uploadEvid(file),
+    deleteTemp: async (payload: { links: string[] }) => {
+      // no-op for temp deletion
+    },
   };
 
-  const removeImage = async (index: number) => {
-    try {
-      setLoadingImage(true);
-      const newImages = [...images];
-      const target = images[index];
-
-      if (target?.path) {
-        if (target?.id) {
-          setRemovedImages((prev) => [...prev, target]);
-        } else {
-          await deleteEvidtmp({ links: [target.path] });
-        }
-      }
-
-      console.debug("Image deleted");
-      newImages.splice(index, 1);
-      setImages(newImages);
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("Remove Image Error:", err);
-      showToast("Gagal menghapus gambar", "error");
-    } finally {
-      setLoadingImage(false);
+  const handleRemoveImage = async (index: number) => {
+    const target = images[index];
+    if (target?.id) {
+      setRemovedImages((prev) => [...prev, { id: target.id as string, path: target.path }]);
     }
+    await removeImage(index, uploadService);
   };
 
   const handleSubmit = async () => {
-    // Validasi lokasi GPS
     if (!location) {
       showToast("Tunggu deteksi lokasi...", "info");
       return;
     }
-
     if (!selectedLocation) {
       showToast("Pilih lokasi terlebih dahulu!", "error");
       return;
     }
-
-    // Validasi gambar wajib minimal 1
     if (images.length === 0) {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
       return;
@@ -371,43 +166,37 @@ export default function CheckoutScreen() {
     setLoadingSubmit(true);
     try {
       const groupId = checkInDataById?.evidence_group_id ?? "";
-      console.debug("Group ID", groupId);
 
+      // Delete removed evidence
       for (const img of removedImages) {
-        const deleted = await deleteEvid({ id: img?.id || "" });
-
-        if (deleted?.code !== 200) continue;
-        console.debug("File deleted", deleted);
+        if (img.id) {
+          try { await deleteEvid({ id: img.id }); } catch { /* continue */ }
+        }
       }
 
+      // Upload new evidence
       for (const img of images) {
         if (!img.id) {
           const uploaded = await uploadEvidPermanent({ links: [img.path] });
           const file = uploaded.data?.links?.[0];
-
-          if (!file) continue;
-          console.debug("File uploaded", file);
-
-          await uploadEvidGroupId({
-            name: `Attendance ${user?.name}`,
-            description: "Evidence",
-            file,
-            evidence_group_id: groupId,
-          });
+          if (file) {
+            await uploadEvidGroupId({
+              name: `Attendance ${user?.name}`,
+              description: "Evidence",
+              file,
+              evidence_group_id: groupId,
+            });
+          }
         }
       }
 
+      // Update attendance checkout
       await updateAttendance({
         id: checkInDataById?.id!,
-        checkout: new Date().toLocaleString("sv-SE", {
-          timeZone: TIMEZONE,
-        }),
+        checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
       });
 
-      console.debug("Attendance updated");
-
       showToast("Berhasil Check Out!", "success");
-
       router.replace("/");
     } catch (error) {
       const err = error as THttpErrorResult;
@@ -440,7 +229,6 @@ export default function CheckoutScreen() {
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Check Out</Text>
               <View style={styles.notificationButtonPlaceholder}>
-                {/* Spacer for centering title */}
                 <View style={{ width: 40 }} />
               </View>
             </View>
@@ -452,7 +240,7 @@ export default function CheckoutScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Map View */}
+            {/* Map */}
             <View style={styles.mapContainer}>
               {loadingLocation || !location ? (
                 <View style={styles.loadingContainer}>
@@ -463,18 +251,13 @@ export default function CheckoutScreen() {
                 <MapEmbed location={location} />
               )}
               <View style={styles.locationOverlay}>
-                <Text style={styles.locationOverlayText}>
-                  {location
-                    ? `${location.coords.latitude}, ${location.coords.longitude}`
-                    : "Menunggu..."}
-                </Text>
+                <Text style={styles.locationOverlayText}>{locationString}</Text>
               </View>
             </View>
 
-            {/* Select Location */}
+            {/* Location Selection */}
             <Text style={styles.sectionTitle}>Select Location</Text>
-
-            {sitesList?.length === 0 ? (
+            {nearbySites.length === 0 ? (
               <View style={styles.emptyStateContainer}>
                 <Text style={styles.emptyStateEmoji}>📍</Text>
                 <Text style={styles.emptyStateText}>
@@ -485,13 +268,12 @@ export default function CheckoutScreen() {
                 </Text>
               </View>
             ) : (
-              sitesList?.map((item) => (
+              nearbySites.map((item) => (
                 <TouchableOpacity
                   key={item.id}
                   style={[
                     styles.locationOption,
-                    selectedLocation === item.id &&
-                      styles.locationOptionSelected,
+                    selectedLocation === item.id && styles.locationOptionSelected,
                   ]}
                   onPress={() => setSelectedLocation(item.id)}
                   activeOpacity={0.7}
@@ -500,8 +282,7 @@ export default function CheckoutScreen() {
                     <View
                       style={[
                         styles.radioOuter,
-                        selectedLocation === item.id &&
-                          styles.radioOuterSelected,
+                        selectedLocation === item.id && styles.radioOuterSelected,
                       ]}
                     >
                       {selectedLocation === item.id && (
@@ -538,7 +319,7 @@ export default function CheckoutScreen() {
               />
             </View>
 
-            {/* Upload Gambar */}
+            {/* Image Upload */}
             <Text style={styles.sectionTitle}>Upload Gambar</Text>
             <View style={styles.imageGrid}>
               {images.map((image, index) => (
@@ -553,7 +334,7 @@ export default function CheckoutScreen() {
                   {!loadingImage && (
                     <TouchableOpacity
                       style={styles.removeImageButton}
-                      onPress={() => removeImage(index)}
+                      onPress={() => handleRemoveImage(index)}
                     >
                       <Text style={styles.removeImageText}>✕</Text>
                     </TouchableOpacity>
@@ -572,7 +353,7 @@ export default function CheckoutScreen() {
                 styles.uploadButton,
                 (loadingImage || loadingSubmit) && styles.uploadButtonDisabled,
               ]}
-              onPress={() => setIsModalVisible(true)}
+              onPress={openModal}
               disabled={loadingImage || loadingSubmit}
             >
               {loadingImage ? (
@@ -589,7 +370,7 @@ export default function CheckoutScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Submit Button */}
+            {/* Submit */}
             <TouchableOpacity
               style={[
                 styles.submitButton,
@@ -619,46 +400,26 @@ export default function CheckoutScreen() {
           visible={isModalVisible}
           transparent={true}
           animationType="fade"
-          onRequestClose={() => setIsModalVisible(false)}
+          onRequestClose={closeModal}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setIsModalVisible(false)}
+            onPress={closeModal}
           >
             <View style={styles.modalContent}>
               <View style={styles.modalIndicator} />
               <Text style={styles.modalTitle}>Pilih sumber Gambar</Text>
-
               <TouchableOpacity
-                style={[
-                  styles.modalButtonPrimary,
-                  { opacity: loadingImage ? 0.7 : 1 },
-                ]}
-                onPress={() => pickImage("camera")}
+                style={[styles.modalButtonPrimary, { opacity: loadingImage ? 0.7 : 1 }]}
+                onPress={() => pickImage("camera", uploadService)}
                 disabled={loadingImage}
               >
-                <Text style={styles.modalButtonTextPrimary}>
-                  Ambil Dari Kamera
-                </Text>
+                <Text style={styles.modalButtonTextPrimary}>Ambil Dari Kamera</Text>
               </TouchableOpacity>
-
-              {/* <TouchableOpacity
-                style={[
-                  styles.modalButtonSecondary,
-                  { opacity: loadingImage ? 0.7 : 1 },
-                ]}
-                onPress={() => pickImage("gallery")}
-                disabled={loadingImage}
-              >
-                <Text style={styles.modalButtonTextSecondary}>
-                  Ambil Dari Galeri
-                </Text>
-              </TouchableOpacity> */}
-
               <TouchableOpacity
                 style={styles.modalButtonCancel}
-                onPress={() => setIsModalVisible(false)}
+                onPress={closeModal}
               >
                 <Text style={styles.modalButtonTextCancel}>Kembali</Text>
               </TouchableOpacity>
@@ -671,409 +432,66 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  headerGradient: {
-    height: 150, // Tinggi gradient
-    paddingBottom: 30,
-  },
-  headerSafeArea: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  notificationButtonPlaceholder: {
-    width: 40,
-    height: 40,
-  },
-
-  contentContainer: {
-    flex: 1,
-    marginTop: -40, // Overlap dengan header
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    overflow: "hidden",
-  },
-  scrollContent: {
-    padding: 20,
-    paddingTop: 25,
-  },
-
-  // Map
-  mapContainer: {
-    height: 180,
-    borderRadius: 20,
-    overflow: "hidden",
-    marginBottom: 24,
-    backgroundColor: "#f5f5f5",
-    // Shadow for map container
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  map: {
-    width: "100%",
-    height: "100%",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    color: "#666",
-  },
-  locationOverlay: {
-    position: "absolute",
-    bottom: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  locationOverlayText: {
-    fontSize: 10,
-    color: "#333",
-    textAlign: "center",
-    fontWeight: "600",
-  },
-
-  // Section Title
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-    marginBottom: 12,
-  },
-
-  // Location Options
-  locationOption: {
-    flexDirection: "row",
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: "#f0f0f0",
-    borderRadius: 16,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-  },
-  locationOptionSelected: {
-    borderColor: "#1e90ff",
-    backgroundColor: "#f8fbff",
-  },
-  radioContainer: {
-    marginRight: 14,
-    marginTop: 2,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#d1d5db",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  radioOuterSelected: {
-    borderColor: "#1e90ff",
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#1e90ff",
-  },
-  locationTextContainer: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  locationAddress: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  locationCoords: {
-    fontSize: 10,
-    color: "#999",
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: "#F0F7FF", // Hijau muda/Biru muda yang lembut
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#E3F2FD",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  infoIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: "rgba(30, 144, 255, 0.1)",
-    marginBottom: 12,
-  },
-  infoDetailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
-
-  // Notes
-  notesContainer: {
-    backgroundColor: "#fafafa",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
-    marginBottom: 24,
-  },
-  notesInput: {
-    padding: 16,
-    height: 100,
-    fontSize: 14,
-    color: "#333",
-  },
-
-  // Image Upload
-  imageGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 16,
-  },
-  imagePreviewContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 16,
-    overflow: "hidden",
-    position: "relative",
-    backgroundColor: "#f0f0f0",
-  },
-  imagePreview: {
-    width: "100%",
-    height: "100%",
-  },
-  removeImageButton: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#fff",
-  },
-  removeImageText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  uploadButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 30,
-    borderStyle: "dashed",
-    backgroundColor: "#fafafa",
-  },
-  uploadButtonIcon: {
-    marginRight: 8,
-    fontSize: 18,
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "600",
-  },
-
-  // Submit Button
-  submitButton: {
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "center",
-    backgroundColor: "#3B82F6", // Modern blue
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: "center",
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    textTransform: "capitalize",
-    letterSpacing: 0.5,
-  },
-  submitButtonDisabled: {
-    opacity: 0.7,
-  },
-  uploadButtonDisabled: {
-    opacity: 0.7,
-    backgroundColor: "#f5f5f5",
-  },
-  imageLoadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalIndicator: {
-    width: 40,
-    height: 4,
-    backgroundColor: "#e0e0e0",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 24,
-    color: "#1a1a1a",
-  },
-  modalButtonPrimary: {
-    backgroundColor: "#3B82F6",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  modalButtonTextPrimary: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  modalButtonSecondary: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: "#eee",
-  },
-  modalButtonTextSecondary: {
-    color: "#333",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  modalButtonCancel: {
-    backgroundColor: "#f8f9fa",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  modalButtonTextCancel: {
-    color: "#666",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  // Empty State
-  emptyStateContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#f0f0f0",
-    marginBottom: 24,
-    borderStyle: "dashed",
-  },
-  emptyStateEmoji: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  emptyStateSubText: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
-  },
+  headerGradient: { height: 150, paddingBottom: 30 },
+  headerSafeArea: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10 },
+  backButton: { padding: 8, borderRadius: 20 },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff" },
+  notificationButtonPlaceholder: { width: 40, height: 40 },
+  contentContainer: { flex: 1, marginTop: -40, backgroundColor: "#ffffff", borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
+  scrollContent: { padding: 20, paddingTop: 25 },
+  mapContainer: { height: 180, borderRadius: 20, overflow: "hidden", marginBottom: 24, backgroundColor: "#f5f5f5", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  map: { width: "100%", height: "100%" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 10, color: "#666" },
+  locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: "rgba(255, 255, 255, 0.95)", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  locationOverlayText: { fontSize: 10, color: "#333", textAlign: "center", fontWeight: "600" },
+  sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#1a1a1a", marginBottom: 12 },
+  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: "#f0f0f0", borderRadius: 16, marginBottom: 12, backgroundColor: "#fff" },
+  locationOptionSelected: { borderColor: "#1e90ff", backgroundColor: "#f8fbff" },
+  radioContainer: { marginRight: 14, marginTop: 2 },
+  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#d1d5db", justifyContent: "center", alignItems: "center" },
+  radioOuterSelected: { borderColor: "#1e90ff" },
+  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#1e90ff" },
+  locationTextContainer: { flex: 1 },
+  locationTitle: { fontSize: 14, fontWeight: "bold", color: "#333", marginBottom: 4 },
+  locationAddress: { fontSize: 12, color: "#666", marginBottom: 6, lineHeight: 18 },
+  locationCoords: { fontSize: 10, color: "#999" },
+  infoCard: { backgroundColor: "#F0F7FF", borderRadius: 16, padding: 20, marginBottom: 24, marginTop: 8, borderWidth: 1, borderColor: "#E3F2FD" },
+  infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  infoIcon: { fontSize: 16, marginRight: 8 },
+  infoTitle: { fontSize: 15, fontWeight: "bold", color: "#1a1a1a" },
+  infoDivider: { height: 1, backgroundColor: "rgba(30, 144, 255, 0.1)", marginBottom: 12 },
+  infoDetailRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  infoLabel: { fontSize: 14, color: "#666" },
+  infoValue: { fontSize: 14, fontWeight: "600", color: "#333" },
+  notesContainer: { backgroundColor: "#fafafa", borderRadius: 16, borderWidth: 1, borderColor: "#f0f0f0", marginBottom: 24 },
+  notesInput: { padding: 16, height: 100, fontSize: 14, color: "#333" },
+  imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
+  imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: "#f0f0f0" },
+  imagePreview: { width: "100%", height: "100%" },
+  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.5)", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#fff" },
+  removeImageText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
+  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 16, padding: 16, marginBottom: 30, borderStyle: "dashed", backgroundColor: "#fafafa" },
+  uploadButtonIcon: { marginRight: 8, fontSize: 18 },
+  uploadButtonText: { fontSize: 14, color: "#666", fontWeight: "600" },
+  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: "#3B82F6", borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
+  submitButtonDisabled: { opacity: 0.7 },
+  uploadButtonDisabled: { opacity: 0.7, backgroundColor: "#f5f5f5" },
+  imageLoadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#fff", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
+  modalIndicator: { width: 40, height: 4, backgroundColor: "#e0e0e0", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: "#1a1a1a" },
+  modalButtonPrimary: { backgroundColor: "#3B82F6", padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
+  modalButtonTextPrimary: { color: "#fff", fontWeight: "bold", fontSize: 15 },
+  modalButtonSecondary: { backgroundColor: "#fff", padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12, borderWidth: 1.5, borderColor: "#eee" },
+  modalButtonTextSecondary: { color: "#333", fontWeight: "600", fontSize: 15 },
+  modalButtonCancel: { backgroundColor: "#f8f9fa", padding: 18, borderRadius: 16, alignItems: "center" },
+  modalButtonTextCancel: { color: "#666", fontWeight: "600", fontSize: 15 },
+  emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: "#f0f0f0", marginBottom: 24, borderStyle: "dashed" },
+  emptyStateEmoji: { fontSize: 40, marginBottom: 10 },
+  emptyStateText: { fontSize: 16, fontWeight: "bold", color: "#333", textAlign: "center", marginBottom: 4 },
+  emptyStateSubText: { fontSize: 13, color: "#999", textAlign: "center" },
 });

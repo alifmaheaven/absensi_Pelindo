@@ -41,8 +41,8 @@ export default function ProfileScreen() {
             {},
             { headers: { Authorization: `Bearer ${token}` } }
           );
-        } catch (apiError) {
-          console.warn("Logout API call failed:", apiError.message);
+        } catch (apiError: any) {
+          console.warn("Logout API call failed:", apiError?.message);
           // Continue with client-side cleanup even if API fails
         }
       }

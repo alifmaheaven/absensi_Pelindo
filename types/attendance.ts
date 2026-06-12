@@ -9,7 +9,6 @@ export interface IAttendance {
   name: string;
   description: string;
   longitude: number;
-  longitude: number;
   latitude: number;
   checkin: string | null;
   checkout: null | string;
@@ -116,9 +115,9 @@ export type TAttendance = {
   evidence_group_id: string;
   checkin: string | null;
   checkout?: string | null;
-  longitude: number | null;
-  latitude: number | null;
-};
+  longitude: number;
+  latitude: number;
+}
 
 export interface IAttendanceSite {
   id: string;
@@ -130,7 +129,6 @@ export interface IAttendanceSite {
   description: string;
   longitude: number;
   latitude: number;
-  created_at: string;
   updated_at: string;
   deleted_at: null;
   x1: null;

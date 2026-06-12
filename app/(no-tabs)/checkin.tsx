@@ -134,13 +134,13 @@ export default function CheckinScreen() {
     if (isNaN(lat) || isNaN(lon)) return sites.map((s) => ({ ...s, distance: Infinity, inRange: false }));
 
     const withDistance = sites
-      .slice(0, MAX_SITES_PROXIMITY)
       .map((s) => ({
         ...s,
         distance: getDistanceInMeters(lat, lon, s.latitude, s.longitude),
         inRange: getDistanceInMeters(lat, lon, s.latitude, s.longitude) <= s.tolerance,
       }))
-      .sort((a, b) => a.distance - b.distance);
+      .sort((a, b) => a.distance - b.distance)
+        .slice(0, MAX_SITES_PROXIMITY);
 
     return withDistance;
   }, [siteData, location]);

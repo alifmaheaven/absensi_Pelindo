@@ -213,16 +213,18 @@ const TicketingScreen = () => {
         return [...prev, ...filtered];
       });
 
-      setTicketMeta((prev) => ({
-        ...prev,
-        total: meta?.total || 0,
-        page: prev.page + 1,
-        total_pages: meta?.total_pages || 0,
-      }));
-
-      if ((ticketMeta.page + 1) >= (meta?.total_pages || 0)) {
-        setHasMore(false);
-      }
+      setTicketMeta((prev) => {
+        const nextPage = prev.page + 1;
+        if (nextPage >= (meta?.total_pages || 0)) {
+          setHasMore(false);
+        }
+        return {
+          ...prev,
+          total: meta?.total || 0,
+          page: nextPage,
+          total_pages: meta?.total_pages || 0,
+        };
+      });
     } catch (error) {
       console.debug(error);
     } finally {

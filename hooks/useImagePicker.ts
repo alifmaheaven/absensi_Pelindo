@@ -13,13 +13,14 @@ import {
 } from "react-native";
 
 export interface IImage {
+  id?: string | null;
   uri: string;
   path: string;
   link: string;
 }
 
 export interface IImageUploadService {
-  uploadTemp: (file: any) => Promise<{ data?: { path: string; link: string }[] }>;
+  uploadTemp: (file: any) => Promise<{ data?: any } | any>;
   deleteTemp: (payload: { links: string[] }) => Promise<any>;
 }
 

@@ -124,6 +124,7 @@ export default function CheckoutScreen() {
               uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
               path: e.file,
               link: e.file,
+              id: e.id,
             })),
           );
         }
@@ -160,6 +161,10 @@ export default function CheckoutScreen() {
     }
     if (images.length === 0) {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
+      return;
+    }
+    if (!checkInDataById?.id) {
+      showToast("Data check-in tidak ditemukan!", "error");
       return;
     }
 

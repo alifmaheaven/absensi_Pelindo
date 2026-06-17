@@ -1,3 +1,4 @@
+import NetworkStatusBar from "@/components/NetworkStatusBar";
 import { ToastProvider } from "@/components/ui/toast";
 import { getLatestVersion } from "@/services/version";
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
@@ -59,6 +60,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={DefaultTheme}>
       <ToastProvider>
+        <NetworkStatusBar />
         <Stack>
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="(no-tabs)" options={{ headerShown: false }} />

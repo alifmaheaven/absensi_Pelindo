@@ -23,7 +23,21 @@ API.interceptors.request.use(
 );
 
 API.interceptors.response.use(
-  async (response) => response,
+  async (response) => {
+    // Normalize nested .data.data.data pattern for paginated list responses
+    if (
+      response.data?.data?.data &&
+      Array.isArray(response.data.data.data) &&
+      !response.config?.raw
+    ) {
+      response.data = {
+        data: response.data.data.data,
+        meta: response.data.data.meta,
+      };
+    }
+
+    return response;
+  },
   async (error) => {
     const err = await handleHttpError(error);
     return Promise.reject(err);

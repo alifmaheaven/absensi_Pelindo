@@ -42,7 +42,7 @@ export default function LoginScreen() {
   useEffect(() => {
     if (Platform.OS === "web") {
       const handleMessage = (e: MessageEvent) => {
-        if (e.origin !== (process.env.EXPO_PUBLIC_MCAPTCHA_URL || "https://captcha.vps.prakhya.id")) return;
+        if (e.origin !== process.env.EXPO_PUBLIC_MCAPTCHA_URL) return;
         if (e.data && e.data.token) {
           setMcaptchaToken(e.data.token);
         }
@@ -198,7 +198,7 @@ export default function LoginScreen() {
             <View style={{ height: 80, width: "100%", marginBottom: 15, overflow: "hidden" }}>
               {Platform.OS === "web" ? (
                 <iframe
-                  src={`${process.env.EXPO_PUBLIC_MCAPTCHA_URL || 'https://captcha.vps.prakhya.id'}/widget/?sitekey=${process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY || 'xDpgSpCZJQVamuVnJDfmn1mi6rG2BQeR'}`}
+                  src={`${process.env.EXPO_PUBLIC_MCAPTCHA_URL}/widget/?sitekey=${process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY}`}
                   title="mCaptcha"
                   frameBorder="0"
                   style={{ width: "100%", height: "100%", border: "none" }}
@@ -219,7 +219,7 @@ export default function LoginScreen() {
                         </head>
                         <body>
                           <iframe 
-                            src="${(process.env.EXPO_PUBLIC_MCAPTCHA_URL || 'https://captcha.vps.prakhya.id')}/widget/?sitekey=${(process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY || 'xDpgSpCZJQVamuVnJDfmn1mi6rG2BQeR')}"
+                            src="${process.env.EXPO_PUBLIC_MCAPTCHA_URL}/widget/?sitekey=${process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY}"
                             title="mCaptcha"
                             frameborder="0"
                           ></iframe>

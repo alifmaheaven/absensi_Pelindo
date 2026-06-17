@@ -9,12 +9,12 @@ import {
 import { useImagePicker } from "@/hooks/useImagePicker";
 import { useLocationCheck } from "@/hooks/useLocationCheck";
 import { useRequest } from "@/hooks/use-request";
+import axios from "@/lib/axios";
 import {
   deleteEvid,
   getAttendanceList,
   getEvidGroupId,
   updateAttendance,
-  uploadEvid,
   uploadEvidPermanent,
   uploadEvidGroupId,
 } from "@/services/attendance";
@@ -136,7 +136,18 @@ export default function CheckoutScreen() {
 
   // Upload service adapter for useImagePicker
   const uploadService = {
-    uploadTemp: async (file: any) => uploadEvid(file),
+    uploadTemp: async (file: { uri: string; name: string; type: string }) => {
+      const formData = new FormData();
+      formData.append("files", {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as any);
+      const response = await axios.post("/attendance/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    },
     deleteTemp: async (payload: { links: string[] }) => {
       // no-op for temp deletion
     },

@@ -42,12 +42,6 @@ export function getTodayStaticTimeString(
   )} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
 }
 
-export const getGoogleMapsEmbedUrl = (lat: number, lng: number) => {
-  return `
-    https://www.google.com/maps?q=${lat},${lng}&z=17&output=embed
-  `;
-};
-
 type CompressOptions = {
   maxWidth?: number;
   quality?: number; // 0 - 1

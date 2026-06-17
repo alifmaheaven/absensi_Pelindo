@@ -55,12 +55,12 @@ export const MapEmbed: React.FC<MapEmbedProps> = ({ location }) => {
         ref={webViewRef}
         source={{ html: createMapHTML() }}
         style={{ width: "100%", height: 200 }}
-        originWhitelist={["*"]}
+        originWhitelist={[]}
         javaScriptEnabled={true}
-        domStorageEnabled={true}
+        domStorageEnabled={false}
         startInLoadingState={false}
         scalesPageToFit={false}
-        mixedContentMode="always"
+        mixedContentMode="never"
         allowsInlineMediaPlayback={true}
       />
     </View>

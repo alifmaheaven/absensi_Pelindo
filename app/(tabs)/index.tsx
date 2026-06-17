@@ -236,9 +236,9 @@ export default function HomeScreen() {
                 <Bell color="#fff" />
 
                 {/* Badge */}
-                <View style={styles.notificationBadge}>
+              {/* <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>3</Text>
-                </View>
+                </View> */}
               </TouchableOpacity>
 
               {/* Avatar */}
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     position: "relative",
     padding: 6, // tap area lebih nyaman
     backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: "100%",
+    borderRadius: 100,
     justifyContent: "center",
     alignItems: "center",
   },

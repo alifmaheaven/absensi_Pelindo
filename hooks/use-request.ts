@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 export function useRequest<T>(request: () => Promise<T>) {
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef(request);
+  requestRef.current = request;
 
   const run = async () => {
     try {
       setLoading(true);
-      return await request();
+      return await requestRef.current();
     } catch (e) {
       throw e;
     } finally {

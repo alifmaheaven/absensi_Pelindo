@@ -230,9 +230,9 @@ export default function TicketingEditScreen() {
         : ImagePicker.launchImageLibraryAsync;
 
       // 1. Cek Status Izin Saat Ini
-      let { status, canAskAgain } = await getPermission();
+      let { status } = await getPermission();
       console.debug(
-        `[PickImage] Initial Status: ${status}, CanAskAgain: ${canAskAgain}`,
+        `[PickImage] Initial Status: ${status}`,
       );
 
       // 2. Jika belum ditentukan (Undetermined), minta izin

@@ -1,5 +1,5 @@
 import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 
@@ -8,76 +8,44 @@ interface MapEmbedProps {
 }
 
 export const MapEmbed: React.FC<MapEmbedProps> = ({ location }) => {
-  // Referensi WebView
   const webViewRef = useRef<WebView>(null);
 
-  // variables
-  const [urlLocation, setUrlLocation] = useState<string | null>(null);
-
-  // functions
   const createMapHTML = () => {
+    const lat = location?.coords?.latitude ?? -2.5;
+    const lon = location?.coords?.longitude ?? 118;
+    const zoom = 18;
+
     return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-          }
-          iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-          }
+          html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+          #map { width: 100%; height: 100%; }
         </style>
       </head>
       <body>
-        <iframe
-          id="mapFrame"
-          src="${urlLocation || ""}"
-          width="100%"
-          height="100%"
-          style="border:0;"
-          allowfullscreen=""
-          loading="lazy"
-          referrerpolicy="no-referrer-when-downgrade"
-        ></iframe>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', {
+            center: [${lat}, ${lon}],
+            zoom: ${zoom},
+            zoomControl: true,
+            attributionControl: true,
+          });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19,
+          }).addTo(map);
+          L.marker([${lat}, ${lon}]).addTo(map);
+        </script>
       </body>
       </html>
     `;
   };
-
-  // lifecycle
-  useEffect(() => {
-    if (location) {
-      const zoom = 18;
-      const lat = location.coords.latitude;
-      const lon = location.coords.longitude;
-
-      const googleMapsUrl = new URL("https://maps.google.com/maps");
-      googleMapsUrl.searchParams.set("q", `${lat},${lon}`); // query coordinate
-      googleMapsUrl.searchParams.set("z", zoom.toString()); // zoom
-      googleMapsUrl.searchParams.set("output", "embed"); // display output
-      googleMapsUrl.searchParams.set("hl", "id"); // host language
-      googleMapsUrl.searchParams.set("gl", "ID"); // geo location
-
-      setUrlLocation(googleMapsUrl.toString());
-    }
-  }, [location]);
-
-  // Tambahan untuk memperbarui peta jika lokasi berubah
-  useEffect(() => {
-    if (webViewRef.current && urlLocation) {
-      webViewRef.current.injectJavaScript(`
-        document.getElementById('mapFrame').src = '${urlLocation}';
-        true;
-      `);
-    }
-  }, [urlLocation]);
 
   if (!location) return null;
 
@@ -90,8 +58,10 @@ export const MapEmbed: React.FC<MapEmbedProps> = ({ location }) => {
         originWhitelist={["*"]}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        startInLoadingState={true}
-        scalesPageToFit={true}
+        startInLoadingState={false}
+        scalesPageToFit={false}
+        mixedContentMode="always"
+        allowsInlineMediaPlayback={true}
       />
     </View>
   );

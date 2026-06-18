@@ -9,6 +9,8 @@ import {
   Alert,
   Dimensions,
   Share,
+  ActionSheetIOS,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -51,6 +53,35 @@ export default function GalleryFolderScreen() {
     fetchPhotos();
   }, [fetchPhotos]);
 
+  const showUploadOptions = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ["Batal", "Kamera", "Galeri"], cancelButtonIndex: 0 },
+        (idx) => {
+          if (idx === 1) handleTakePhoto();
+          else if (idx === 2) handlePickImages();
+        },
+      );
+    } else {
+      Alert.alert("Upload Foto", "Pilih sumber:", [
+        { text: "Kamera", onPress: handleTakePhoto },
+        { text: "Galeri", onPress: handlePickImages },
+        { text: "Batal", style: "cancel" },
+      ]);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Izin Diperlukan", "Akses kamera diperlukan untuk mengambil foto");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (result.canceled || !result.assets?.length) return;
+    await uploadAssets(result.assets);
+  };
+
   const handlePickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
@@ -65,11 +96,14 @@ export default function GalleryFolderScreen() {
     });
 
     if (result.canceled || !result.assets?.length) return;
+    await uploadAssets(result.assets);
+  };
 
+  const uploadAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
     setUploading(true);
     try {
       const formData = new FormData();
-      for (const asset of result.assets) {
+      for (const asset of assets) {
         const filename = asset.uri.split("/").pop() || "photo.jpg";
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : "image/jpeg";
@@ -159,7 +193,7 @@ export default function GalleryFolderScreen() {
           <Text style={{ color: "#1e90ff", fontSize: 14 }}>Share</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={handlePickImages}
+          onPress={showUploadOptions}
           disabled={uploading}
           style={{
             backgroundColor: "#1e90ff",

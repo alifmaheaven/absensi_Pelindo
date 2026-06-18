@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Calender, DocumentCheck, Home, Person } from "@/components/icon";
+import { Calender, DocumentCheck, Home, Person, Bell, GalleryIcon } from "@/components/icon";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { getToken } from "@/lib/storage";
 import { getProfile } from "@/services/auth";
@@ -88,6 +88,24 @@ export default function TabLayout() {
           title: "Izin/Cuti",
           tabBarIcon: ({ focused }) => (
             <TabIcon icon={DocumentCheck} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="gallery"
+        options={{
+          title: "Gallery",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon={GalleryIcon} focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: "Notifikasi",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon={Bell} focused={focused} />
           ),
         }}
       />

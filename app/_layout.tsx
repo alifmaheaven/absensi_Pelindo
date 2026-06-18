@@ -1,4 +1,5 @@
 import NetworkStatusBar from "@/components/NetworkStatusBar";
+import OfflineBanner from "@/components/OfflineBanner";
 import { ToastProvider } from "@/components/ui/toast";
 import { getLatestVersion } from "@/services/version";
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
@@ -8,12 +9,29 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Alert, Linking } from "react-native";
 import "react-native-reanimated";
+import "./lib/i18n";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { lightTheme, darkTheme } from "@/lib/theme";
 
 export const unstable_settings = {
   anchor: "(tabs)",
 };
 
 export default function RootLayout() {
+  const { colorScheme, isDark } = useColorScheme();
+  const navTheme = {
+    ...DefaultTheme,
+    dark: isDark,
+    colors: {
+      ...DefaultTheme.colors,
+      background: isDark ? darkTheme.background : lightTheme.background,
+      card: isDark ? darkTheme.card : lightTheme.card,
+      text: isDark ? darkTheme.text : lightTheme.text,
+      border: isDark ? darkTheme.border : lightTheme.border,
+      primary: isDark ? darkTheme.primary : lightTheme.primary,
+    },
+  };
+
   useEffect(() => {
     checkVersion();
   }, []);
@@ -58,9 +76,10 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={DefaultTheme}>
+    <ThemeProvider value={navTheme}>
       <ToastProvider>
         <NetworkStatusBar />
+        <OfflineBanner />
         <Stack>
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="(no-tabs)" options={{ headerShown: false }} />
@@ -74,7 +93,7 @@ export default function RootLayout() {
         </Stack>
       </ToastProvider>
 
-      <StatusBar style="auto" />
+      <StatusBar style={isDark ? "light" : "dark"} />
     </ThemeProvider>
   );
 }

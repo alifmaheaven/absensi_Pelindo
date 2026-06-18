@@ -1,3 +1,6 @@
+import { readCache, writeCache } from "@/lib/cache";
+import NetInfo from "@react-native-community/netinfo";
+
 import axios from "@/lib/axios";
 import {
   IAttendanceOptions,
@@ -31,6 +34,8 @@ export async function getTicketDevice(
   }
 }
 
+const CACHE_KEY = "ticket_list";
+
 export async function getTicket(params: {
   per_page: number;
   page: number;
@@ -38,8 +43,25 @@ export async function getTicket(params: {
   user_id_exact?: string[];
   company_id_exact?: string[];
 }): Promise<Response<{ data: ITicket[]; meta: IMeta }>> {
+  // First page only: try cache first
+  if (params.page <= 1) {
+    try {
+      const state = await NetInfo.fetch();
+      if (!state.isConnected) {
+        const cached = await readCache<Response<{ data: ITicket[]; meta: IMeta }>>(CACHE_KEY);
+        if (cached) return cached;
+      }
+    } catch {
+      // offline check failed, try live
+    }
+  }
+
   try {
     const response = await axios.get("/ticket/", { params });
+    // Cache first page results
+    if (params.page <= 1) {
+      writeCache(CACHE_KEY, response.data, 60000);
+    }
     return response.data;
   } catch (error) {
     console.error(error);

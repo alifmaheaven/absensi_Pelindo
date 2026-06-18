@@ -1,4 +1,6 @@
 import axios from "@/lib/axios";
+import NetInfo from "@react-native-community/netinfo";
+import { queueRequest } from "@/lib/offlineQueue";
 import {
   IAttendance,
   IAttendanceEvidGroupId,
@@ -100,8 +102,12 @@ export async function createAttendance(
   payload: TAttendance,
 ): Promise<Response<IAttendance>> {
   try {
+    const state = await NetInfo.fetch();
+    if (!state.isConnected || !state.isInternetReachable) {
+      await queueRequest("/attendance/", "POST", payload);
+      return { data: payload as any } as Response<IAttendance>;
+    }
     const response = await axios.post("/attendance/", payload);
-
     return response.data;
   } catch (error) {
     console.error(error);
@@ -114,8 +120,12 @@ export async function updateAttendance(payload: {
   checkout: string;
 }) {
   try {
+    const state = await NetInfo.fetch();
+    if (!state.isConnected || !state.isInternetReachable) {
+      await queueRequest("/attendance/", "PUT", payload);
+      return { data: payload } as any;
+    }
     const response = await axios.put("/attendance/", payload);
-
     return response.data;
   } catch (error) {
     console.error(error);

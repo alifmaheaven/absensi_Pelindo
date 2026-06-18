@@ -1,0 +1,58 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "error": "Error",
+    "no_data": "No data available",
+    "search": "Search..."
+  },
+  "home": {
+    "greeting_morning": "Good Morning",
+    "greeting_afternoon": "Good Afternoon",
+    "greeting_evening": "Good Evening",
+    "quick_access": "Quick Access",
+    "tips_title": "Tips of the Day"
+  },
+  "gallery": {
+    "title": "Gallery",
+    "new_folder": "+ Folder",
+    "folder_name": "Folder name",
+    "create_folder": "Create Folder",
+    "delete_folder": "Delete Folder",
+    "delete_confirm": "Delete \"{{name}}\" and all photos inside?",
+    "photos": "photos",
+    "no_folders": "No folders yet",
+    "no_photos": "No photos yet",
+    "upload": "Upload",
+    "share": "Share",
+    "delete_photo": "Delete Photo",
+    "uploading": "Uploading..."
+  },
+  "notification": {
+    "title": "Notifications",
+    "mark_all_read": "Mark all read",
+    "no_notifications": "No notifications",
+    "just_now": "just now"
+  },
+  "attendance": {
+    "start_work": "Start Work",
+    "end_work": "End Work",
+    "check_in": "Check In",
+    "check_out": "Check Out",
+    "offline_mode": "Offline mode",
+    "offline_pending": "Offline ({{count}} pending)",
+    "syncing": "Syncing queued requests..."
+  },
+  "ticket": {
+    "create_new": "Create New Ticket",
+    "view_detail": "View Detail",
+    "select_location": "Select Location",
+    "select_device": "Select device",
+    "title_label": "Enter Problem Title",
+    "description_label": "Explain the problem in detail",
+    "submit": "Submit Ticket"
+  }
+}

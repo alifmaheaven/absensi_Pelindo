@@ -1,0 +1,58 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Batal",
+    "save": "Simpan",
+    "delete": "Hapus",
+    "loading": "Memuat...",
+    "error": "Kesalahan",
+    "no_data": "Tidak ada data",
+    "search": "Cari..."
+  },
+  "home": {
+    "greeting_morning": "Selamat Pagi",
+    "greeting_afternoon": "Selamat Siang",
+    "greeting_evening": "Selamat Sore",
+    "quick_access": "Akses Cepat",
+    "tips_title": "Tips Hari Ini"
+  },
+  "gallery": {
+    "title": "Gallery",
+    "new_folder": "+ Folder",
+    "folder_name": "Nama folder",
+    "create_folder": "Buat Folder",
+    "delete_folder": "Hapus Folder",
+    "delete_confirm": "Hapus \"{{name}}\" dan semua foto di dalamnya?",
+    "photos": "foto",
+    "no_folders": "Belum ada folder",
+    "no_photos": "Belum ada foto",
+    "upload": "Upload",
+    "share": "Bagikan",
+    "delete_photo": "Hapus Foto",
+    "uploading": "Mengupload..."
+  },
+  "notification": {
+    "title": "Notifikasi",
+    "mark_all_read": "Tandai semua sudah dibaca",
+    "no_notifications": "Belum ada notifikasi",
+    "just_now": "baru saja"
+  },
+  "attendance": {
+    "start_work": "Mulai Kerja",
+    "end_work": "Akhir Kerja",
+    "check_in": "Check In",
+    "check_out": "Check Out",
+    "offline_mode": "Mode offline",
+    "offline_pending": "Offline ({{count}} antrean)",
+    "syncing": "Sinkronisasi data..."
+  },
+  "ticket": {
+    "create_new": "Buat Tiket Baru",
+    "view_detail": "Lihat Detail",
+    "select_location": "Pilih Lokasi",
+    "select_device": "Pilih Perangkat",
+    "title_label": "Masukkan Judul Masalah",
+    "description_label": "Jelaskan masalah secara detail",
+    "submit": "Kirim Tiket"
+  }
+}

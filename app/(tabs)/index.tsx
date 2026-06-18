@@ -183,11 +183,11 @@ export default function HomeScreen() {
     },
     {
       icon: TreeRoundDot,
-      label: "Division",
+      label: "Gallery",
       color: "#9747FF",
       containerColor: "#c599ff",
       onPress: () => {
-        showToast("Fitur Division akan segera hadir", "info");
+        router.push("/(tabs)/gallery");
       },
     },
   ];

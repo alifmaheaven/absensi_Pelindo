@@ -8,6 +8,7 @@ export { default as Device } from "./Device";
 export { default as DocumentCheck } from "./DocumentCheck";
 export { default as EyeOffOutline } from "./EyeOffOutline";
 export { default as EyeOutline } from "./EyeOutline";
+export { default as GalleryIcon } from "./Gallery";
 export { default as Home } from "./Home";
 export { default as ImageIcon } from "./ImageIcon";
 export { default as InfoOutlineRounded } from "./InfoOutlineRounded";

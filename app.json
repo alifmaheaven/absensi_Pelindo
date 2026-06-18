@@ -2,7 +2,7 @@
   "expo": {
     "name": "Absensi Eos",
     "slug": "absensi_app",
-    "version": "1.0.4",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "absensiapp",
@@ -35,7 +35,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 4
+      "versionCode": 13
     },
     "web": {
       "output": "static",
@@ -67,7 +67,10 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-font",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,

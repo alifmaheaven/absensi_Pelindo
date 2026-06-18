@@ -13,10 +13,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { getFolders, createFolder, deleteFolder } from "@/services/gallery";
-import { IIGalleryFolder } from "@/types/gallery";
+import { IGalleryFolder } from "@/types/gallery";
 
 export default function GalleryScreen() {
-  const [folders, setFolders] = useState<IIGalleryFolder[]>([]);
+  const [folders, setFolders] = useState<IGalleryFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -82,7 +82,7 @@ export default function GalleryScreen() {
   const renderFolder = ({ item }: { item: IGalleryFolder }) => (
     <TouchableOpacity
       onPress={() =>
-        router.push({ pathname: "/gallery-folder", params: { id: item.id, name: item.name } })
+        router.push({ pathname: "/(no-tabs)/gallery-folder" as any, params: { id: item.id, name: item.name } })
       }
       onLongPress={() => handleDelete(item)}
       style={{

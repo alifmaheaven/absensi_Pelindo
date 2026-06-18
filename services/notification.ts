@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/axios";
+import apiClient from "@/lib/axios";
 
 export async function getNotifications(page = 1, perPage = 20) {
   try {

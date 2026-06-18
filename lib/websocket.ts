@@ -1,5 +1,5 @@
 import { getToken } from "./storage";
-import { apiClient } from "./axios";
+import apiClient from "./axios";
 
 type MessageHandler = (data: any) => void;
 

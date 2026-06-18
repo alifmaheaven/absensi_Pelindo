@@ -9,8 +9,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Alert, Linking } from "react-native";
 import "react-native-reanimated";
-import "./lib/i18n";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import "../lib/i18n";
+import { useColorScheme } from "react-native";
 import { lightTheme, darkTheme } from "@/lib/theme";
 
 export const unstable_settings = {
@@ -18,7 +18,9 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  const { colorScheme, isDark } = useColorScheme();
+  const deviceColorScheme = useColorScheme();
+  const isDark = deviceColorScheme === "dark";
+  const colorScheme = deviceColorScheme || "light";
   const navTheme = {
     ...DefaultTheme,
     dark: isDark,

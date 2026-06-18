@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/axios";
+import apiClient from "@/lib/axios";
 import { IGalleryFolder, IGalleryPhoto, IGalleryShareResponse } from "@/types/gallery";
 
 export async function getFolders(page = 1, perPage = 20) {

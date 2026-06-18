@@ -187,7 +187,7 @@ export default function HomeScreen() {
       color: "#9747FF",
       containerColor: "#c599ff",
       onPress: () => {
-        router.push("/(tabs)/gallery");
+        router.push("/(tabs)/gallery" as any);
       },
     },
   ];

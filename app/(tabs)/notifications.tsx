@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, memo } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -101,7 +101,7 @@ export default function NotificationsScreen() {
     }
   };
 
-  const NotificationItem = memo(({ item }: { item: Notification }) => (
+  const renderNotification = ({ item }: { item: Notification }) => (
     <TouchableOpacity
       onPress={() => handlePressNotif(item)}
       style={{
@@ -155,7 +155,7 @@ export default function NotificationsScreen() {
         </Text>
       </View>
     </TouchableOpacity>
-  ));
+  );
 
   if (loading) {
     return (
@@ -188,7 +188,7 @@ export default function NotificationsScreen() {
       </View>
       <FlatList
         data={notifications}
-        renderItem={NotificationItem}
+        renderItem={renderNotification}
         keyExtractor={(item) => item.id}
         getItemLayout={(_data, index) => ({ length: 76, offset: 76 * index, index })}
         windowSize={5}

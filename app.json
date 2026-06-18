@@ -35,7 +35,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 13
+      "versionCode": 15
     },
     "web": {
       "output": "static",

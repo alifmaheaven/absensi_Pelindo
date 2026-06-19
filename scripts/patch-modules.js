@@ -39,7 +39,51 @@ if (fs.existsSync(domRectPath)) {
   console.log("⚠ DOMRectReadOnly.js not found at", domRectPath);
 }
 
-// 2. Patch expo-modules-core Promise.kt - fix code: String? → String in toBridgePromise overrides
+// 2. Patch expo-modules-core KPromiseWrapper.kt - fix code: String? → String and cause → throwable
+const kPromiseWrapperPath = path.join(
+  __dirname,
+  "..",
+  "node_modules",
+  "expo-modules-core",
+  "android",
+  "src",
+  "main",
+  "java",
+  "expo",
+  "modules",
+  "kotlin",
+  "KPromiseWrapper.kt"
+);
+
+if (fs.existsSync(kPromiseWrapperPath)) {
+  let content = fs.readFileSync(kPromiseWrapperPath, "utf8");
+  let modified = false;
+
+  const oldSig = "override fun reject(code: String?, message: String?, cause: Throwable?)";
+  const newSig = "override fun reject(code: String, message: String?, throwable: Throwable?)";
+  if (content.includes(oldSig)) {
+    content = content.split(oldSig).join(newSig);
+    modified = true;
+  }
+
+  const oldCall = "bridgePromise.reject(code, message, cause)";
+  const newCall = "bridgePromise.reject(code, message, throwable)";
+  if (content.includes(oldCall)) {
+    content = content.split(oldCall).join(newCall);
+    modified = true;
+  }
+
+  if (modified) {
+    fs.writeFileSync(kPromiseWrapperPath, content);
+    console.log("✓ Patched KPromiseWrapper.kt - nullable String → String + parameter rename");
+  } else {
+    console.log("→ KPromiseWrapper.kt already patched or pattern not found");
+  }
+} else {
+  console.log("⚠ KPromiseWrapper.kt not found at", kPromiseWrapperPath);
+}
+
+// 3. Patch expo-modules-core Promise.kt - fix code: String? → String in toBridgePromise overrides
 const promiseKtPath = path.join(
   __dirname,
   "..",

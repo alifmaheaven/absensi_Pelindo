@@ -5,6 +5,7 @@
   "scripts": {
     "start": "expo start -c",
     "build:apk": "eas build -p android --profile preview",
+    "postinstall": "node ./scripts/patch-modules.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -22,7 +23,7 @@
     "@react-navigation/native": "^7.1.8",
     "axios": "^1.13.2",
     "buffer": "^6.0.3",
-    "expo": "~55.0.26",
+    "expo": "~56.0.0",
     "expo-build-properties": "~56.0.19",
     "expo-constants": "~56.0.18",
     "expo-font": "~56.0.7",

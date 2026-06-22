@@ -2,7 +2,7 @@ import NetworkStatusBar from "@/components/NetworkStatusBar";
 import OfflineBanner from "@/components/OfflineBanner";
 import { ToastProvider } from "@/components/ui/toast";
 import { getLatestVersion } from "@/services/version";
-import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
+import { DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";

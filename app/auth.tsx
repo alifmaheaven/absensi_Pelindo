@@ -3,12 +3,13 @@ import { useToast } from "@/components/ui/toast";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { useRequest } from "@/hooks/use-request";
 import { saveToken } from "@/lib/storage";
-import { login } from "@/services/auth";
+import { login, getCaptcha } from "@/services/auth";
+import { SvgXml } from "react-native-svg";
 import { THttpErrorResult } from "@/types";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,7 +21,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { WebView } from "react-native-webview";
 
 const isValidEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -33,30 +33,36 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [mcaptchaToken, setMcaptchaToken] = useState("");
-  const webViewRef = useRef<WebView>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaSvg, setCaptchaSvg] = useState("");
+  const [loadingCaptcha, setLoadingCaptcha] = useState(false);
+
   const { showToast } = useToast();
   const router = useRouter();
   const { checking } = useAuthGuard("guest");
 
-  useEffect(() => {
-    if (Platform.OS === "web") {
-      const handleMessage = (e: MessageEvent) => {
-        if (e.origin !== process.env.EXPO_PUBLIC_MCAPTCHA_URL) return;
-        if (e.data && e.data.token) {
-          setMcaptchaToken(e.data.token);
-        }
-      };
-
-      window.addEventListener("message", handleMessage as EventListener);
-      return () => {
-        window.removeEventListener("message", handleMessage as EventListener);
-      };
+  const fetchCaptcha = async () => {
+    try {
+      setLoadingCaptcha(true);
+      const res = await getCaptcha();
+      if (res?.data) {
+        setCaptchaSvg(res.data.svg);
+        setCaptchaToken(res.data.token);
+      }
+    } catch (error) {
+      console.error("Failed to fetch captcha", error);
+    } finally {
+      setLoadingCaptcha(false);
     }
+  };
+
+  useEffect(() => {
+    fetchCaptcha();
   }, []);
 
   const { run: loginReq, loading } = useRequest(() =>
-    login({ email, password, mcaptcha_token: mcaptchaToken }),
+    login({ email, password, captcha_token: captchaToken, captcha_answer: captchaAnswer }),
   );
 
   const handleLogin = async () => {
@@ -71,8 +77,8 @@ export default function LoginScreen() {
       return;
     }
 
-    if (!mcaptchaToken) {
-      showToast("Mohon selesaikan CAPTCHA", "error");
+    if (!captchaAnswer.trim() || !captchaToken) {
+      showToast("Silakan isi jawaban captcha terlebih dahulu", "error");
       return;
     }
 
@@ -80,10 +86,6 @@ export default function LoginScreen() {
       const res = await loginReq();
 
       if (res.data?.token) {
-        // Selalu simpan token — rememberMe hanya kontrol apakah
-        // token persisten setelah app restart atau tidak.
-        // Tapi SecureStore tetap perlu token agar auth guard & axios
-        // interceptor bisa baca saat session berjalan.
         await saveToken(res.data.token);
       }
 
@@ -92,15 +94,9 @@ export default function LoginScreen() {
     } catch (error) {
       console.debug("Login failed:", error);
 
-      // Reset mCaptcha
-      setMcaptchaToken("");
-      if (Platform.OS !== "web") {
-        webViewRef.current?.reload();
-      } else {
-        // For web, we can force reload by altering state or just let the user click again as iframe handles its own state.
-        // Or we could attach a ref to the iframe. For simplicity, we can ignore reloading the iframe directly here 
-        // because mCaptcha handles its own refresh button inside the widget.
-      }
+      // Reset captcha
+      setCaptchaAnswer("");
+      fetchCaptcha();
 
       const err = error as THttpErrorResult;
 
@@ -194,55 +190,40 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* mCaptcha Widget */}
-            <View style={{ height: 80, width: "100%", marginBottom: 15, overflow: "hidden" }}>
-              {Platform.OS === "web" ? (
-                <iframe
-                  src={`${process.env.EXPO_PUBLIC_MCAPTCHA_URL}/widget/?sitekey=${process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY}`}
-                  title="mCaptcha"
-                  frameBorder="0"
-                  style={{ width: "100%", height: "100%", border: "none" }}
+            {/* SVG Captcha */}
+            <View style={styles.captchaContainer}>
+              <Text style={styles.inputLabel}>Verifikasi Keamanan</Text>
+              <View style={styles.svgRow}>
+                <View style={styles.svgBox}>
+                  {loadingCaptcha ? (
+                    <ActivityIndicator color="#1e90ff" />
+                  ) : captchaSvg ? (
+                    <SvgXml xml={captchaSvg} width="100%" height="100%" />
+                  ) : (
+                    <Text style={{ color: "#999" }}>Gagal memuat</Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={fetchCaptcha} style={styles.refreshBtn}>
+                  <Ionicons name="refresh" size={24} color="#1e90ff" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ justifyContent: "center", marginTop: 10 }}>
+                <TextInput
+                  style={[styles.input, { paddingLeft: 40 }]}
+                  placeholder="Masukkan teks captcha"
+                  placeholderTextColor="#999"
+                  value={captchaAnswer}
+                  onChangeText={setCaptchaAnswer}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
-              ) : (
-                <WebView
-                  ref={webViewRef}
-                  source={{
-                    html: `
-                      <!DOCTYPE html>
-                      <html>
-                        <head>
-                          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                          <style>
-                            body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
-                            iframe { width: 100%; height: 100%; border: none; }
-                          </style>
-                        </head>
-                        <body>
-                          <iframe 
-                            src="${process.env.EXPO_PUBLIC_MCAPTCHA_URL}/widget/?sitekey=${process.env.EXPO_PUBLIC_MCAPTCHA_SITE_KEY}"
-                            title="mCaptcha"
-                            frameborder="0"
-                          ></iframe>
-                           <script>
-                             window.addEventListener("message", function(e) {
-                               if (e.data && e.data.token) {
-                                 window.ReactNativeWebView.postMessage(e.data.token);
-                               }
-                             });
-                           </script>
-                        </body>
-                      </html>
-                    `
-                  }}
-                  onMessage={(event) => {
-                    setMcaptchaToken(event.nativeEvent.data);
-                  }}
-                  scrollEnabled={false}
-                  style={{ backgroundColor: "transparent" }}
-                  showsVerticalScrollIndicator={false}
-                  showsHorizontalScrollIndicator={false}
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={20}
+                  color="#999"
+                  style={{ position: "absolute", left: 12 }}
                 />
-              )}
+              </View>
             </View>
 
             {/* Remember Me & Forgot Password */}
@@ -354,6 +335,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
     backgroundColor: "#fafafa",
+  },
+  captchaContainer: {
+    marginBottom: 20,
+  },
+  svgRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  svgBox: {
+    flex: 1,
+    height: 60,
+    backgroundColor: "#fafafa",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  refreshBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#fafafa",
+    justifyContent: "center",
+    alignItems: "center",
   },
   optionsRow: {
     flexDirection: "row",

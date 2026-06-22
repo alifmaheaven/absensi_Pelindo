@@ -2,7 +2,7 @@
   "expo": {
     "name": "Absensi Eos",
     "slug": "absensi_app",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "absensiapp",
@@ -24,7 +24,6 @@
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/icon-foreground.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -35,7 +34,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 19
+      "versionCode": 20
     },
     "web": {
       "output": "static",

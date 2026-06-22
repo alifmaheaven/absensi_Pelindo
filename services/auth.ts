@@ -1,10 +1,20 @@
 import axios from '@/lib/axios';
 import { IMeta, IPermission, IUser, Response } from '@/types';
 
+export async function getCaptcha(): Promise<Response<{ svg: string; token: string }>> {
+  try {
+    const res = await axios.get('/auth/captcha');
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
 export async function login(payload: {
   email: string;
   password: string;
-  mcaptcha_token: string;
+  captcha_token: string;
+  captcha_answer: string;
 }): Promise<Response<{ token: string }>> {
   try {
     const res = await axios.post('/auth/login', payload);

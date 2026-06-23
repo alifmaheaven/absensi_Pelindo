@@ -35,7 +35,7 @@ export default function GalleryFolderScreen() {
     if (!id) return;
     try {
       const res = await getPhotos(id, 1, 1000);
-      setPhotos(res?.data || []);
+      setPhotos(res?.data?.data || []);
     } catch {
       // silently fail
     } finally {
@@ -107,7 +107,7 @@ export default function GalleryFolderScreen() {
         const filename = asset.uri.split("/").pop() || "photo.jpg";
         const match = /\.(\w+)$/.exec(filename);
         const type = match ? `image/${match[1]}` : "image/jpeg";
-        formData.append("files", {
+        formData.append("photos", {
           uri: asset.uri,
           name: filename,
           type,

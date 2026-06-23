@@ -26,7 +26,7 @@ export default function GalleryScreen() {
   const fetchFolders = useCallback(async () => {
     try {
       const res = await getFolders(1, 100);
-      setFolders(res?.data || []);
+      setFolders(res?.data?.data || []);
     } catch {
       // silently fail
     } finally {
@@ -50,7 +50,7 @@ export default function GalleryScreen() {
     setCreating(true);
     try {
       const res = await createFolder(trimmed);
-      const newFolder = { ...res, photo_count: 0 };
+      const newFolder = { ...(res?.data ?? res), photo_count: 0 };
       setFolders((prev) => [newFolder, ...prev]);
       setNewName("");
       setShowCreate(false);

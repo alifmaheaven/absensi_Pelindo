@@ -65,3 +65,11 @@ export async function getVersionCode(): Promise<string | null> {
   }
   return await SecureStore.getItemAsync(VERSION_CODE_KEY);
 }
+
+export async function removeVersionCode() {
+  if (Platform.OS === "web") {
+    try { localStorage.removeItem(VERSION_CODE_KEY); } catch (e) {}
+    return;
+  }
+  await SecureStore.deleteItemAsync(VERSION_CODE_KEY);
+}

@@ -3,6 +3,7 @@ import { useToast } from "@/components/ui/toast";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { useRequest } from "@/hooks/use-request";
 import { saveToken } from "@/lib/storage";
+import { clearCache } from "@/lib/cache";
 import { login, getCaptcha } from "@/services/auth";
 import { SvgXml } from "react-native-svg";
 import { THttpErrorResult } from "@/types";
@@ -58,6 +59,9 @@ export default function LoginScreen() {
   };
 
   useEffect(() => {
+    // Clear app HTTP cache on entering the login screen so a stale (expired)
+    // captcha token can never be reused. Runs only on mount — NOT after login.
+    clearCache().catch(() => {});
     fetchCaptcha();
   }, []);
 

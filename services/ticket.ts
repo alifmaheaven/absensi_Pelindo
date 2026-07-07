@@ -18,6 +18,16 @@ import {
   TTicket,
 } from "@/types";
 
+export async function getTicketHistory(ticketId: string) {
+  try {
+    const response = await axios.get(`/ticket/${ticketId}/history`);
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch ticket history:", error);
+    throw error;
+  }
+}
+
 export async function getTicketDevice(
   params: TParams & {
     company_id_exact?: string[];

@@ -24,44 +24,67 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { getTodaySchedule } from "@/services/schedule";
+import type { IScheduleToday, Ishift } from "@/types";
 
 export function getWorkStatus(
   datetime?: string | null,
-  type: "checkin" | "checkout" = "checkin"
+  type: "checkin" | "checkout" = "checkin",
+  shift?: Ishift | null
 ): string {
-  const defaultText =
-    type === "checkin" ? "Start Work 09:00" : "End Work 17:00";
+  if (!shift) {
+    const defaultText = type === "checkin" ? "Start Work 09:00" : "End Work 17:00";
+    if (!datetime) return defaultText;
+
+    const formattedDate = datetime.replace(" ", "T");
+    const actualTime = new Date(formattedDate);
+    if (isNaN(actualTime.getTime())) return defaultText;
+
+    const scheduledTime = new Date(actualTime);
+    scheduledTime.setHours(type === "checkin" ? 9 : 17);
+    scheduledTime.setMinutes(0);
+    scheduledTime.setSeconds(0);
+    scheduledTime.setMilliseconds(0);
+
+    const diffMinutes = Math.floor((actualTime.getTime() - scheduledTime.getTime()) / 60000);
+
+    if (type === "checkin") {
+      return diffMinutes > 0 ? `Late Check in +${diffMinutes} min` : defaultText;
+    }
+    return diffMinutes < 0 ? `Early Check Out ${Math.abs(diffMinutes)} min` : defaultText;
+  }
+
+  const [sh, sm] = shift.start_time.split(":").map(Number);
+  const [eh, em] = shift.end_time.split(":").map(Number);
+  const defaultText = `${type === "checkin" ? "Start" : "End"} ${type === "checkin" ? shift.start_time.slice(0,5) : shift.end_time.slice(0,5)}`;
 
   if (!datetime) return defaultText;
 
-  // Parse datetime "YYYY-MM-DD HH:mm:ss" -> "YYYY-MM-DDTHH:mm:ss"
   const formattedDate = datetime.replace(" ", "T");
   const actualTime = new Date(formattedDate);
-
   if (isNaN(actualTime.getTime())) return defaultText;
 
-  // Set scheduled time based on the ACTUAL date of the attendance
   const scheduledTime = new Date(actualTime);
-  scheduledTime.setHours(type === "checkin" ? 9 : 17);
-  scheduledTime.setMinutes(0);
-  scheduledTime.setSeconds(0);
-  scheduledTime.setMilliseconds(0);
-
-  const diffMs = actualTime.getTime() - scheduledTime.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000); // Minutes
-
   if (type === "checkin") {
-    // Check In: Late if actual > scheduled (diff > 0)
-    if (diffMinutes > 0) {
+    scheduledTime.setHours(sh, sm, 0, 0);
+    const graceMs = shift.grace_late * 60 * 1000;
+    const diffMs = actualTime.getTime() - scheduledTime.getTime();
+    if (diffMs > graceMs) {
+      const diffMinutes = Math.floor((diffMs - graceMs) / 60000);
       return `Late Check in +${diffMinutes} min`;
     }
     return defaultText;
   } else {
-    // Check Out: Early if actual < scheduled (diff < 0)
-    if (diffMinutes < 0) {
+    scheduledTime.setHours(eh, em, 0, 0);
+    if (shift.is_overnight && eh < sh) {
+      scheduledTime.setDate(scheduledTime.getDate() + 1);
+    }
+    const graceMs = shift.grace_early * 60 * 1000;
+    const diffMs = actualTime.getTime() - scheduledTime.getTime();
+    if (diffMs < -graceMs) {
+      const diffMinutes = Math.floor(Math.abs(diffMs + graceMs) / 60000);
       return `Early Check Out ${diffMinutes} min`;
     }
-
     return defaultText;
   }
 }
@@ -82,6 +105,7 @@ export default function HomeScreen() {
 
   const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
 
   const checkInDataById = useMemo(() => {
     if (!checkInData?.length) return null;
@@ -100,6 +124,15 @@ export default function HomeScreen() {
 
     return checkInById ?? null;
   }, [checkInData]);
+
+  const fetchSchedule = async () => {
+    try {
+      const res = await getTodaySchedule();
+      setTodaySchedule(res.data);
+    } catch (error) {
+      console.error("Error fetching schedule:", error);
+    }
+  };
 
   const fetchAttendance = async () => {
     if (!user?.id) return;
@@ -120,7 +153,10 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (user?.id) fetchAttendance();
+    if (user?.id) {
+      fetchAttendance();
+      fetchSchedule();
+    }
   }, [user?.id]);
 
   useEffect(() => {
@@ -297,7 +333,7 @@ export default function HomeScreen() {
               <AttendanceCard
                 type="checkin"
                 time={checkInDataById?.checkin}
-                subtitle={getWorkStatus(checkInDataById?.checkin, "checkin")}
+                subtitle={getWorkStatus(checkInDataById?.checkin, "checkin", todaySchedule?.shift)}
                 badgeText={checkInDataById?.checkin ? "Checked In" : "Check In"}
                 onPress={() => {
                   if (checkInDataById?.checkin) {
@@ -311,7 +347,7 @@ export default function HomeScreen() {
               <AttendanceCard
                 type="checkout"
                 time={checkInDataById?.checkout}
-                subtitle={getWorkStatus(checkInDataById?.checkout, "checkout")}
+                subtitle={getWorkStatus(checkInDataById?.checkout, "checkout", todaySchedule?.shift)}
                 badgeText={
                   checkInDataById?.checkout ? "Checked Out" : "Check Out"
                 }

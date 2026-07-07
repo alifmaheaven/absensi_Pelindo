@@ -1,38 +1,28 @@
-import { getAttendanceList } from "@/services/attendance";
-import { useAuthStore } from "@/stores/auth";
-import { IAttendance } from "@/types";
+import { getWeekSchedule } from "@/services/schedule";
+import type { IWeekScheduleItem } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-const DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-
 export default function JadwalScreen() {
-  const { user } = useAuthStore();
-  const [attendanceData, setAttendanceData] = useState<IAttendance[]>([]);
+  const [schedules, setSchedules] = useState<IWeekScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchRecent() {
+    async function fetchSchedule() {
       try {
         setIsLoading(true);
-        const res = await getAttendanceList({
-          page: 1,
-          per_page: 7,
-          user_id_exact: [user?.id ?? ""],
-          order_by_desc: ["created_at"],
-        });
-        setAttendanceData(res.data?.data || []);
+        const res = await getWeekSchedule();
+        setSchedules(res.data?.schedules || []);
       } catch (e) {
-        console.error("Failed to fetch attendance:", e);
+        console.error("Failed to fetch schedule:", e);
       } finally {
         setIsLoading(false);
       }
     }
-    fetchRecent();
-  }, [user?.id]);
+    fetchSchedule();
+  }, []);
 
-  const formatter = new Intl.DateTimeFormat("id-ID", { day: "numeric" });
   const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" });
 
   return (
@@ -43,48 +33,53 @@ export default function JadwalScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
-        <Text style={styles.headerTitle}>Riwayat Absensi</Text>
+        <Text style={styles.headerTitle}>Jadwal Kerja</Text>
         <Text style={styles.headerSubtitle}>{monthYear}</Text>
       </LinearGradient>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <Text style={styles.loadingText}>Memuat...</Text>
-        ) : attendanceData.length === 0 ? (
+        ) : schedules.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Belum ada data absensi</Text>
+            <Text style={styles.emptyText}>Belum ada jadwal</Text>
           </View>
         ) : (
-          attendanceData.map((item) => {
-            const checkin = item.checkin ?? "";
-            const date = new Date(checkin);
-            const day = DAY_NAMES[date.getDay()];
-            const dateNum = formatter.format(date);
-            const isToday = new Date().toDateString() === date.toDateString();
-            const time = item.checkout
-              ? `${checkin.split(" ")[1]?.slice(0, 5) ?? "--"} - ${item.checkout.split(" ")[1]?.slice(0, 5) ?? "--"}`
-              : checkin.split(" ")[1]?.slice(0, 5) ?? "--:--";
-            const bg = isToday ? "#1e90ff" : "#e3f2fd";
-            const textColor = isToday ? "#fff" : "#1e90ff";
+          schedules.map((item, index) => {
+            const date = new Date(item.date);
+            const dateNum = date.getDate().toString().padStart(2, "0");
+            const bg = item.is_today ? "#1e90ff" : item.has_schedule ? item.shift!.color : "#e3f2fd";
+            const textColor = item.is_today || item.has_schedule ? "#fff" : "#999";
 
             return (
               <View
-                key={item.id}
-                style={[styles.scheduleCard, isToday && styles.todayCard]}
+                key={index}
+                style={[styles.scheduleCard, item.is_today && styles.todayCard]}
               >
                 <View style={[styles.dateBox, { backgroundColor: bg }]}>
                   <Text style={[styles.dateNumber, { color: textColor }]}>
                     {dateNum}
                   </Text>
                   <Text style={[styles.dayName, { color: textColor }]}>
-                    {day}
+                    {item.day_name}
                   </Text>
                 </View>
                 <View style={styles.scheduleInfo}>
-                  <Text style={styles.shiftLabel}>{item.name}</Text>
-                  <Text style={styles.timeText}>{time}</Text>
+                  {item.has_schedule ? (
+                    <>
+                      <Text style={styles.shiftLabel}>{item.shift!.name}</Text>
+                      <Text style={styles.timeText}>
+                        {item.shift!.start_time} - {item.shift!.end_time}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.shiftLabel}>Libur</Text>
+                      <Text style={styles.timeText}>Tidak ada jadwal</Text>
+                    </>
+                  )}
                 </View>
-                {isToday && (
+                {item.is_today && (
                   <View style={styles.todayBadge}>
                     <Text style={styles.todayText}>Hari Ini</Text>
                   </View>

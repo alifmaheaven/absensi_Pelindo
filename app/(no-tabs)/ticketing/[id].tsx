@@ -20,6 +20,7 @@ import {
   uploadEvidGroupId,
   uploadEvidPermanent,
   uploadEvidtmp,
+  getTicketHistory,
 } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
@@ -107,6 +108,7 @@ export default function TicketingEditScreen() {
     IAttendanceOptions[]
   >([]);
   const [severitys, setSeveritys] = useState<ITicketSeverity[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,7 +116,7 @@ export default function TicketingEditScreen() {
         try {
           setLoadingSkeleton(true);
 
-          const [devices, attendanceOptions, severitys, evids, status] =
+          const [devices, attendanceOptions, severitys, evids, status, historyRes] =
             await Promise.all([
               getTicketDevice({
                 page: 1,
@@ -141,6 +143,7 @@ export default function TicketingEditScreen() {
                 per_page: 100,
                 company_id_exact: [ticket?.company_id || ""],
               }),
+              getTicketHistory(id as string).catch(() => ({ data: { logs: [] } })),
             ]);
 
           const device = devices.data?.data || [];
@@ -185,6 +188,7 @@ export default function TicketingEditScreen() {
           setDeviceData(device);
           setAttendanceOptions(attendanceOptionFilter);
           setStatusData(statusData);
+          setHistory((historyRes as any)?.data?.logs || []);
 
           setTitle(ticket?.name || "");
           setNotes(ticket?.description || "");
@@ -737,6 +741,33 @@ export default function TicketingEditScreen() {
                 </Text>
               </TouchableOpacity>
 
+              {/* Riwayat Tiket */}
+              <View style={styles.historySection}>
+                <Text style={styles.historySectionTitle}>Riwayat Tiket</Text>
+                {history.length === 0 ? (
+                  <Text style={styles.historyEmpty}>Belum ada riwayat</Text>
+                ) : (
+                  history.map((log) => (
+                    <View key={log.id} style={styles.historyItem}>
+                      <Text style={styles.historyAction}>
+                        {log.action}
+                      </Text>
+                      {log.from_status ? (
+                        <Text style={styles.historyStatus}>
+                          {log.from_status} → {log.to_status}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.historyUserName}>
+                        {log.user?.name || "System"}
+                      </Text>
+                      <Text style={styles.historyTime}>
+                        {new Date(log.created_at).toLocaleString("id-ID")}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+
               <View style={{ height: 40 }} />
             </ScrollView>
           </View>
@@ -1177,5 +1208,52 @@ const styles = StyleSheet.create({
   severityText: {
     fontSize: 13,
     color: "#555",
+  },
+
+  // History
+  historySection: {
+    marginTop: 24,
+    backgroundColor: "#fafafa",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+    padding: 16,
+  },
+  historySectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1a1a1a",
+    marginBottom: 12,
+  },
+  historyEmpty: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+  historyItem: {
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+    paddingVertical: 10,
+  },
+  historyAction: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginBottom: 4,
+  },
+  historyStatus: {
+    fontSize: 13,
+    color: "#3B82F6",
+    marginBottom: 4,
+  },
+  historyUserName: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 2,
+  },
+  historyTime: {
+    fontSize: 11,
+    color: "#999",
   },
 });

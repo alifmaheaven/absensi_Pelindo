@@ -800,7 +800,6 @@ export default function TicketingEditScreen() {
                       old: change?.oldName || formatVal(change?.old),
                       new: change?.newName || formatVal(change?.new),
                     });
-                    const imgBase = process.env.EXPO_PUBLIC_API_URL || "https://backend-ticketing.vps.prakhya.id";
                     return (
                       <View key={log.id} style={[styles.historyItem, isLast && { borderBottomWidth: 0 }]}>
                         <View style={styles.historyHeader}>
@@ -824,13 +823,16 @@ export default function TicketingEditScreen() {
                         {log.field_changes && Object.keys(log.field_changes).length > 0 ? (
                           log.action === 'FILE_ATTACH' ? (
                             <View style={styles.imageChangesContainer}>
-                              {Object.entries(log.field_changes).map(([key, info]: [string, any]) => (
-                                <Image
-                                  key={key}
-                                  source={{ uri: `${imgBase}/public/images/${info.url || info}` }}
-                                  style={styles.historyImage}
-                                />
-                              ))}
+                              {Object.entries(log.field_changes).map(([key, info]: [string, any]) => {
+                                const fileUrl = new URL(`${IMAGE_BASE_PATH}${info.url || info}`, BASE_URL).toString();
+                                return (
+                                  <Image
+                                    key={key}
+                                    source={{ uri: fileUrl }}
+                                    style={styles.historyImage}
+                                  />
+                                );
+                              })}
                             </View>
                           ) : log.action === 'FILE_REMOVE' ? (
                             <Text style={styles.fileRemoveText}>

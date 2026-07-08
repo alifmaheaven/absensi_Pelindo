@@ -454,6 +454,7 @@ export default function TicketingEditScreen() {
 
       showToast("Berhasil create ticket!", "success");
 
+      useTicketStore.getState().setNeedsRefresh(true);
       router.replace("/ticketing");
     } catch (error) {
       const err = error as THttpErrorResult;

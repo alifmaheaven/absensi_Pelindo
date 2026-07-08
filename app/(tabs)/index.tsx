@@ -33,12 +33,12 @@ export function getWorkStatus(
   shift?: Ishift | null
 ): string {
   if (!shift) {
-    const defaultText = type === "checkin" ? "Start Work 09:00" : "End Work 17:00";
-    if (!datetime) return defaultText;
+    // No schedule assigned — display empty neutral state instead of hardcoded 09-17
+    if (!datetime) return "--";
 
     const formattedDate = datetime.replace(" ", "T");
     const actualTime = new Date(formattedDate);
-    if (isNaN(actualTime.getTime())) return defaultText;
+    if (isNaN(actualTime.getTime())) return "--";
 
     const scheduledTime = new Date(actualTime);
     scheduledTime.setHours(type === "checkin" ? 9 : 17);
@@ -49,9 +49,9 @@ export function getWorkStatus(
     const diffMinutes = Math.floor((actualTime.getTime() - scheduledTime.getTime()) / 60000);
 
     if (type === "checkin") {
-      return diffMinutes > 0 ? `Late Check in +${diffMinutes} min` : defaultText;
+      return diffMinutes > 0 ? `Late Check in +${diffMinutes} min` : "--";
     }
-    return diffMinutes < 0 ? `Early Check Out ${Math.abs(diffMinutes)} min` : defaultText;
+    return diffMinutes < 0 ? `Early Check Out ${Math.abs(diffMinutes)} min` : "--";
   }
 
   const [sh, sm] = shift.start_time.split(":").map(Number);
@@ -145,26 +145,28 @@ export default function HomeScreen() {
       const res = await getTodaySchedule();
       setTodaySchedule(res.data);
     } catch (error) {
-      console.error("Error fetching schedule:", error);
+      showToast("Gagal memuat jadwal hari ini", "error");
     }
   };
 
   const fetchAttendance = async () => {
     if (!user?.id) return;
-
     try {
       setRefreshing(true);
-
       const res = await getCheckIn();
-      const checkIn = res.data?.data || [];
-
-      setCheckInData(checkIn);
+      setCheckInData(res.data?.data || []);
     } catch (error) {
-      console.error("Error fetching attendance:", error);
+      showToast("Gagal memuat data absensi", "error");
       setCheckInData([]);
     } finally {
       setRefreshing(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchSchedule(), fetchAttendance()]);
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -244,7 +246,7 @@ export default function HomeScreen() {
   ];
 
   const handleNotificationPress = () => {
-    console.log("Notification pressed");
+    router.push("/(tabs)/notifications");
   };
 
   const handleAvatarPress = () => {
@@ -265,7 +267,7 @@ export default function HomeScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={fetchAttendance}
+              onRefresh={handleRefresh}
             />
           }
         >

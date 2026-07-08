@@ -1,9 +1,9 @@
 import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
-import { getToken, removeToken } from "@/lib/storage";
+import { removeToken } from "@/lib/storage";
 import { useAuthStore } from "@/stores/auth";
 import { smartCapitalize } from "@/utils/utils";
-import axios from "axios";
+import API from "@/lib/axios";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -32,28 +32,15 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     try {
-      // Blacklist token on server-side first
-      const token = await getToken();
-      if (token) {
-        try {
-          await axios.post(
-            `${process.env.EXPO_PUBLIC_API_URL}/api/v1/auth/logout`,
-            {},
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-        } catch (apiError: any) {
-          console.warn("Logout API call failed:", apiError?.message);
-          // Continue with client-side cleanup even if API fails
-        }
-      }
-    } catch (error) {
-      console.warn("Failed to read token for logout:", error);
-    } finally {
-      await removeToken();
-      showToast("Logout berhasil", "success");
-      logout();
-      router.replace("/auth");
+      await API.post('/auth/logout');
+    } catch (apiError: any) {
+      console.warn("Logout API call failed:", apiError?.message);
+      // Continue with client-side cleanup even if API fails
     }
+    await removeToken();
+    showToast("Logout berhasil", "success");
+    logout();
+    router.replace("/auth");
   };
 
   return (

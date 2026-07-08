@@ -1,14 +1,5 @@
 import { ArrowLeft, Device } from "@/components/icon";
-import {
-  getDataContract,
-  getDataDevice,
-  getDataEvid,
-  getDataSeverity,
-  getDataSite,
-  getDataStatus,
-  getDataUser,
-  getTicket,
-} from "@/services/ticket";
+import { getTicket } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
 import {
@@ -246,6 +237,18 @@ const TicketingScreen = () => {
   useEffect(() => {
     handleGetTicketList();
   }, []);
+
+  // Refresh list when returning from edit that changed data
+  useEffect(() => {
+    const store = useTicketStore.getState();
+    if (store.needsRefresh) {
+      setTicketDatas([]);
+      setTicketMeta(initialMeta);
+      setHasMore(true);
+      handleGetTicketList();
+      store.setNeedsRefresh(false);
+    }
+  });
 
   const handleTicketDetail = (item: ITicket) => {
     if (navigating.current) return;

@@ -24,8 +24,8 @@ import {
 } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -124,6 +124,7 @@ const TicketingScreen = () => {
   const [hasMore, setHasMore] = useState(true);
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
+  const navigating = useRef(false);
 
   const { setTicket } = useTicketStore();
 
@@ -133,6 +134,7 @@ const TicketingScreen = () => {
       per_page: ticketMeta.per_page,
       order_by_desc: ["created_at"],
       company_id_exact: [user?.company_id ?? ""],
+      include: "user,site,contract,severity,status,device",
     });
   };
 
@@ -152,57 +154,16 @@ const TicketingScreen = () => {
         return;
       }
 
-      /* ===== fetch relational data ===== */
-      const [user, site, evid, contract, severity, device, status] =
-        await Promise.all([
-          getDataUser({
-            page: 1,
-            per_page: 100,
-            user_id_exact: tickets.map((d) => d.user_id),
-          }),
-          getDataSite({
-            page: 1,
-            per_page: 100,
-            site_id_exact: tickets.map((d) => d.site_id),
-          }),
-          getDataEvid({
-            page: 1,
-            per_page: 100,
-            evidence_group_id_exact: tickets.map((d) => d.evidence_group_id),
-          }),
-          getDataContract({
-            page: 1,
-            per_page: 100,
-            contract_id_exact: tickets.map((d) => d.contract_id),
-          }),
-          getDataSeverity({
-            page: 1,
-            per_page: 100,
-            severity_id_exact: tickets.map((d) => d.severity_id),
-          }),
-          getDataDevice({
-            page: 1,
-            per_page: 100,
-            device_id_exact: tickets.map((d) => d.device_id),
-          }),
-          getDataStatus({
-            page: 1,
-            per_page: 100,
-            status_id_exact: tickets.map((d) => d.status_id),
-          }),
-        ]);
-
-      const ticketMap: TicketData[] = tickets.map((item) => ({
+      // BE returns joined data via `include` param — no separate requests needed
+      const ticketMap: TicketData[] = tickets.map((item: any) => ({
         ...item,
-        user: user.data?.data.find((u) => u.id === item.user_id),
-        site: site.data?.data.find((s) => s.id === item.site_id),
-        evidence: evid.data?.data.filter(
-          (e) => e.evidence_group_id === item.evidence_group_id
-        ),
-        contract: contract.data?.data.find((c) => c.id === item.contract_id),
-        severity: severity.data?.data.find((s) => s.id === item.severity_id),
-        device: device.data?.data.find((d) => d.id === item.device_id),
-        status: status.data?.data.find((s) => s.id === item.status_id),
+        user: item.user || undefined,
+        site: item.site || undefined,
+        evidence: item.evidence || [],
+        contract: item.contract || undefined,
+        severity: item.severity || undefined,
+        device: item.device || undefined,
+        status: item.status || undefined,
       }));
 
       setTicketDatas((prev) => {
@@ -249,57 +210,16 @@ const TicketingScreen = () => {
         return;
       }
 
-      /* ===== fetch relational data ===== */
-      const [user, site, evid, contract, severity, device, status] =
-        await Promise.all([
-          getDataUser({
-            page: 1,
-            per_page: 100,
-            user_id_exact: tickets.map((d) => d.user_id),
-          }),
-          getDataSite({
-            page: 1,
-            per_page: 100,
-            site_id_exact: tickets.map((d) => d.site_id),
-          }),
-          getDataEvid({
-            page: 1,
-            per_page: 100,
-            evidence_group_id_exact: tickets.map((d) => d.evidence_group_id),
-          }),
-          getDataContract({
-            page: 1,
-            per_page: 100,
-            contract_id_exact: tickets.map((d) => d.contract_id),
-          }),
-          getDataSeverity({
-            page: 1,
-            per_page: 100,
-            severity_id_exact: tickets.map((d) => d.severity_id),
-          }),
-          getDataDevice({
-            page: 1,
-            per_page: 100,
-            device_id_exact: tickets.map((d) => d.device_id),
-          }),
-          getDataStatus({
-            page: 1,
-            per_page: 100,
-            status_id_exact: tickets.map((d) => d.status_id),
-          }),
-        ]);
-
-      const ticketMap: TicketData[] = tickets.map((item) => ({
+      // BE returns joined data via `include` param — no separate requests needed
+      const ticketMap: TicketData[] = tickets.map((item: any) => ({
         ...item,
-        user: user.data?.data.find((u) => u.id === item.user_id),
-        site: site.data?.data.find((s) => s.id === item.site_id),
-        evidence: evid.data?.data.filter(
-          (e) => e.evidence_group_id === item.evidence_group_id
-        ),
-        contract: contract.data?.data.find((c) => c.id === item.contract_id),
-        severity: severity.data?.data.find((s) => s.id === item.severity_id),
-        device: device.data?.data.find((d) => d.id === item.device_id),
-        status: status.data?.data.find((s) => s.id === item.status_id),
+        user: item.user || undefined,
+        site: item.site || undefined,
+        evidence: item.evidence || [],
+        contract: item.contract || undefined,
+        severity: item.severity || undefined,
+        device: item.device || undefined,
+        status: item.status || undefined,
       }));
 
       setTicketDatas(ticketMap);
@@ -320,21 +240,23 @@ const TicketingScreen = () => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      setTicketDatas([]);
-      setTicketMeta(initialMeta);
-      setHasMore(true);
-      handleGetTicketList();
-    }, [])
-  );
+  // Fetch once on mount. Pull-to-refresh (handleRefresh) or
+  // navigating back from detail can update the list without
+  // resetting state, which avoids competing with the back gesture.
+  useEffect(() => {
+    handleGetTicketList();
+  }, []);
 
   const handleTicketDetail = (item: ITicket) => {
+    if (navigating.current) return;
+    navigating.current = true;
     setTicket(item);
     router.push({
       pathname: `/ticketing/[id]`,
       params: { id: item.id },
     });
+    // Allow navigation again after a short debounce
+    setTimeout(() => { navigating.current = false; }, 500);
   };
 
   return (
@@ -349,16 +271,22 @@ const TicketingScreen = () => {
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.header}>
             <TouchableOpacity
-              onPress={() => router.back()}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/(tabs)");
+                }
+              }}
               style={styles.backButton}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
               <ArrowLeft color="#fff" />
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>Ticketing</Text>
 
-            {/* Spacer kanan agar title tetap center */}
-            <View style={{ width: 40 }} />
+            <View style={{ width: 60 }} />
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -514,10 +442,6 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    position: "absolute",
-    alignSelf: "center",
-    width: "100%",
-    textAlign: "center",
     fontSize: 18,
     fontWeight: "600",
     color: "#fff",

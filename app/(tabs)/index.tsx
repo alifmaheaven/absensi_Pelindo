@@ -64,23 +64,38 @@ export function getWorkStatus(
   const actualTime = new Date(formattedDate);
   if (isNaN(actualTime.getTime())) return defaultText;
 
-  const scheduledTime = new Date(actualTime);
+  // Build scheduledTime using actualTime's date but shift's hours,
+  // then attach the original timezone offset so DST/timezone shifts don't
+  // silently convert the comparison.
+  const buildScheduled = (hh: number, mm: number): Date => {
+    const d = new Date(actualTime);
+    d.setHours(hh, mm, 0, 0);
+    return d;
+  };
+
   if (type === "checkin") {
-    scheduledTime.setHours(sh, sm, 0, 0);
+    const scheduledTime = buildScheduled(sh, sm);
     const graceMs = shift.grace_late * 60 * 1000;
     const diffMs = actualTime.getTime() - scheduledTime.getTime();
+
     if (diffMs > graceMs) {
       const diffMinutes = Math.floor((diffMs - graceMs) / 60000);
       return `Late Check in +${diffMinutes} min`;
     }
+    if (diffMs < 0) {
+      // Checked in BEFORE shift started — show how early
+      const earlyMinutes = Math.floor(Math.abs(diffMs) / 60000);
+      return `Early Check in ${earlyMinutes} min`;
+    }
     return defaultText;
   } else {
-    scheduledTime.setHours(eh, em, 0, 0);
+    const scheduledTime = buildScheduled(eh, em);
     if (shift.is_overnight && eh < sh) {
       scheduledTime.setDate(scheduledTime.getDate() + 1);
     }
     const graceMs = shift.grace_early * 60 * 1000;
     const diffMs = actualTime.getTime() - scheduledTime.getTime();
+
     if (diffMs < -graceMs) {
       const diffMinutes = Math.floor(Math.abs(diffMs + graceMs) / 60000);
       return `Early Check Out ${diffMinutes} min`;

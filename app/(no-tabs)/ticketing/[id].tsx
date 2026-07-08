@@ -109,6 +109,8 @@ export default function TicketingEditScreen() {
   >([]);
   const [severitys, setSeveritys] = useState<ITicketSeverity[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+  const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
 
   useFocusEffect(
     useCallback(() => {
@@ -324,6 +326,9 @@ export default function TicketingEditScreen() {
           setRemovedImages((prev) => [...prev, target]);
         } else {
           await deleteEvidtmp({ links: [target.path] });
+          // Log file remove to ticket timeline
+          const { default: api } = await import("@/lib/axios");
+          await api.post(`/ticket/${id}/log`, { action: 'FILE_REMOVE', field_changes: { removed: { url: target.path, name: target.path } } });
         }
       }
 
@@ -336,6 +341,24 @@ export default function TicketingEditScreen() {
       showToast("Gagal menghapus gambar", "error");
     } finally {
       setLoadingImage(false);
+    }
+  };
+
+  const submitComment = async (logId: string) => {
+    const text = (commentInputs[logId] || "").trim();
+    if (!text) return;
+    setCommentSubmitting((p) => ({ ...p, [logId]: true }));
+    try {
+      const { default: api } = await import("@/lib/axios");
+      await api.post(`/ticket/${id}/comment`, { logId, comment: text });
+      setCommentInputs((p) => ({ ...p, [logId]: "" }));
+      // Refresh history
+      const historyRes = await getTicketHistory(id as string).catch(() => ({ data: { logs: [] } }));
+      setHistory((historyRes as any)?.data?.logs || []);
+    } catch {
+      showToast("Gagal menambah komentar", "error");
+    } finally {
+      setCommentSubmitting((p) => ({ ...p, [logId]: false }));
     }
   };
 
@@ -384,6 +407,8 @@ export default function TicketingEditScreen() {
         console.debug("File deleted", deleted);
       }
 
+      const { default: api } = await import("@/lib/axios");
+      let imgCounter = 0;
       for (const img of images) {
         if (!img.id) {
           const uploaded = await uploadEvidPermanent({ links: [img.path] });
@@ -398,6 +423,10 @@ export default function TicketingEditScreen() {
             file,
             evidence_group_id: groupId,
           });
+
+          // Log file attach to ticket timeline
+          await api.post(`/ticket/${id}/log`, { action: 'FILE_ATTACH', field_changes: { [`file_${imgCounter}`]: { url: file, name: `image-${Date.now()}` } } });
+          imgCounter++;
         }
       }
 
@@ -747,24 +776,123 @@ export default function TicketingEditScreen() {
                 {history.length === 0 ? (
                   <Text style={styles.historyEmpty}>Belum ada riwayat</Text>
                 ) : (
-                  history.map((log) => (
-                    <View key={log.id} style={styles.historyItem}>
-                      <Text style={styles.historyAction}>
-                        {log.action}
-                      </Text>
-                      {log.from_status ? (
-                        <Text style={styles.historyStatus}>
-                          {log.from_status} → {log.to_status}
+                  history.map((log, i) => {
+                    const isLast = i === history.length - 1;
+                    const actionLabel: Record<string, string> = {
+                      CREATE: "Membuat tiket",
+                      STATUS_CHANGE: "Mengubah status",
+                      UPDATE: "Memperbarui",
+                      DELETE: "Menghapus tiket",
+                      COMMENT: "Komentar",
+                      FILE_ATTACH: "Menambah gambar",
+                      FILE_REMOVE: "Menghapus gambar",
+                    };
+                    const fieldLabels: Record<string, string> = {
+                      title: "Judul", name: "Nama", description: "Deskripsi",
+                      severity_id: "Severity", status_id: "Status", sla_id: "SLA",
+                      priority: "Prioritas", device_id: "Perangkat",
+                      attendance_id: "Presensi", user_id: "User", site_id: "Site",
+                      contract_id: "Kontrak", company_id: "Perusahaan",
+                      start_ticket: "Mulai", end_ticket: "Selesai", due_date: "Tenggat",
+                    };
+                    const formatVal = (v: any) => v === null || v === undefined || v === "" ? "(kosong)" : String(v);
+                    const displayValue = (change: any) => ({
+                      old: change?.oldName || formatVal(change?.old),
+                      new: change?.newName || formatVal(change?.new),
+                    });
+                    const imgBase = process.env.EXPO_PUBLIC_API_URL || "https://backend-ticketing.vps.prakhya.id";
+                    return (
+                      <View key={log.id} style={[styles.historyItem, isLast && { borderBottomWidth: 0 }]}>
+                        <View style={styles.historyHeader}>
+                          <Text style={styles.historyAction}>
+                            {actionLabel[log.action] || log.action}
+                          </Text>
+                          <Text style={styles.historyTime}>
+                            {new Date(log.created_at).toLocaleString("id-ID")}
+                          </Text>
+                        </View>
+                        <Text style={styles.historyUserName}>
+                          {log.user?.name || "System"}{log.user?.email ? ` (${log.user.email})` : ""}
                         </Text>
-                      ) : null}
-                      <Text style={styles.historyUserName}>
-                        {log.user?.name || "System"}
-                      </Text>
-                      <Text style={styles.historyTime}>
-                        {new Date(log.created_at).toLocaleString("id-ID")}
-                      </Text>
-                    </View>
-                  ))
+                        {log.from_status ? (
+                          <View style={styles.historyStatusRow}>
+                            <Text style={styles.historyStatusBadge}>{log.from_status}</Text>
+                            <Text style={styles.historyStatusArrow}> → </Text>
+                            <Text style={[styles.historyStatusBadge, styles.historyStatusBadgeNew]}>{log.to_status}</Text>
+                          </View>
+                        ) : null}
+                        {log.field_changes && Object.keys(log.field_changes).length > 0 ? (
+                          log.action === 'FILE_ATTACH' ? (
+                            <View style={styles.imageChangesContainer}>
+                              {Object.entries(log.field_changes).map(([key, info]: [string, any]) => (
+                                <Image
+                                  key={key}
+                                  source={{ uri: `${imgBase}/public/images/${info.url || info}` }}
+                                  style={styles.historyImage}
+                                />
+                              ))}
+                            </View>
+                          ) : log.action === 'FILE_REMOVE' ? (
+                            <Text style={styles.fileRemoveText}>
+                              {Object.values(log.field_changes).map((info: any) => info.name || info.url || "-").join(", ")}
+                            </Text>
+                          ) : (
+                            <View style={styles.fieldChangesContainer}>
+                              {Object.entries(log.field_changes).map(([field, change]: [string, any]) => {
+                                const dv = displayValue(change);
+                                return (
+                                  <View key={field} style={styles.fieldChangeRow}>
+                                    <Text style={styles.fieldChangeLabel}>{fieldLabels[field] || field}:</Text>
+                                    <Text style={styles.fieldChangeOld}>{dv.old}</Text>
+                                    <Text style={styles.fieldChangeArrow}> → </Text>
+                                    <Text style={styles.fieldChangeNew}>{dv.new}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          )
+                        ) : null}
+                        {log.note ? (
+                          <View style={styles.noteContainer}>
+                            <Text style={styles.noteText}>{log.note}</Text>
+                          </View>
+                        ) : null}
+                        {/* Comments */}
+                        {log.comments?.length > 0 ? (
+                          <View style={styles.commentsContainer}>
+                            {log.comments.map((c: any) => (
+                              <View key={c.id} style={styles.commentItem}>
+                                <View style={styles.commentAvatar}>
+                                  <Text style={styles.commentAvatarText}>{(c.user?.name || "?")[0]}</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.commentUserName}>{c.user?.name || "System"}</Text>
+                                  <Text style={styles.commentText}>{c.comment}</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
+                        {/* Comment input */}
+                        <View style={styles.commentInputRow}>
+                          <TextInput
+                            style={styles.commentInput}
+                            placeholder="Tambah komentar..."
+                            placeholderTextColor="#999"
+                            value={commentInputs[log.id] || ""}
+                            onChangeText={(t) => setCommentInputs((p) => ({ ...p, [log.id]: t }))}
+                          />
+                          <TouchableOpacity
+                            onPress={() => submitComment(log.id)}
+                            disabled={commentSubmitting[log.id] || !commentInputs[log.id]?.trim()}
+                            style={[styles.commentSendBtn, (commentSubmitting[log.id] || !commentInputs[log.id]?.trim()) && { opacity: 0.4 }]}
+                          >
+                            <Text style={styles.commentSendText}>Kirim</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
                 )}
               </View>
 
@@ -1236,6 +1364,12 @@ const styles = StyleSheet.create({
     borderBottomColor: "#eee",
     paddingVertical: 10,
   },
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   historyAction: {
     fontSize: 14,
     fontWeight: "600",
@@ -1255,5 +1389,162 @@ const styles = StyleSheet.create({
   historyTime: {
     fontSize: 11,
     color: "#999",
+  },
+  historyStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  historyStatusArrow: {
+    fontSize: 13,
+    color: "#999",
+    marginHorizontal: 4,
+  },
+  historyStatusBadge: {
+    fontSize: 12,
+    fontWeight: "600",
+    backgroundColor: "#e5e7eb",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  historyStatusBadgeNew: {
+    backgroundColor: "rgba(30,144,255,0.15)",
+    color: "#1e90ff",
+  },
+  fieldChangesContainer: {
+    marginTop: 8,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    padding: 8,
+  },
+  fieldChangeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+    marginBottom: 3,
+  },
+  fieldChangeLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#555",
+    marginRight: 4,
+    width: 80,
+  },
+  fieldChangeOld: {
+    fontSize: 12,
+    color: "#999",
+    textDecorationLine: "line-through",
+  },
+  fieldChangeArrow: {
+    fontSize: 12,
+    color: "#aaa",
+    marginHorizontal: 3,
+  },
+  fieldChangeNew: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#1e90ff",
+  },
+  noteContainer: {
+    marginTop: 6,
+    backgroundColor: "rgba(30,144,255,0.05)",
+    borderRadius: 6,
+    padding: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#1e90ff",
+  },
+  noteText: {
+    fontSize: 12,
+    color: "#555",
+    fontStyle: "italic",
+  },
+  // Comments
+  commentsContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  commentItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 8,
+  },
+  commentAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(30,144,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentAvatarText: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#1e90ff",
+  },
+  commentUserName: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#555",
+  },
+  commentText: {
+    fontSize: 13,
+    color: "#333",
+    marginTop: 1,
+  },
+  commentInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  commentInput: {
+    flex: 1,
+    fontSize: 13,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: "#333",
+  },
+  commentSendBtn: {
+    backgroundColor: "#1e90ff",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  commentSendText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  // Image changes
+  imageChangesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  historyImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  fileRemoveText: {
+    fontSize: 12,
+    color: "#999",
+    textDecorationLine: "line-through",
+    marginTop: 4,
   },
 });

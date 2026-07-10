@@ -2,6 +2,7 @@ import AttendanceCard from "@/components/home/AttendanceCard";
 import {
   Bell,
   Calender,
+  CheckRounded,
   ClockOutline,
   PersonFill,
   Ticket,
@@ -241,6 +242,19 @@ export default function HomeScreen() {
       containerColor: "#c599ff",
       onPress: () => {
         router.push("/(tabs)/gallery" as any);
+      },
+    },
+    {
+      icon: CheckRounded,
+      label: "Daily Routine",
+      color: "#22C55E",
+      containerColor: "#a7f3d0",
+      onPress: () => {
+        if (!checkInDataById?.checkin) {
+          showToast("Anda belum check in", "info");
+          return;
+        }
+        router.push("/(no-tabs)/daily-routine");
       },
     },
   ];

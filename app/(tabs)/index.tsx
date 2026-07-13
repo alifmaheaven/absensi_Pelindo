@@ -6,7 +6,6 @@ import {
   ClockOutline,
   PersonFill,
   Ticket,
-  TreeRoundDot,
 } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { useRequest } from "@/hooks/use-request";
@@ -233,15 +232,6 @@ export default function HomeScreen() {
           return;
         }
         router.push("/(no-tabs)/ticketing");
-      },
-    },
-    {
-      icon: TreeRoundDot,
-      label: "Gallery",
-      color: "#9747FF",
-      containerColor: "#c599ff",
-      onPress: () => {
-        router.push("/(tabs)/gallery" as any);
       },
     },
     {

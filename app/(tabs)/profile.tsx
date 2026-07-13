@@ -7,7 +7,10 @@ import API from "@/lib/axios";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,19 +19,33 @@ import {
 } from "react-native";
 
 const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
+const BUILD_NUMBER = Constants.expoConfig?.extra?.eas?.buildNumber ?? "-";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { showToast } = useToast();
+  const [aboutModalVisible, setAboutModalVisible] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const menuItems = [
     { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => showToast("Segera hadir", "info") },
-    { icon: "🔔", label: "Notifikasi", subtitle: "Pengaturan notifikasi", onPress: () => showToast("Segera hadir", "info") },
     { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan", onPress: () => showToast("Segera hadir", "info") },
-    { icon: "❓", label: "Bantuan", subtitle: "Pusat bantuan", onPress: () => showToast("Segera hadir", "info") },
-    { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => showToast("Segera hadir", "info") },
+    { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => setAboutModalVisible(true) },
   ];
+
+  const handleCheckUpdate = () => {
+    setCheckingUpdate(true);
+    // Simulate checking for updates
+    setTimeout(() => {
+      setCheckingUpdate(false);
+      Alert.alert(
+        "Update Aplikasi",
+        `Anda sudah menggunakan versi terbaru.\n\nVersi: ${APP_VERSION}`,
+        [{ text: "OK" }]
+      );
+    }, 1500);
+  };
 
   const handleLogout = async () => {
     try {
@@ -79,6 +96,64 @@ export default function ProfileScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* About App Modal */}
+      <Modal
+        visible={aboutModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAboutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Handle */}
+            <View style={styles.modalHandle} />
+
+            {/* App Icon */}
+            <View style={styles.modalAppIcon}>
+              <Text style={styles.modalAppIconText}>📋</Text>
+            </View>
+
+            {/* App Name */}
+            <Text style={styles.modalAppName}>EOS Monitoring System</Text>
+            <Text style={styles.modalAppDesc}>Sistem monitoring dan manajemen daily routine operasional</Text>
+
+            {/* Divider */}
+            <View style={styles.modalDivider} />
+
+            {/* Version Info */}
+            <View style={styles.modalInfoRow}>
+              <Text style={styles.modalInfoLabel}>Versi Aplikasi</Text>
+              <Text style={styles.modalInfoValue}>{APP_VERSION}</Text>
+            </View>
+
+            <View style={styles.modalInfoRow}>
+              <Text style={styles.modalInfoLabel}>Build Number</Text>
+              <Text style={styles.modalInfoValue}>{BUILD_NUMBER}</Text>
+            </View>
+
+            {/* Check Update Button */}
+            <TouchableOpacity
+              style={[styles.modalUpdateButton, checkingUpdate && { opacity: 0.7 }]}
+              onPress={handleCheckUpdate}
+              disabled={checkingUpdate}
+            >
+              <Text style={styles.modalUpdateIcon}>🔄</Text>
+              <Text style={styles.modalUpdateText}>
+                {checkingUpdate ? "Memeriksa..." : "Periksa Update"}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Close Button */}
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setAboutModalVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Tutup</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -178,5 +253,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#F44336",
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 40,
+    alignItems: "center",
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ddd",
+    marginBottom: 20,
+  },
+  modalAppIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: "#e9f0ff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalAppIconText: {
+    fontSize: 30,
+  },
+  modalAppName: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#1a1a1a",
+    marginBottom: 4,
+  },
+  modalAppDesc: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  modalDivider: {
+    width: "100%",
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginBottom: 16,
+  },
+  modalInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  modalInfoLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  modalInfoValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+  },
+  modalUpdateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1e90ff",
+    width: "100%",
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  modalUpdateIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  modalUpdateText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  modalCloseButton: {
+    marginTop: 12,
+    padding: 10,
+  },
+  modalCloseText: {
+    fontSize: 14,
+    color: "#999",
+    fontWeight: "500",
   },
 });

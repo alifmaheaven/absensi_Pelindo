@@ -3,7 +3,7 @@ import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { HapticTab } from "@/components/haptic-tab";
-import { Calender, DocumentCheck, Home, Person, Bell, GalleryIcon } from "@/components/icon";
+import { Calender, DocumentCheck, Home, Person, Bell } from "@/components/icon";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { getToken } from "@/lib/storage";
 import { getProfile } from "@/services/auth";
@@ -92,15 +92,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="gallery"
-        options={{
-          title: "Gallery",
-          tabBarIcon: ({ focused }) => (
-            <TabIcon icon={GalleryIcon} focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="notifications"
         options={{
           title: "Notifikasi",
@@ -131,21 +122,25 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
-    height: 75,
-    paddingTop: 8,
-    paddingBottom: 12,
+    height: 60,
+    paddingTop: 4,
+    paddingBottom: 4,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    position: 'absolute',
+    bottom: 10,
+    left: 0,
+    right: 0,
   },
   tabBarLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
-    marginVertical: 10,
+    marginVertical: 4,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    marginVertical: 10,
+    width: 32,
+    height: 32,
+    marginVertical: 2,
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 12,

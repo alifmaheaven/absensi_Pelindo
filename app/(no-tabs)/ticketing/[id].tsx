@@ -189,13 +189,20 @@ export default function TicketingEditScreen() {
           setSeveritys(sortSeverity);
           setDeviceData(device);
           setAttendanceOptions(attendanceOptionFilter);
+          // Auto-select attendance from ticket data or first active check-in
+          if (ticket?.attendance_id) {
+            setAttendanceSelected(ticket.attendance_id);
+          } else if (attendanceOptionFilter.length > 0) {
+            setAttendanceSelected(attendanceOptionFilter[0].id);
+          }
           setStatusData(statusData);
           setHistory((historyRes as any)?.data?.logs || []);
 
           setTitle(ticket?.name || "");
           setNotes(ticket?.description || "");
           setDeviceSelected(ticket?.device_id || "");
-          setAttendanceSelected(ticket?.attendance_id || "");
+          setSeveritySelected(ticket?.severity_id || "");
+          setStatusSelected(ticket?.status_id || "");
           setSeveritySelected(ticket?.severity_id || "");
           setStatusSelected(ticket?.status_id || "");
         } catch (error) {
@@ -373,9 +380,9 @@ export default function TicketingEditScreen() {
       showToast("Pilih device!", "error");
       return;
     }
-    // Attendance
+    // Attendance - auto from check-in
     if (!attendanceSelected) {
-      showToast("Pilih attendance!", "error");
+      showToast("Tidak ada check-in aktif untuk tiket ini", "error");
       return;
     }
     // Severity
@@ -577,57 +584,7 @@ export default function TicketingEditScreen() {
                 )}
               </View>
 
-              {/* Attendance */}
-              <Text style={styles.sectionTitle}>Attendance</Text>
-              <View style={styles.dropdownWrapper}>
-                <TouchableOpacity
-                  style={styles.selectInputDropdown}
-                  onPress={() => setAttendanceDropdownOpen((p) => !p)}
-                >
-                  <Text
-                    style={
-                      attendanceSelected ? styles.value : styles.placeholder
-                    }
-                  >
-                    {attendanceOptions?.find((d) => d.id === attendanceSelected)
-                      ?.name || "Select attendance"}
-                  </Text>
-                  <Ionicons
-                    name={
-                      attendanceDropdownOpen ? "chevron-up" : "chevron-down"
-                    }
-                    size={18}
-                  />
-                </TouchableOpacity>
-
-                {attendanceDropdownOpen && (
-                  <View style={styles.dropdown}>
-                    {attendanceOptions?.map((attendance) => (
-                      <TouchableOpacity
-                        key={attendance.id}
-                        style={styles.option}
-                        onPress={() => {
-                          setAttendanceSelected(attendance.id);
-                          setAttendanceDropdownOpen((p) => !p);
-                        }}
-                      >
-                        <View style={{ width: 20 }}>
-                          {attendanceSelected === attendance.id && (
-                            <Ionicons
-                              name={"checkmark"}
-                              size={18}
-                              color="#1e90ff"
-                            />
-                          )}
-                        </View>
-                        <Text style={styles.optionText}>{attendance.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* Status */}
+              {/* Attendance - auto-selected from check-in */}
               <Text style={styles.sectionTitle}>Status</Text>
               <View style={styles.dropdownWrapper}>
                 <TouchableOpacity

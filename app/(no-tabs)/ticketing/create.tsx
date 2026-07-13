@@ -156,6 +156,10 @@ export default function TicketingCreateScreen() {
           setSeveritys(sortSeverity);
           setDeviceData(device);
           setAttendanceOptions(attendanceOptionFilter);
+          // Auto-select the first attendance (most recent active check-in)
+          if (attendanceOptionFilter.length > 0 && !attendanceSelected) {
+            setAttendanceSelected(attendanceOptionFilter[0].id);
+          }
         } catch (error) {
           const err = error as THttpErrorResult;
           console.error("[FetchData Error]", err);
@@ -179,9 +183,9 @@ export default function TicketingCreateScreen() {
       showToast("Pilih device!", "error");
       return;
     }
-    // Attendance
+    // Attendance - auto from check-in
     if (!attendanceSelected) {
-      showToast("Pilih attendance!", "error");
+      showToast("Tidak ada check-in aktif untuk pembuatan tiket", "error");
       return;
     }
     // Severity
@@ -373,57 +377,7 @@ export default function TicketingCreateScreen() {
                 )}
               </View>
 
-              {/* Attendance */}
-              <Text style={styles.sectionTitle}>Attendance</Text>
-              <View style={styles.dropdownWrapper}>
-                <TouchableOpacity
-                  style={styles.selectInputDropdown}
-                  onPress={() => setAttendanceDropdownOpen((p) => !p)}
-                >
-                  <Text
-                    style={
-                      attendanceSelected ? styles.value : styles.placeholder
-                    }
-                  >
-                    {attendanceOptions?.find((d) => d.id === attendanceSelected)
-                      ?.name || "Select attendance"}
-                  </Text>
-                  <Ionicons
-                    name={
-                      attendanceDropdownOpen ? "chevron-up" : "chevron-down"
-                    }
-                    size={18}
-                  />
-                </TouchableOpacity>
-
-                {attendanceDropdownOpen && (
-                  <View style={styles.dropdown}>
-                    {attendanceOptions?.map((attendance) => (
-                      <TouchableOpacity
-                        key={attendance.id}
-                        style={styles.option}
-                        onPress={() => {
-                          setAttendanceSelected(attendance.id);
-                          setAttendanceDropdownOpen((p) => !p);
-                        }}
-                      >
-                        <View style={{ width: 20 }}>
-                          {attendanceSelected === attendance.id && (
-                            <Ionicons
-                              name={"checkmark"}
-                              size={18}
-                              color="#1e90ff"
-                            />
-                          )}
-                        </View>
-                        <Text style={styles.optionText}>{attendance.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-
-              {/* SeveritySelector */}
+              {/* Attendance - auto-selected from check-in */}
               <Text style={styles.sectionTitle}>Severity</Text>
               <SeveritySelector
                 options={severitys}

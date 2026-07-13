@@ -29,8 +29,8 @@ export default function ProfileScreen() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   const menuItems = [
-    { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => showToast("Segera hadir", "info") },
-    { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan", onPress: () => showToast("Segera hadir", "info") },
+    { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => router.push("/(no-tabs)/edit-profile") },
+    { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan", onPress: () => router.push("/(no-tabs)/change-password") },
     { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => setAboutModalVisible(true) },
   ];
 

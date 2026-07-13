@@ -51,3 +51,27 @@ export async function getPermission(): Promise<
     throw error;
   }
 }
+
+export async function updateProfile(payload: {
+  name?: string;
+  email?: string;
+  phone?: string;
+}): Promise<Response<IUser>> {
+  try {
+    const res = await axios.put('/auth/update-profile', payload);
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+export async function changePassword(payload: {
+  password: string;
+}): Promise<Response<{ message: string }>> {
+  try {
+    const res = await axios.put('/auth/update-profile', payload);
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+}

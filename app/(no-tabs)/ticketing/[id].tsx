@@ -120,12 +120,16 @@ export default function TicketingEditScreen() {
   const [history, setHistory] = useState<any[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
-  const isInitialLoad = useRef(true);
+  // Site id prefilled from ticket data on initial load — used to skip the
+  // refetch effect when siteSelected is set programmatically (not by user).
+  const initialSiteId = useRef<string>("");
 
   // Refetch devices when user manually changes site (skip initial programmatic set)
   useEffect(() => {
-    if (!siteSelected || isInitialLoad.current) {
-      isInitialLoad.current = false;
+    if (!siteSelected) return;
+    // Initial load: devices already filtered in useFocusEffect — don't reset.
+    if (siteSelected === initialSiteId.current) {
+      initialSiteId.current = "";
       return;
     }
     const fetchDevicesBySite = async () => {
@@ -233,6 +237,7 @@ useFocusEffect(
           const prefilledSiteId = ticket?.site_id || attendanceOptionFilter[0]?.site_id || "";
           let selectedSiteName = "";
           if (prefilledSiteId) {
+            initialSiteId.current = prefilledSiteId;
             setSiteSelected(prefilledSiteId);
             const foundSite = siteOpts.find((s: any) => s.id === prefilledSiteId);
             if (foundSite) selectedSiteName = foundSite.name;

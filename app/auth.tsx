@@ -104,8 +104,11 @@ export default function LoginScreen() {
 
       const err = error as THttpErrorResult;
 
-      if (err?.code === 403) {
-        showToast("Email atau password salah", "error");
+      if (err?.code === 403 || err?.code === 400) {
+        showToast(
+          err?.message || "Email atau password salah",
+          "error",
+        );
       } else {
         showToast(
           "Terjadi kesalahan pada server. Mohon hubungi Admin dan coba lagi.",

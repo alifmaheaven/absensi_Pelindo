@@ -17,7 +17,7 @@ export async function login(payload: {
   captcha_answer: string;
 }): Promise<Response<{ token: string }>> {
   try {
-    const res = await axios.post('/auth/login', payload);
+    const res = await axios.post('/auth/login-mobile', payload);
 
     return res.data;
   } catch (error) {

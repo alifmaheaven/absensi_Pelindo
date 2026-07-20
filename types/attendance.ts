@@ -10,6 +10,8 @@ export interface IAttendance {
   description: string;
   longitude: number;
   latitude: number;
+  checkout_longitude: number | null;
+  checkout_latitude: number | null;
   checkin: string | null;
   checkout: null | string;
   created_at: string;

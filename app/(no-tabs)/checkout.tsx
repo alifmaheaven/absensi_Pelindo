@@ -7,7 +7,6 @@ import {
   TIMEZONE,
 } from "@/constants";
 import { useImagePicker } from "@/hooks/useImagePicker";
-import { useLocationCheck } from "@/hooks/useLocationCheck";
 import { useRequest } from "@/hooks/use-request";
 import axios from "@/lib/axios";
 import {
@@ -21,11 +20,11 @@ import {
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -46,15 +45,9 @@ export default function CheckoutScreen() {
   const { showToast } = useToast();
   const { user } = useAuthStore();
 
-  // --- Hooks ---
-  const {
-    location,
-    loadingLocation,
-    nearbySites,
-    selectedLocation,
-    setSelectedLocation,
-    locationString,
-  } = useLocationCheck();
+  // --- Location state (direct, not via useLocationCheck) ---
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(true);
 
   const {
     images,
@@ -72,6 +65,7 @@ export default function CheckoutScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
   const [removedImages, setRemovedImages] = useState<Array<{ id: string | null; path: string }>>([]);
+  const [selectedSiteName, setSelectedSiteName] = useState("");
 
   const { run: getCheckIn } = useRequest(() =>
     getAttendanceList({
@@ -103,9 +97,30 @@ export default function CheckoutScreen() {
     fetchCheckIn();
   }, []);
 
+  // Get GPS location on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          showToast("Izin lokasi diperlukan", "error");
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        if (mounted) setLocation(loc);
+      } catch (e) {
+        console.debug("Location error:", e);
+      } finally {
+        if (mounted) setLoadingLocation(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   useEffect(() => {
     if (!checkInDataById) return;
-    setSelectedLocation(checkInDataById.site_id);
+    setSelectedSiteName(checkInDataById.name || checkInDataById.code || "Site");
     setNotes(checkInDataById.description || "");
 
     (async () => {
@@ -166,10 +181,6 @@ export default function CheckoutScreen() {
       showToast("Tunggu deteksi lokasi...", "info");
       return;
     }
-    if (!selectedLocation) {
-      showToast("Pilih lokasi terlebih dahulu!", "error");
-      return;
-    }
     if (images.length === 0) {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
       return;
@@ -206,10 +217,14 @@ export default function CheckoutScreen() {
         }
       }
 
-      // Update attendance checkout
+      // Update attendance checkout with GPS location
       await updateAttendance({
         id: checkInDataById?.id!,
         checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
+        ...(location ? {
+          checkout_longitude: location.coords.longitude,
+          checkout_latitude: location.coords.latitude,
+        } : {}),
       });
 
       showToast("Berhasil Check Out!", "success");
@@ -267,56 +282,31 @@ export default function CheckoutScreen() {
                 <MapEmbed location={location} />
               )}
               <View style={styles.locationOverlay}>
-                <Text style={styles.locationOverlayText}>{locationString}</Text>
+                <Text style={styles.locationOverlayText}>{location ? `${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}` : "Menunggu..."}</Text>
               </View>
             </View>
 
-            {/* Location Selection */}
-            <Text style={styles.sectionTitle}>Select Location</Text>
-            {nearbySites.length === 0 ? (
+            {/* Location Info — from check-in record */}
+            <Text style={styles.sectionTitle}>Lokasi Check In</Text>
+            {checkInDataById ? (
+              <View style={[styles.locationOption, styles.locationOptionSelected]}>
+                <View style={styles.locationIconContainer}>
+                  <Text style={{ fontSize: 22 }}>📍</Text>
+                </View>
+                <View style={styles.locationTextContainer}>
+                  <Text style={styles.locationTitle}>{selectedSiteName || "Site"}</Text>
+                  <Text style={styles.locationCoords}>
+                    {checkInDataById.latitude}, {checkInDataById.longitude}
+                  </Text>
+                </View>
+              </View>
+            ) : (
               <View style={styles.emptyStateContainer}>
                 <Text style={styles.emptyStateEmoji}>📍</Text>
                 <Text style={styles.emptyStateText}>
-                  Tidak ada lokasi absen di sekitar Anda
-                </Text>
-                <Text style={styles.emptyStateSubText}>
-                  Pastikan Anda berada di lokasi yang terdaftar
+                  Data check-in tidak ditemukan
                 </Text>
               </View>
-            ) : (
-              nearbySites.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.locationOption,
-                    selectedLocation === item.id && styles.locationOptionSelected,
-                  ]}
-                  onPress={() => setSelectedLocation(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.radioContainer}>
-                    <View
-                      style={[
-                        styles.radioOuter,
-                        selectedLocation === item.id && styles.radioOuterSelected,
-                      ]}
-                    >
-                      {selectedLocation === item.id && (
-                        <View style={styles.radioInner} />
-                      )}
-                    </View>
-                  </View>
-                  <View style={styles.locationTextContainer}>
-                    <Text style={styles.locationTitle}>{item.name}</Text>
-                    <Text style={styles.locationAddress}>
-                      {item.description}
-                    </Text>
-                    <Text style={styles.locationCoords}>
-                      {item.longitude}, {item.latitude}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))
             )}
 
             {/* Notes */}
@@ -466,6 +456,7 @@ const styles = StyleSheet.create({
   locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: "#f0f0f0", borderRadius: 16, marginBottom: 12, backgroundColor: "#fff" },
   locationOptionSelected: { borderColor: "#1e90ff", backgroundColor: "#f8fbff" },
   radioContainer: { marginRight: 14, marginTop: 2 },
+  locationIconContainer: { marginRight: 14, marginTop: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: "#e9f0ff", justifyContent: "center", alignItems: "center" },
   radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#d1d5db", justifyContent: "center", alignItems: "center" },
   radioOuterSelected: { borderColor: "#1e90ff" },
   radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#1e90ff" },

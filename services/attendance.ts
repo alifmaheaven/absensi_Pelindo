@@ -118,6 +118,8 @@ export async function createAttendance(
 export async function updateAttendance(payload: {
   id: string;
   checkout: string;
+  checkout_longitude?: number;
+  checkout_latitude?: number;
 }) {
   try {
     const state = await NetInfo.fetch();

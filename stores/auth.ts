@@ -1,4 +1,5 @@
 // src/store/auth.store.ts
+import { clearCache } from "@/lib/cache";
 import { removeToken, removeCheckInId, removeVersionCode } from "@/lib/storage";
 import { IUser } from "@/types";
 import { create } from "zustand";
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     // Bersihkan semua persisted storage dari auth
     // Gunakan Promise agar tidak blocking UI
     Promise.all([
+      clearCache(),
       removeToken(),
       removeCheckInId(),
       removeVersionCode(),

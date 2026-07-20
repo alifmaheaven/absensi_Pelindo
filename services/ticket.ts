@@ -285,6 +285,20 @@ export async function uploadEvidPermanent(payload: {
   }
 }
 
+export async function getActiveCheckins(): Promise<
+  Response<{ data: IAttendanceOptions[] }> | IAttendanceOptions[]
+> {
+  try {
+    const response = await axios.get("/attendance/active-checkins");
+    // Backend wraps in { code, message, data: [...] } via response.ok()
+    const payload = response.data;
+    return payload?.data ?? payload;
+  } catch (error) {
+    console.error("Failed to fetch active checkins:", error);
+    throw error;
+  }
+}
+
 export async function getAttendanceOption(
   params: TParams & {
     company_id_exact?: string[];

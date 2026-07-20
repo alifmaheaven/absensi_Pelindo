@@ -66,10 +66,11 @@ export async function updateProfile(payload: {
 }
 
 export async function changePassword(payload: {
-  password: string;
+  old_password: string;
+  new_password: string;
 }): Promise<Response<{ message: string }>> {
   try {
-    const res = await axios.put('/auth/update-profile', payload);
+    const res = await axios.put('/auth/change-password', payload);
     return res.data;
   } catch (error) {
     throw error;

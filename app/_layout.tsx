@@ -12,6 +12,8 @@ import "react-native-reanimated";
 import "../lib/i18n";
 import { useColorScheme } from "react-native";
 import { lightTheme, darkTheme } from "@/lib/theme";
+import { getToken, saveToken } from "@/lib/storage";
+import API from "@/lib/axios";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -36,7 +38,45 @@ export default function RootLayout() {
 
   useEffect(() => {
     checkVersion();
+    checkTokenExpiry();
   }, []);
+
+  // Proactively refresh token on app launch if it expires within 7 days
+  async function checkTokenExpiry() {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Decode JWT payload (without verification — just to read exp)
+      const payloadBase64 = token.split('.')[1];
+      if (!payloadBase64) return;
+
+      const payload = JSON.parse(
+        decodeURIComponent(
+          atob(payloadBase64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+        )
+      );
+      const exp = payload?.exp;
+      if (!exp) return;
+
+      const expiresInMs = exp * 1000 - Date.now();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+      if (expiresInMs < sevenDays) {
+        console.debug('[TokenRefresh] Token expires soon, refreshing...');
+        const refreshRes = await API.post('/auth/refresh');
+        const newToken = refreshRes.data?.data?.token || refreshRes.data?.token;
+        if (newToken) {
+          await saveToken(newToken);
+          console.debug('[TokenRefresh] Token refreshed successfully');
+        }
+      } else {
+        console.debug('[TokenRefresh] Token still valid for', Math.round(expiresInMs / 86400000), 'days');
+      }
+    } catch (err) {
+      console.debug('[TokenRefresh] Token check skipped:', err instanceof Error ? err.message : String(err));
+    }
+  }
 
   async function checkVersion() {
     try {

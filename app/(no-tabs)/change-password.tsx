@@ -47,7 +47,7 @@ export default function ChangePasswordScreen() {
 
     setLoading(true);
     try {
-      await changePassword({ password: newPassword });
+      await changePassword({ old_password: oldPassword, new_password: newPassword });
       showToast("Password berhasil diubah", "success");
       router.back();
     } catch (error: any) {

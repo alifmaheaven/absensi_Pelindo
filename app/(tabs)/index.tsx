@@ -4,13 +4,16 @@ import {
   Calender,
   CheckRounded,
   ClockOutline,
+  DocumentCheck,
   PersonFill,
   Ticket,
 } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { useRequest } from "@/hooks/use-request";
 import { getAttendanceList } from "@/services/attendance";
+import { getUnreadCount } from "@/services/notification";
 import { useAuthStore } from "@/stores/auth";
+import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
 import { smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,25 +36,8 @@ export function getWorkStatus(
   shift?: Ishift | null
 ): string {
   if (!shift) {
-    // No schedule assigned — display empty neutral state instead of hardcoded 09-17
-    if (!datetime) return "--";
-
-    const formattedDate = datetime.replace(" ", "T");
-    const actualTime = new Date(formattedDate);
-    if (isNaN(actualTime.getTime())) return "--";
-
-    const scheduledTime = new Date(actualTime);
-    scheduledTime.setHours(type === "checkin" ? 9 : 17);
-    scheduledTime.setMinutes(0);
-    scheduledTime.setSeconds(0);
-    scheduledTime.setMilliseconds(0);
-
-    const diffMinutes = Math.floor((actualTime.getTime() - scheduledTime.getTime()) / 60000);
-
-    if (type === "checkin") {
-      return diffMinutes > 0 ? `Late Check in +${diffMinutes} min` : "--";
-    }
-    return diffMinutes < 0 ? `Early Check Out ${Math.abs(diffMinutes)} min` : "--";
+    // No schedule assigned — just show neutral state
+    return "--";
   }
 
   const [sh, sm] = shift.start_time.split(":").map(Number);
@@ -121,6 +107,7 @@ export default function HomeScreen() {
   const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const checkInDataById = useMemo(() => {
     if (!checkInData?.length) return null;
@@ -152,28 +139,44 @@ export default function HomeScreen() {
   const fetchAttendance = async () => {
     if (!user?.id) return;
     try {
-      setRefreshing(true);
       const res = await getCheckIn();
       setCheckInData(res.data?.data || []);
     } catch (error) {
       showToast("Gagal memuat data absensi", "error");
       setCheckInData([]);
-    } finally {
-      setRefreshing(false);
+    }
+  };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await getUnreadCount();
+      setUnreadCount(res?.data?.count || 0);
+    } catch {
+      // silently fail
     }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchSchedule(), fetchAttendance()]);
+    await Promise.all([fetchSchedule(), fetchAttendance(), fetchUnreadCount()]);
     setRefreshing(false);
   };
 
+  // Connect WebSocket for live notification updates
   useEffect(() => {
-    if (user?.id) {
-      fetchAttendance();
-      fetchSchedule();
-    }
+    if (!user?.id) return;
+    wsClient.connect({ user_id: user.id });
+
+    const handler = (data: any) => {
+      if (data?.type === 'notification') {
+        fetchUnreadCount();
+      }
+    };
+    wsClient.onMessage(handler);
+
+    return () => {
+      wsClient.offMessage(handler);
+    };
   }, [user?.id]);
 
   useEffect(() => {
@@ -247,6 +250,19 @@ export default function HomeScreen() {
         router.push("/(no-tabs)/daily-routine");
       },
     },
+    {
+      icon: DocumentCheck,
+      label: "Izin/Cuti",
+      color: "#8B5CF6",
+      containerColor: "#ddd6fe",
+      onPress: () => {
+        if (!checkInDataById?.checkin) {
+          showToast("Anda belum check in", "info");
+          return;
+        }
+        router.push("/(tabs)/izin");
+      },
+    },
   ];
 
   const handleNotificationPress = () => {
@@ -293,10 +309,13 @@ export default function HomeScreen() {
               >
                 <Bell color="#fff" />
 
-                {/* Badge */}
-              {/* <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>3</Text>
-                </View> */}
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
 
               {/* Avatar */}

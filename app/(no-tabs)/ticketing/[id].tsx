@@ -3,7 +3,6 @@ import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
 import { useToast } from "@/components/ui/toast";
 import {
-  ATTENDANCE_WINDOW_HOURS,
   IMAGE_BASE_PATH,
   IMAGE_MAX_WIDTH,
   IMAGE_QUALITY,
@@ -12,7 +11,7 @@ import {
 import {
   deleteEvid,
   deleteEvidtmp,
-  getAttendanceOption,
+  getActiveCheckins,
   getDataEvid,
   getDataSeverity,
   getDataSite, getDataStatus,
@@ -33,6 +32,7 @@ import {
   THttpErrorResult,
 } from "@/types";
 import { compressImage } from "@/utils/utils";
+import { useImagePreview } from "@/hooks/useImagePreview";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -101,6 +101,7 @@ export default function TicketingEditScreen() {
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [removedImages, setRemovedImages] = useState<IImage[]>([]);
   const [loadingSkeleton, setLoadingSkeleton] = useState(true);
+  const { showPreview, PreviewModal } = useImagePreview();
 
   // Data Options
   const [deviceData, setDeviceData] = useState<ITicketDevice[]>([]);
@@ -161,13 +162,7 @@ useFocusEffect(
                 user_id_exact: [user?.id || ""],
                 order_by_desc: ["created_at"],
               }),
-              getAttendanceOption({
-                page: 1,
-                per_page: 100,
-                company_id_exact: [user?.company_id || ""],
-                user_id_exact: [user?.id || ""],
-                order_by_desc: ["created_at"],
-              }),
+              getActiveCheckins(),
               getDataSeverity({ page: 1, per_page: 100 }),
               getDataEvid({
                 page: 1,
@@ -184,26 +179,18 @@ useFocusEffect(
 
           const device = devices.data?.data || [];
           const siteOpts = sitesRes?.data?.data || [];
-          const attendanceOption = attendanceOptions.data?.data || [];
+          // active-checkins array is already unwrapped by service
+          const attendanceOption: IAttendanceOptions[] = (attendanceOptions as any) || [];
           const severityData = severitys.data?.data || [];
           const statusData = status.data?.data || [];
 
           const attendanceOptionFilter =
-            attendanceOption
-              ?.filter((item) => {
-                const checkinDate = new Date(item.checkin);
-                const now = new Date();
-                const windowEnd = new Date(
-                  checkinDate.getTime() + ATTENDANCE_WINDOW_HOURS * 60 * 60 * 1000,
-                );
-                return now > checkinDate && now < windowEnd;
-              })
-              ?.map((item) => ({
-                ...item,
-                name: `${item.code} - ${new Date(
-                  item.checkin,
-                ).toLocaleString()}`,
-              })) || [];
+            attendanceOption?.map((item) => ({
+              ...item,
+              name: `${item.code} - ${new Date(
+                item.checkin,
+              ).toLocaleString()}`,
+            })) || [];
 
           const sortSeverity =
             severityData?.sort((a, b) => a.code.localeCompare(b.code)) || [];
@@ -741,13 +728,15 @@ useFocusEffect(
               <View style={styles.imageGrid}>
                 {images.map((image, index) => (
                   <View key={index} style={styles.imagePreviewContainer}>
-                    <Image
-                      source={{ uri: image.uri }}
-                      style={[
-                        styles.imagePreview,
-                        loadingImage && { opacity: 0.5 },
-                      ]}
-                    />
+                    <TouchableOpacity onPress={() => showPreview(image.uri)}>
+                      <Image
+                        source={{ uri: image.uri }}
+                        style={[
+                          styles.imagePreview,
+                          loadingImage && { opacity: 0.5 },
+                        ]}
+                      />
+                    </TouchableOpacity>
                     {!loadingImage && (
                       <TouchableOpacity
                         style={styles.removeImageButton}
@@ -1015,6 +1004,8 @@ useFocusEffect(
             </View>
           </TouchableOpacity>
         </Modal>
+
+        {PreviewModal}
       </KeyboardAvoidingView>
     </View>
   );

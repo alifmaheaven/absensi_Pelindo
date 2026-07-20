@@ -61,6 +61,7 @@ export default function DailyRoutineDetailScreen() {
 
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -369,14 +370,16 @@ export default function DailyRoutineDetailScreen() {
                     <View style={styles.photoSection}>
                       {state.evidence_file ? (
                         <View style={styles.photoPreviewContainer}>
-                          <Image
-                            source={{
-                              uri:
-                                state.local_uri ||
-                                getImageUrl(state.evidence_file),
-                            }}
-                            style={styles.photoPreview}
-                          />
+                          <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file))}>
+                            <Image
+                              source={{
+                                uri:
+                                  state.local_uri ||
+                                  getImageUrl(state.evidence_file),
+                              }}
+                              style={styles.photoPreview}
+                            />
+                          </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.retakeButton}
                             onPress={() => handlePickImage(index)}
@@ -450,6 +453,13 @@ export default function DailyRoutineDetailScreen() {
             <View style={{ height: 40 }} />
           </ScrollView>
         </View>
+
+        {/* Image Preview Modal */}
+        <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
+          <TouchableOpacity style={{flex:1,backgroundColor:"rgba(0,0,0,0.9)",justifyContent:"center",alignItems:"center"}} onPress={() => setPreviewImage(null)}>
+            {previewImage && <Image source={{uri: previewImage}} style={{width:"90%",height:"70%",resizeMode:"contain"}} />}
+          </TouchableOpacity>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
   );

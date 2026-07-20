@@ -1,5 +1,6 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
+import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
   DEFAULT_PAGE_SIZE,
@@ -59,6 +60,7 @@ export default function CheckoutScreen() {
     closeModal,
     setImages,
   } = useImagePicker();
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // --- State ---
   const [notes, setNotes] = useState("");
@@ -267,13 +269,16 @@ export default function CheckoutScreen() {
         </LinearGradient>
 
         <View style={styles.contentContainer}>
+          {loadingLocation ? (
+            <FormSkeleton />
+          ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
             {/* Map */}
             <View style={styles.mapContainer}>
-              {loadingLocation || !location ? (
+              {!location ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color="#1e90ff" />
                   <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
@@ -330,13 +335,15 @@ export default function CheckoutScreen() {
             <View style={styles.imageGrid}>
               {images.map((image, index) => (
                 <View key={index} style={styles.imagePreviewContainer}>
-                  <Image
-                    source={{ uri: image.uri }}
-                    style={[
-                      styles.imagePreview,
-                      loadingImage && { opacity: 0.5 },
-                    ]}
-                  />
+                    <TouchableOpacity onPress={() => setPreviewImage(image.uri)}>
+                      <Image
+                        source={{ uri: image.uri }}
+                        style={[
+                          styles.imagePreview,
+                          loadingImage && { opacity: 0.5 },
+                        ]}
+                      />
+                    </TouchableOpacity>
                   {!loadingImage && (
                     <TouchableOpacity
                       style={styles.removeImageButton}
@@ -399,6 +406,7 @@ export default function CheckoutScreen() {
 
             <View style={{ height: 40 }} />
           </ScrollView>
+        )}
         </View>
 
         {/* Image Picker Modal */}
@@ -430,6 +438,13 @@ export default function CheckoutScreen() {
                 <Text style={styles.modalButtonTextCancel}>Kembali</Text>
               </TouchableOpacity>
             </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Image Preview Modal */}
+        <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
+          <TouchableOpacity style={{flex:1,backgroundColor:"rgba(0,0,0,0.9)",justifyContent:"center",alignItems:"center"}} onPress={() => setPreviewImage(null)}>
+            {previewImage && <Image source={{uri: previewImage}} style={{width:"90%",height:"70%",resizeMode:"contain"}} />}
           </TouchableOpacity>
         </Modal>
       </KeyboardAvoidingView>

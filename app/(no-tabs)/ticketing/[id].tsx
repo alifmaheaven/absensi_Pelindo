@@ -1,5 +1,6 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
+import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
 import { useToast } from "@/components/ui/toast";
 import {
   ATTENDANCE_WINDOW_HOURS,
@@ -14,7 +15,7 @@ import {
   getAttendanceOption,
   getDataEvid,
   getDataSeverity,
-  getDataStatus,
+  getDataSite, getDataStatus,
   getTicketDevice,
   updateTicket,
   uploadEvidGroupId,
@@ -36,7 +37,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -103,6 +104,14 @@ export default function TicketingEditScreen() {
 
   // Data Options
   const [deviceData, setDeviceData] = useState<ITicketDevice[]>([]);
+  const [deviceDrawerVisible, setDeviceDrawerVisible] = useState(false);
+  const [deviceDrawerSiteId, setDeviceDrawerSiteId] = useState<string>("");
+  const [deviceDrawerSiteName, setDeviceDrawerSiteName] = useState<string>("");
+
+  // Site state
+  const [siteData, setSiteData] = useState<{ id: string; name: string }[]>([]);
+  const [siteSelected, setSiteSelected] = useState("");
+  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
   const [statusData, setStatusData] = useState<ITicketStatus[]>([]);
   const [attendanceOptions, setAttendanceOptions] = useState<
     IAttendanceOptions[]
@@ -111,15 +120,36 @@ export default function TicketingEditScreen() {
   const [history, setHistory] = useState<any[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
+  const isInitialLoad = useRef(true);
 
-  useFocusEffect(
+  // Refetch devices when user manually changes site (skip initial programmatic set)
+  useEffect(() => {
+    if (!siteSelected || isInitialLoad.current) {
+      isInitialLoad.current = false;
+      return;
+    }
+    const fetchDevicesBySite = async () => {
+      try {
+        const res = await getTicketDevice({ page: 1, per_page: 100, site_id_exact: siteSelected, order_by_desc: ["created_at"] });
+        setDeviceData(res.data?.data || []);
+        setDeviceSelected("");
+      } catch (e) { console.error(e); }
+    };
+    fetchDevicesBySite();
+  }, [siteSelected]);
+
+useFocusEffect(
     useCallback(() => {
       async function fetchData() {
         try {
           setLoadingSkeleton(true);
 
-          const [devices, attendanceOptions, severitys, evids, status, historyRes] =
+          const [sitesRes, devices, attendanceOptions, severitys, evids, status, historyRes] =
             await Promise.all([
+              getDataSite({
+                page: 1,
+                per_page: 100,
+              }),
               getTicketDevice({
                 page: 1,
                 per_page: 100,
@@ -149,6 +179,7 @@ export default function TicketingEditScreen() {
             ]);
 
           const device = devices.data?.data || [];
+          const siteOpts = sitesRes?.data?.data || [];
           const attendanceOption = attendanceOptions.data?.data || [];
           const severityData = severitys.data?.data || [];
           const statusData = status.data?.data || [];
@@ -187,7 +218,7 @@ export default function TicketingEditScreen() {
           }
 
           setSeveritys(sortSeverity);
-          setDeviceData(device);
+          setSiteData(siteOpts.map((s: any) => ({ id: s.id, name: s.name })));
           setAttendanceOptions(attendanceOptionFilter);
           // Auto-select attendance from ticket data or first active check-in
           if (ticket?.attendance_id) {
@@ -195,14 +226,29 @@ export default function TicketingEditScreen() {
           } else if (attendanceOptionFilter.length > 0) {
             setAttendanceSelected(attendanceOptionFilter[0].id);
           }
+          // Determine site ID for device drawer
+          const drawerSiteId = ticket?.site_id || attendanceOptionFilter[0]?.site_id || "";
+          setDeviceDrawerSiteId(drawerSiteId);
+          // Set selected site from ticket or attendance - do this BEFORE device
+          const prefilledSiteId = ticket?.site_id || attendanceOptionFilter[0]?.site_id || "";
+          let selectedSiteName = "";
+          if (prefilledSiteId) {
+            setSiteSelected(prefilledSiteId);
+            const foundSite = siteOpts.find((s: any) => s.id === prefilledSiteId);
+            if (foundSite) selectedSiteName = foundSite.name;
+            setDeviceDrawerSiteName(selectedSiteName);
+          }
+          // Filter devices by site and pick the selected one
+          const filteredDevices = prefilledSiteId
+            ? device.filter((d: any) => d.site_id === prefilledSiteId)
+            : device;
+          setDeviceData(filteredDevices);
+          setDeviceSelected(ticket?.device_id || "");
           setStatusData(statusData);
           setHistory((historyRes as any)?.data?.logs || []);
 
           setTitle(ticket?.name || "");
           setNotes(ticket?.description || "");
-          setDeviceSelected(ticket?.device_id || "");
-          setSeveritySelected(ticket?.severity_id || "");
-          setStatusSelected(ticket?.status_id || "");
           setSeveritySelected(ticket?.severity_id || "");
           setStatusSelected(ticket?.status_id || "");
         } catch (error) {
@@ -538,51 +584,82 @@ export default function TicketingEditScreen() {
                 />
               </View>
 
-              {/* Device */}
-              <Text style={styles.sectionTitle}>Device</Text>
+              {/* Site */}
+              <Text style={styles.sectionTitle}>Site</Text>
               <View style={styles.dropdownWrapper}>
-                <TouchableOpacity
-                  style={styles.selectInputDropdown}
-                  onPress={() => setDeviceDropdownOpen((p) => !p)}
-                >
-                  <Text
-                    style={deviceSelected ? styles.value : styles.placeholder}
-                  >
-                    {deviceData?.find((d) => d.id === deviceSelected)?.name ||
-                      "Select device"}
-                  </Text>
-                  <Ionicons
-                    name={deviceDropdownOpen ? "chevron-up" : "chevron-down"}
-                    size={18}
-                  />
+                <TouchableOpacity style={styles.selectInputDropdown} onPress={() => setSiteDropdownOpen(p => !p)}>
+                  <Text style={siteSelected ? styles.value : styles.placeholder}>{siteData?.find(s => s.id === siteSelected)?.name || "Pilih Site"}</Text>
+                  <Ionicons name={siteDropdownOpen ? "chevron-up" : "chevron-down"} size={18} />
                 </TouchableOpacity>
-
-                {deviceDropdownOpen && (
+                {siteDropdownOpen && (
                   <View style={styles.dropdown}>
-                    {deviceData?.map((device) => (
-                      <TouchableOpacity
-                        key={device.id}
-                        style={styles.option}
-                        onPress={() => {
-                          setDeviceSelected(device.id);
-                          setDeviceDropdownOpen((p) => !p);
-                        }}
-                      >
-                        <View style={{ width: 20 }}>
-                          {deviceSelected === device.id && (
-                            <Ionicons
-                              name={"checkmark"}
-                              size={18}
-                              color="#1e90ff"
-                            />
-                          )}
-                        </View>
-                        <Text style={styles.optionText}>{device.name}</Text>
+                    {siteData?.map(site => (
+                      <TouchableOpacity key={site.id} style={styles.option} onPress={() => { setSiteSelected(site.id); setDeviceDrawerSiteId(site.id); setDeviceDrawerSiteName(site.name); setSiteDropdownOpen(false); }}>
+                        <View style={{ width: 20 }}>{siteSelected === site.id && <Ionicons name="checkmark" size={18} color="#1e90ff" />}</View>
+                        <Text style={styles.optionText}>{site.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
               </View>
+
+              {!!siteSelected && (
+              <>
+              {/* Device */}
+              <Text style={styles.sectionTitle}>Device</Text>
+              <View style={styles.dropdownRow}>
+                <View style={styles.dropdownWrapper}>
+                  <TouchableOpacity
+                    style={styles.selectInputDropdown}
+                    onPress={() => setDeviceDropdownOpen((p) => !p)}
+                  >
+                    <Text
+                      style={deviceSelected ? styles.value : styles.placeholder}
+                    >
+                      {deviceData?.find((d) => d.id === deviceSelected)?.name ||
+                        "Select device"}
+                    </Text>
+                    <Ionicons
+                      name={deviceDropdownOpen ? "chevron-up" : "chevron-down"}
+                      size={18}
+                    />
+                  </TouchableOpacity>
+
+                  {deviceDropdownOpen && (
+                    <View style={styles.dropdown}>
+                      {deviceData?.map((device) => (
+                        <TouchableOpacity
+                          key={device.id}
+                          style={styles.option}
+                          onPress={() => {
+                            setDeviceSelected(device.id);
+                            setDeviceDropdownOpen((p) => !p);
+                          }}
+                        >
+                          <View style={{ width: 20 }}>
+                            {deviceSelected === device.id && (
+                              <Ionicons
+                                name={"checkmark"}
+                                size={18}
+                                color="#1e90ff"
+                              />
+                            )}
+                          </View>
+                          <Text style={styles.optionText}>{device.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={styles.addDeviceButton}
+                  onPress={() => setDeviceDrawerVisible(true)}
+                >
+                  <Ionicons name="add" size={24} color="#1e90ff" />
+                </TouchableOpacity>
+              </View>
+              </>
+              )}
 
               {/* Attendance - auto-selected from check-in */}
               <Text style={styles.sectionTitle}>Status</Text>
@@ -705,6 +782,27 @@ export default function TicketingEditScreen() {
                   {loadingImage ? "Memproses..." : "Tambah Gambar"}
                 </Text>
               </TouchableOpacity>
+
+              {/* Device Drawer */}
+              <DeviceDrawer
+                visible={deviceDrawerVisible}
+                onClose={() => setDeviceDrawerVisible(false)}
+                onSelect={(device) => {
+                  setDeviceSelected(device.id);
+                  getTicketDevice({
+                    per_page: 100,
+                    company_id_exact: [user?.company_id || ""],
+                    user_id_exact: [user?.id || ""],
+                    order_by_desc: ["created_at"],
+                  }).then((res) => {
+                    setDeviceData(res.data?.data || []);
+                  }).catch(() => {});
+                }}
+                siteId={deviceDrawerSiteId}
+                siteName={deviceDrawerSiteName}
+                companyId={user?.company_id || ticket?.company_id || ""}
+                contractId={user?.contract_id || ticket?.contract_id || ""}
+              />
 
               {/* Submit Button */}
               <TouchableOpacity
@@ -1252,7 +1350,24 @@ const styles = StyleSheet.create({
   },
 
   // dropdown
-  dropdownWrapper: { position: "relative", marginBottom: 24 },
+  dropdownRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 24,
+  },
+  dropdownWrapper: { position: "relative", flex: 1, marginBottom: 24 },
+  addDeviceButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#1e90ff",
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 0,
+  },
   selectInputDropdown: {
     borderWidth: 1,
     borderColor: "#E5E7EB",

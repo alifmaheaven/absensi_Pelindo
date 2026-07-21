@@ -20,9 +20,11 @@ interface Props {
   value: string; // "YYYY-MM-DD"
   onConfirm: (date: string) => void;
   onClose: () => void;
+  disabledDates?: string[]; // "YYYY-MM-DD" — days that should be disabled (e.g. already taken leave dates)
+  disabledDateMessage?: string; // shown as tooltip/inline on why it's disabled
 }
 
-export default function DatePicker({ visible, value, onConfirm, onClose }: Props) {
+export default function DatePicker({ visible, value, onConfirm, onClose, disabledDates = [] }: Props) {
   const today = new Date();
   const initial = value ? new Date(value) : today;
   const [year, setYear] = useState(initial.getFullYear());
@@ -31,6 +33,14 @@ export default function DatePicker({ visible, value, onConfirm, onClose }: Props
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun
+
+  const disabledSet = new Set(disabledDates);
+
+  const isDayDisabled = (day: number): boolean => {
+    const mm = String(month + 1).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    return disabledSet.has(`${year}-${mm}-${dd}`);
+  };
 
   const goToPrevMonth = () => {
     if (month === 0) {
@@ -97,29 +107,42 @@ export default function DatePicker({ visible, value, onConfirm, onClose }: Props
 
           {/* Calendar grid */}
           <View style={styles.grid}>
-            {cells.map((day, i) => (
+            {cells.map((day, i) => {
+              const disabled = day ? isDayDisabled(day) : false;
+              return (
               <TouchableOpacity
                 key={i}
                 style={[
                   styles.dayCell,
                   day === selectedDay && styles.dayCellSelected,
+                  disabled && styles.dayCellDisabled,
                 ]}
-                onPress={() => day && setSelectedDay(day)}
-                disabled={!day}
+                onPress={() => day && !disabled && setSelectedDay(day)}
+                disabled={!day || disabled}
               >
                 {day ? (
-                  <Text
-                    style={[
-                      styles.dayText,
-                      day === selectedDay && styles.dayTextSelected,
-                    ]}
-                  >
-                    {day}
-                  </Text>
+                  <View style={{ alignItems: "center" }}>
+                    <Text
+                      style={[
+                        styles.dayText,
+                        day === selectedDay && styles.dayTextSelected,
+                        disabled && styles.dayTextDisabled,
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                    {disabled && <View style={styles.disabledDot} />}
+                  </View>
                 ) : null}
               </TouchableOpacity>
-            ))}
+            )})}
           </View>
+          {disabledDates.length > 0 && (
+            <View style={styles.disabledHint}>
+              <View style={styles.disabledDot} />
+              <Text style={styles.disabledHintText}>Tanggal sudah ada pengajuan</Text>
+            </View>
+          )}
 
           <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
             <Text style={styles.confirmText}>Pilih Tanggal</Text>
@@ -214,5 +237,34 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "600",
+  },
+  dayCellDisabled: {
+    backgroundColor: "#f5f5f5",
+    opacity: 0.5,
+  },
+  dayTextDisabled: {
+    color: "#ccc",
+  },
+  disabledDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#F44336",
+    marginTop: 2,
+  },
+  disabledHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 8,
+    backgroundColor: "#FFF3E0",
+    borderRadius: 8,
+  },
+  disabledHintText: {
+    fontSize: 11,
+    color: "#E65100",
+    fontWeight: "500",
   },
 });

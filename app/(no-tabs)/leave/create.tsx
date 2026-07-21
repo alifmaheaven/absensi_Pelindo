@@ -1,18 +1,15 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import DatePicker from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast";
-import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE, ATTENDANCE_STATUS_CODE_CHECKIN } from "@/constants";
+import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE } from "@/constants";
+import API from "@/lib/axios";
 import { useRequest } from "@/hooks/use-request";
-import { saveCheckInId } from "@/lib/storage";
+import { getMyLeaves } from "@/services/leave";
 import {
-  createAttendance,
-  createGroupId,
   deleteEvidtmp,
   getAttendanceSite,
   getAttendanceStatus,
   uploadEvid,
-  uploadEvidGroupId,
-  uploadEvidPermanent,
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
@@ -64,6 +61,7 @@ export default function LeaveScreen() {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
   const [attendanceSelected, setAttendanceSelected] = useState("");
+  const [disabledDates, setDisabledDates] = useState<string[]>([]);
   const { user } = useAuthStore();
 
   const { run: getSite } = useRequest(() =>
@@ -85,23 +83,10 @@ export default function LeaveScreen() {
         const sites = sitesRes.data?.data;
         const status = statusRes.data?.data;
 
+        // Exclude only "Attend" — show Izin, Cuti, Sakit, Alpha, dll
         setStatusData(
           status
-            ? status.filter((s) => {
-                const name = s.name?.toLowerCase() ?? "";
-                const code = s.code?.toLowerCase() ?? "";
-                const isCheckin =
-                  code === ATTENDANCE_STATUS_CODE_CHECKIN ||
-                  name.includes("hadir") ||
-                  name.includes("check") ||
-                  name.includes("attend") ||
-                  name.includes("masuk") ||
-                  code.includes("hadir") ||
-                  code.includes("checkin") ||
-                  code.includes("attend") ||
-                  code.includes("masuk");
-                return !isCheckin;
-              })
+            ? status.filter((s) => s.name?.toLowerCase() !== "attend")
             : [],
         );
         setSiteData(sites ? sites : []);
@@ -111,6 +96,19 @@ export default function LeaveScreen() {
       }
     };
     fetchSites();
+
+    // Fetch existing leave dates to disable in calendar
+    getMyLeaves({ page: 1, per_page: 50 })
+      .then((leaves) => {
+        if (Array.isArray(leaves)) {
+          const dates = leaves
+            .filter((lr) => lr.status !== "rejected")
+            .map((lr) => (lr.leave_date || "").split("T")[0])
+            .filter(Boolean);
+          setDisabledDates(dates);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -261,14 +259,8 @@ export default function LeaveScreen() {
   };
 
   const handleSubmit = async () => {
-    // Validasi gambar wajib minimal 1
     if (notes == "") {
       showToast("Masukkan catatan!", "error");
-      return;
-    }
-
-    if (attendanceSelected == "") {
-      showToast("Pilih status kehadiran!", "error");
       return;
     }
 
@@ -277,61 +269,24 @@ export default function LeaveScreen() {
       return;
     }
 
-    if (images.length === 0) {
-      showToast("Upload minimal 1 gambar sebagai bukti!", "error");
+    if (attendanceSelected == "") {
+      showToast("Pilih status kehadiran!", "error");
       return;
     }
 
+    const selectedStatus = statusData?.find((s) => s.id === attendanceSelected);
+    const isCuti = selectedStatus?.name?.toLowerCase() === "cuti";
+
     setLoadingSubmit(true);
     try {
-      const group = await createGroupId({
-        name: `Attendance ${user?.name}`,
-        description: "Attendance evidence",
-      });
-
-      const groupId = group.data?.id ?? "";
-      console.debug("Group ID", groupId);
-
-      for (const img of images) {
-        const uploaded = await uploadEvidPermanent({ links: [img.path] });
-        const file = uploaded.data?.links?.[0];
-
-        if (!file) continue;
-        console.debug("File uploaded", file);
-
-        await uploadEvidGroupId({
-          name: `Attendance ${user?.name}`,
-          description: "Evidence",
-          file,
-          evidence_group_id: groupId,
-        });
-      }
-
-      const userSiteId = user?.site_id;
-      const site = (userSiteId ? siteData?.find((s) => s.id === userSiteId) : undefined) ?? siteData?.[0];
-
-      const res = await createAttendance({
-        user_id: user?.id ?? "",
-        company_id: user?.company_id ?? "",
-        contract_id: user?.contract_id ?? "",
-        site_id: user?.site_id ?? "",
-        name: "attendance",
-        description: notes || "Attendance",
-        code: `LV-${Date.now()}`,
-        checkin: new Date(leaveDate).toLocaleString("sv-SE", {
-          timeZone: TIMEZONE,
-        }),
+      await API.post("/leave/", {
+        leave_date: leaveDate,
+        leave_type: isCuti ? "cuti" : "izin",
         attendance_status_id: attendanceSelected,
-        evidence_group_id: groupId,
-        longitude: location?.coords?.longitude ?? site?.longitude,
-        latitude: location?.coords?.latitude ?? site?.latitude,
+        reason: notes,
       });
-      console.debug("Attendance created");
 
-      await saveCheckInId(res.data?.id ?? "");
-
-      showToast("Berhasil Check In!", "success");
-
+      showToast("Pengajuan izin/cuti berhasil dikirim!", "success");
       router.replace("/");
     } catch (error) {
       const err = error as THttpErrorResult;
@@ -442,6 +397,7 @@ export default function LeaveScreen() {
             <DatePicker
               visible={datePickerVisible}
               value={leaveDate}
+              disabledDates={disabledDates}
               onConfirm={(date) => {
                 setLeaveDate(date);
                 setDatePickerVisible(false);

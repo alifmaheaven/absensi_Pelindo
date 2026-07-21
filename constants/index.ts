@@ -13,7 +13,7 @@ export const DEFAULT_WORK_HOURS = {
 export const ATTENDANCE_WINDOW_HOURS = 8;
 
 // Used to look up attendance_status by stable `code` rather than fragile UUID
-export const ATTENDANCE_STATUS_CODE_CHECKIN = "checkin";
+export const ATTENDANCE_STATUS_CODE_CHECKIN = "ATST001";
 
 // Used to look up default ticket status by stable `code` rather than fragile UUID
 export const TICKET_STATUS_CODE_OPEN = "open";

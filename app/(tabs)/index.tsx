@@ -4,7 +4,6 @@ import {
   Calender,
   CheckRounded,
   ClockOutline,
-  DocumentCheck,
   PersonFill,
   Ticket,
 } from "@/components/icon";
@@ -18,7 +17,7 @@ import { IAttendance } from "@/types";
 import { smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -26,7 +25,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  AppState,
 } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { getTodaySchedule } from "@/services/schedule";
 import type { IScheduleToday, Ishift } from "@/types";
 
@@ -162,6 +163,28 @@ export default function HomeScreen() {
     setRefreshing(false);
   };
 
+  // Re-fetch attendance + schedule every time this screen gains focus
+  // (handles initial mount, returning from checkin/checkout, and tab switch)
+  useFocusEffect(
+    useCallback(() => {
+      fetchAttendance();
+      fetchSchedule();
+      fetchUnreadCount();
+    }, [user?.id])
+  );
+
+  // Re-fetch when app returns from background
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active" && user?.id) {
+        fetchAttendance();
+        fetchSchedule();
+        fetchUnreadCount();
+      }
+    });
+    return () => sub.remove();
+  }, [user?.id]);
+
   // Connect WebSocket for live notification updates
   useEffect(() => {
     if (!user?.id) return;
@@ -226,7 +249,7 @@ export default function HomeScreen() {
   const aksesMenuItems = [
     {
       icon: Ticket,
-      label: "Ticketing",
+      label: "Ticket",
       color: "#FF8D28",
       containerColor: "#ffc999",
       onPress: () => {
@@ -239,7 +262,7 @@ export default function HomeScreen() {
     },
     {
       icon: CheckRounded,
-      label: "Daily Routine",
+      label: "Daily",
       color: "#22C55E",
       containerColor: "#a7f3d0",
       onPress: () => {
@@ -248,19 +271,6 @@ export default function HomeScreen() {
           return;
         }
         router.push("/(no-tabs)/daily-routine");
-      },
-    },
-    {
-      icon: DocumentCheck,
-      label: "Izin/Cuti",
-      color: "#8B5CF6",
-      containerColor: "#ddd6fe",
-      onPress: () => {
-        if (!checkInDataById?.checkin) {
-          showToast("Anda belum check in", "info");
-          return;
-        }
-        router.push("/(tabs)/izin");
       },
     },
   ];

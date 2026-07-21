@@ -1,10 +1,10 @@
-import { ATTENDANCE_STATUS_CODE_CHECKIN } from "@/constants";
 import { getAttendanceList, getAttendanceStatus } from "@/services/attendance";
+import { getMyLeaves, ILeaveRequest } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -26,91 +26,128 @@ const getStatusColor = (status: string) => {
   }
 };
 
+interface MergedItem {
+  id: string;
+  type: "attendance" | "leave_request";
+  title: string;
+  date: string;
+  status: string;
+  reason?: string;
+  leave_type?: string;
+}
+
 export default function IzinScreen() {
   const { user } = useAuthStore();
-  const [attendanceData, setAttendanceData] = useState<
-    (IAttendance & { status: string })[]
-  >([]);
+  const [mergedData, setMergedData] = useState<MergedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchAttendance() {
-      try {
-        setIsLoading(true);
+  const fetchAll = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      setIsLoading(true);
 
-        const [attendanceRes, statusRes] = await Promise.all([
-          getAttendanceList({
-            page: 1,
-            per_page: 10,
-            order_by_desc: ["created_at"],
-            user_id_exact: [user?.id ?? ""],
-          }),
-          getAttendanceStatus({ page: 1, per_page: 10 }),
-        ]);
+      const [attendanceRes, statusRes, leavesRes] = await Promise.all([
+        getAttendanceList({
+          page: 1,
+          per_page: 20,
+          order_by_desc: ["created_at"],
+          user_id_exact: [user.id],
+        }),
+        getAttendanceStatus({ page: 1, per_page: 10 }),
+        getMyLeaves({ page: 1, per_page: 20 }).catch(() => [] as ILeaveRequest[]),
+      ]);
 
-        const attendance = attendanceRes?.data?.data || [];
-        const status = statusRes.data?.data || [];
+      const attendance = attendanceRes?.data?.data || [];
+      const status = statusRes.data?.data || [];
+      const leaves: ILeaveRequest[] = Array.isArray(leavesRes) ? leavesRes : [];
 
-        const statusMap: Record<string, string> = {};
-        let checkinStatusId = "";
-        const checkinStatus = status.find((s) => s.code === ATTENDANCE_STATUS_CODE_CHECKIN)
-          ?? status.find((s) => {
-            const name = s.name?.toLowerCase() ?? "";
-            const code = s.code?.toLowerCase() ?? "";
-            return (
-              name.includes("hadir") ||
-              name.includes("check") ||
-              name.includes("attend") ||
-              name.includes("masuk") ||
-              code.includes("hadir") ||
-              code.includes("checkin") ||
-              code.includes("attend") ||
-              code.includes("masuk")
-            );
+      const statusMap: Record<string, string> = {};
+      const attendId = status.find((s) => s.name?.toLowerCase() === "attend")?.id || "";
+      status.forEach((s) => { statusMap[s.id] = s.name; });
+
+      const merged: MergedItem[] = [];
+
+      // Attendance records (approved by admin, non-Attend)
+      attendance
+        .filter((item) => item.attendance_status_id !== attendId)
+        .forEach((item) => {
+          merged.push({
+            id: item.id,
+            type: "attendance",
+            title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
+            date: item.checkin ?? "",
+            status: item.checkin ? "Disetujui" : "Menunggu",
+            reason: item.description,
           });
-        if (checkinStatus) {
-          checkinStatusId = checkinStatus.id;
-        }
-        status.forEach((item) => {
-          statusMap[item.id] = item.name;
         });
 
-        const attendanceWithStatus = attendance
-          .filter((item) => item.attendance_status_id !== checkinStatusId)
-          .map((item) => ({
-            ...item,
-            status: statusMap[item.attendance_status_id] || "Menunggu",
-          }));
+      // Leave requests (pending/rejected — show even if not yet approved)
+      leaves.forEach((lr) => {
+        // Skip if already has an attendance record for same date (approved)
+        const alreadyApproved = merged.some(
+          (m) => m.type === "attendance" && m.date?.startsWith(lr.leave_date?.split("T")[0])
+        );
+        if (!alreadyApproved) {
+          const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
+          merged.push({
+            id: lr.id,
+            type: "leave_request",
+            title: leaveTypeLabel,
+            date: lr.leave_date,
+            status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Menunggu",
+            reason: lr.reason,
+            leave_type: lr.leave_type,
+          });
+        }
+      });
 
-        setAttendanceData(attendanceWithStatus);
-      } catch (error) {
-        console.error("Failed to fetch attendance data:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      // Sort by date desc
+      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setMergedData(merged);
+    } catch (error) {
+      console.error("Failed to fetch izin data:", error);
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchAttendance();
   }, [user?.id]);
+
+  // Refresh every time this tab gets focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchAll();
+    }, [fetchAll])
+  );
 
   let content: React.ReactNode;
 
   if (isLoading) {
     content = <IzinSkeleton />;
-  } else if (attendanceData.length === 0) {
+  } else if (mergedData.length === 0) {
     content = <EmptyState />;
   } else {
-    content = attendanceData?.map((item) => (
-      <View key={item.id} style={styles.izinCard}>
+    content = mergedData.map((item) => (
+      <View key={`${item.type}-${item.id}`} style={styles.izinCard}>
         <View style={styles.izinHeader}>
-          <Text style={styles.izinType}>{item.description}</Text>
+          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={styles.izinType}>
+              {item.title}
+              {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
+            </Text>
+            {item.type === "leave_request" && item.status === "Menunggu" && (
+              <Text style={styles.pendingDot}>⏳</Text>
+            )}
+          </View>
           <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
         <View style={styles.izinDetails}>
-          <Text style={styles.izinDate}>📅 {item.checkin ?? "--"}</Text>
+          <Text style={styles.izinDate}>📅 {item.date ? new Date(item.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "--"}</Text>
         </View>
+        {item.reason ? (
+          <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>
+        ) : null}
       </View>
     ));
   }
@@ -257,6 +294,15 @@ const styles = StyleSheet.create({
   izinDate: {
     fontSize: 13,
     color: "#666",
+  },
+  reasonText: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  pendingDot: {
+    fontSize: 14,
   },
 
   skeletonCard: {

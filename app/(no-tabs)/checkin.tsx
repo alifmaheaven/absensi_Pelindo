@@ -3,7 +3,6 @@ import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
-  ATTENDANCE_STATUS_CODE_CHECKIN,
   DEFAULT_PAGE_SIZE,
   MAX_SITES_PROXIMITY,
   TIMEZONE,
@@ -88,29 +87,10 @@ export default function CheckinScreen() {
         setSiteData(sites ? sites : []);
 
         const statuses: IAttendanceStatus[] = statusRes.data?.data || [];
-        // Try finding checkin status: first by known code, then by name keywords
-        let checkinStatus = statuses.find(
-          (s) => s.code === ATTENDANCE_STATUS_CODE_CHECKIN,
+        // Find checkin status by exact code (ATST001 = Attend)
+        const checkinStatus = statuses.find(
+          (s) => s.name?.toLowerCase() === "attend",
         );
-        if (!checkinStatus) {
-          checkinStatus = statuses.find((s) => {
-            const name = s.name?.toLowerCase() ?? "";
-            const code = s.code?.toLowerCase() ?? "";
-            return (
-              name.includes("hadir") ||
-              name.includes("check") ||
-              name.includes("attend") ||
-              name.includes("masuk") ||
-              code.includes("hadir") ||
-              code.includes("checkin") ||
-              code.includes("attend") ||
-              code.includes("masuk")
-            );
-          });
-        }
-        if (!checkinStatus && statuses.length > 0) {
-          checkinStatus = statuses[0];
-        }
         if (checkinStatus) {
           setCheckinStatusId(checkinStatus.id);
         } else {

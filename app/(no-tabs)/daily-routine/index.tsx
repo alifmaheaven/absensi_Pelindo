@@ -166,16 +166,23 @@ export default function DailyRoutineListScreen() {
                 <Text style={styles.routineDescription}>{data.routine.description}</Text>
               ) : null}
 
+              {/* Checklist count: per-device items if device exists, else template items */}
               <View style={styles.itemCountRow}>
                 <Text style={styles.itemCountLabel}>Checklist Items</Text>
-                <Text style={styles.itemCountValue}>{data.routine.items?.length || 0}</Text>
+                <Text style={styles.itemCountValue}>
+                  {data.routine?.device_items?.length || data.routine?.items?.length || 0}
+                </Text>
               </View>
 
               {data.log_items?.length > 0 && (
                 <View style={styles.progressRow}>
                   <Text style={styles.progressLabel}>Progress</Text>
                   <Text style={styles.progressValue}>
-                    {data.log_items.filter((i) => i.is_checked).length}/{data.routine.items?.length || 0}
+                    {(() => {
+                      const total = data.routine?.device_items?.length || data.routine?.items?.length || 0;
+                      const checked = data.log_items.filter((i) => i.is_checked).length;
+                      return `${checked}/${total}`;
+                    })()}
                   </Text>
                 </View>
               )}

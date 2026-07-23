@@ -7,6 +7,15 @@ export interface IDailyRoutineItem {
   sort_order: number;
 }
 
+export interface IDailyRoutineDeviceItem {
+  id: string;
+  daily_routine_id: string;
+  daily_routine_item_id: string;
+  device_id: string;
+  device_name?: string;
+  is_photo_required: boolean;
+}
+
 export interface IDailyRoutine {
   id: string;
   name: string;
@@ -15,12 +24,14 @@ export interface IDailyRoutine {
   company_id: string;
   is_active: boolean;
   items: IDailyRoutineItem[];
+  device_items?: IDailyRoutineDeviceItem[];
 }
 
 export interface IDailyRoutineLogItem {
   id: string;
   daily_routine_log_id: string;
   daily_routine_item_id: string;
+  device_id?: string | null;
   is_checked: boolean;
   checked_at: string | null;
   evidence_file: string | null;

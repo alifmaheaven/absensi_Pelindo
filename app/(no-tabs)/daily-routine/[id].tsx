@@ -37,10 +37,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface IItemState {
   daily_routine_item_id: string;
+  device_id?: string; // composite key: device_id::item_id for per-device state
   is_checked: boolean;
   evidence_file: string | null;
   notes: string;
   local_uri: string | null;
+}
+
+interface IDeviceGroup {
+  device_id: string;
+  device_name: string;
+  items: IDailyRoutineItem[];
 }
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -52,12 +59,14 @@ export default function DailyRoutineDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [loadingImageIndex, setLoadingImageIndex] = useState<number | null>(null);
+  const [loadingImageKey, setLoadingImageKey] = useState<string | null>(null);
+  const [activeDeviceTab, setActiveDeviceTab] = useState<string>(""); // currently active device tab
+  const [deviceGroups, setDeviceGroups] = useState<IDeviceGroup[]>([]); // for device tab UI
 
   const [routine, setRoutine] = useState<IDailyRoutine | null>(null);
   const [logData, setLogData] = useState<IDailyRoutineLog | null>(null);
   const [logItems, setLogItems] = useState<IDailyRoutineLogItem[]>([]);
-  const [itemStates, setItemStates] = useState<IItemState[]>([]);
+  const [itemStates, setItemStates] = useState<Record<string, IItemState>>({});
 
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
@@ -91,26 +100,85 @@ export default function DailyRoutineDetailScreen() {
       setRoutine(routineDetail);
       setLogData(todayData?.log || null);
 
-      // Use log_items from today data, but only those matching this routine's items
+      // Use log_items from today data — match by composite (device_id, daily_routine_item_id)
       const matchingLogItems = (todayData?.log_items || []).filter(
         (li: IDailyRoutineLogItem) =>
           routineDetail.items?.some((ri: IDailyRoutineItem) => ri.id === li.daily_routine_item_id)
       );
       setLogItems(matchingLogItems);
 
-      // Initialize item states from routine items
-      const states: IItemState[] = (routineDetail.items || []).map((item: IDailyRoutineItem) => {
-        const existingLogItem = matchingLogItems.find(
-          (li: IDailyRoutineLogItem) => li.daily_routine_item_id === item.id
-        );
-        return {
-          daily_routine_item_id: item.id,
-          is_checked: existingLogItem?.is_checked || false,
-          evidence_file: existingLogItem?.evidence_file || null,
-          notes: existingLogItem?.notes || "",
-          local_uri: null,
-        };
+      // Initialize item states keyed by device_id::daily_routine_item_id
+      const states: Record<string, IItemState> = {};
+      // Build lookup: log_item by composite key, with fallback by item_id alone
+      // (old log_items may not have device_id — fallback to item_id match)
+      const logItemLookup: Record<string, IDailyRoutineLogItem> = {};
+      const logItemLookupByItem: Record<string, IDailyRoutineLogItem> = {};
+      matchingLogItems.forEach((li: any) => {
+        const key = `${li.device_id || ''}::${li.daily_routine_item_id}`;
+        logItemLookup[key] = li;
+        // Fallback: first-come-first-serve by item_id (for legacy log_items without device_id)
+        if (!li.device_id && !logItemLookupByItem[li.daily_routine_item_id]) {
+          logItemLookupByItem[li.daily_routine_item_id] = li;
+        }
       });
+
+      const groups: IDeviceGroup[] = [];
+      if (routineDetail.device_items?.length) {
+        // Build per-device groups
+        const deviceMap: Record<string, IDeviceGroup> = {};
+        (routineDetail.device_items as any[]).forEach((di: any) => {
+          const key = di.device_id;
+          if (!deviceMap[key]) deviceMap[key] = { device_id: key, device_name: di.device_name || 'Unknown', items: [] };
+        });
+        (routineDetail.items || []).forEach((item: IDailyRoutineItem) => {
+          // Find which devices this item belongs to
+          (routineDetail.device_items as any[]).forEach((di: any) => {
+            if (di.daily_routine_item_id === item.id && deviceMap[di.device_id]) {
+              deviceMap[di.device_id].items.push(item);
+            }
+          });
+        });
+
+        const sortedGroups = Object.values(deviceMap);
+        groups.push(...sortedGroups);
+        if (sortedGroups.length > 0 && !activeDeviceTab) setActiveDeviceTab(sortedGroups[0].device_id);
+
+        // Init state for each device×item combo — lookup by composite key
+        sortedGroups.forEach((group) => {
+          group.items.forEach((item) => {
+            const stateKey = `${group.device_id}::${item.id}`;
+            // Try composite key first, fallback to item-only (legacy data without device_id)
+            const existingLogItem = logItemLookup[stateKey] || logItemLookupByItem[item.id];
+            states[stateKey] = {
+              daily_routine_item_id: item.id,
+              device_id: group.device_id,
+              is_checked: existingLogItem?.is_checked || false,
+              evidence_file: (existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id)
+                ? (existingLogItem?.evidence_file || null)
+                : null, // different device's evidence — don't share
+              notes: (existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id)
+                ? (existingLogItem?.notes || "")
+                : "",
+              local_uri: null,
+            };
+          });
+        });
+      }
+      setDeviceGroups(groups);
+      if (!routineDetail.device_items?.length) {
+        // Flat checklist: key is ::itemId (no device_id)
+        (routineDetail.items || []).forEach((item: IDailyRoutineItem) => {
+          const stateKey = `::${item.id}`;
+          const existingLogItem = logItemLookup[stateKey];
+          states[stateKey] = {
+            daily_routine_item_id: item.id,
+            is_checked: existingLogItem?.is_checked || false,
+            evidence_file: existingLogItem?.evidence_file || null,
+            notes: existingLogItem?.notes || "",
+            local_uri: null,
+          };
+        });
+      }
       setItemStates(states);
     } catch (error: any) {
       console.error("Fetch routine detail error:", error);
@@ -127,25 +195,25 @@ export default function DailyRoutineDetailScreen() {
     }, [])
   );
 
-  const updateItemState = (index: number, updates: Partial<IItemState>) => {
-    setItemStates((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], ...updates };
-      return next;
-    });
+  const updateItemState = (stateKey: string, updates: Partial<IItemState>) => {
+    setItemStates((prev) => ({
+      ...prev,
+      [stateKey]: { ...prev[stateKey], ...updates },
+    }));
   };
 
-  const handleCheckToggle = (index: number) => {
-    const item = itemStates[index];
-    updateItemState(index, { is_checked: !item.is_checked });
+  const handleCheckToggle = (stateKey: string) => {
+    const item = itemStates[stateKey];
+    if (item) updateItemState(stateKey, { is_checked: !item.is_checked });
   };
 
-  const handlePickImage = async (index: number) => {
-    const itemState = itemStates[index];
-    const routineItem = routine?.items[index];
+  const handlePickImage = async (stateKey: string) => {
+    const itemState = itemStates[stateKey];
+    const itemId = itemState?.daily_routine_item_id;
+    const routineItem = routine?.items?.find((ri: IDailyRoutineItem) => ri.id === itemId);
     if (!routineItem?.is_photo_required) return;
 
-    setLoadingImageIndex(index);
+    setLoadingImageKey(stateKey);
 
     try {
       const { status } = await ImagePicker.getCameraPermissionsAsync();
@@ -154,7 +222,7 @@ export default function DailyRoutineDetailScreen() {
         const newPermission = await ImagePicker.requestCameraPermissionsAsync();
         if (newPermission.status !== ImagePicker.PermissionStatus.GRANTED) {
           showToast("Izin kamera diperlukan", "error");
-          setLoadingImageIndex(null);
+          setLoadingImageKey(null);
           return;
         }
       }
@@ -168,7 +236,7 @@ export default function DailyRoutineDetailScreen() {
             { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
           ]
         );
-        setLoadingImageIndex(null);
+        setLoadingImageKey(null);
         return;
       }
 
@@ -179,7 +247,7 @@ export default function DailyRoutineDetailScreen() {
       });
 
       if (result.canceled) {
-        setLoadingImageIndex(null);
+        setLoadingImageKey(null);
         return;
       }
 
@@ -194,7 +262,7 @@ export default function DailyRoutineDetailScreen() {
         type: "image/jpeg",
       } as any);
 
-      updateItemState(index, {
+      updateItemState(stateKey, {
         evidence_file: uploadRes.data?.[0]?.path ?? "",
         local_uri: compressed?.uri ?? null,
       });
@@ -202,7 +270,7 @@ export default function DailyRoutineDetailScreen() {
       console.error("Pick image error:", error);
       showToast("Gagal mengambil gambar", "error");
     } finally {
-      setLoadingImageIndex(null);
+      setLoadingImageKey(null);
     }
   };
 
@@ -212,30 +280,38 @@ export default function DailyRoutineDetailScreen() {
       return;
     }
 
+    const states = Object.values(itemStates);
+
     // Validate: checked items with is_photo_required must have evidence
-    for (let i = 0; i < itemStates.length; i++) {
-      const item = itemStates[i];
+    // Priority: per-device setting (daily_routine_device_item) > global item setting
+    for (const item of states) {
       const routineItem = routine?.items.find(
         (ri) => ri.id === item.daily_routine_item_id
       );
-      if (item.is_checked && routineItem?.is_photo_required && !item.evidence_file) {
+      const deviceConf = (routine?.device_items || []).find(
+        (di: any) => di.device_id === item.device_id && di.daily_routine_item_id === item.daily_routine_item_id
+      );
+      const requiresPhoto = deviceConf?.is_photo_required ?? routineItem?.is_photo_required ?? false;
+      if (item.is_checked && requiresPhoto && !item.evidence_file) {
         showToast(
-          `"${routineItem.name}" membutuhkan foto bukti`,
+          `"${routineItem?.name || 'Item'}" membutuhkan foto bukti`,
           "error"
         );
         return;
       }
     }
 
+    // Submit per-device items — each device gets its own log_item state
+    const submitItems = states.map((item) => ({
+      daily_routine_item_id: item.daily_routine_item_id,
+      device_id: item.device_id,
+      is_checked: item.is_checked,
+      ...(item.evidence_file && { evidence_file: item.evidence_file }),
+      ...(item.notes && { notes: item.notes }),
+    }));
+
     setSubmitting(true);
     try {
-      const submitItems = itemStates.map((item) => ({
-        daily_routine_item_id: item.daily_routine_item_id,
-        is_checked: item.is_checked,
-        ...(item.evidence_file && { evidence_file: item.evidence_file }),
-        ...(item.notes && { notes: item.notes }),
-      }));
-
       await submitDailyRoutineLog(logData.id, submitItems);
       showToast("Daily routine berhasil diselesaikan!", "success");
       router.replace("/(no-tabs)/daily-routine");
@@ -249,6 +325,12 @@ export default function DailyRoutineDetailScreen() {
 
   const getImageUrl = (file: string) => {
     return new URL(`${IMAGE_BASE_PATH}${file}`, BASE_URL).toString();
+  };
+
+  const getDeviceProgress = (deviceId: string) => {
+    const states = Object.values(itemStates).filter((s) => s.device_id === deviceId);
+    const checked = states.filter((s) => s.is_checked).length;
+    return { total: states.length, checked };
   };
 
   if (loading) {
@@ -319,10 +401,94 @@ export default function DailyRoutineDetailScreen() {
 
             <View style={styles.divider} />
 
-            {/* Checklist Items */}
-            <Text style={styles.sectionTitle}>Checklist</Text>
-            {routine?.items?.map((item, index) => {
-              const state = itemStates[index];
+            {/* Checklist Items — tabbed by device if device_items exist */}
+            {deviceGroups.length ? (
+              <>
+                {/* Device Tabs */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.deviceTabBar}>
+                  {deviceGroups.map((group) => {
+                    const progress = getDeviceProgress(group.device_id);
+                    const isActive = activeDeviceTab === group.device_id;
+                    const allDone = progress.total > 0 && progress.checked === progress.total;
+                    return (
+                      <TouchableOpacity
+                        key={group.device_id}
+                        style={[styles.deviceTab, isActive && styles.deviceTabActive]}
+                        onPress={() => setActiveDeviceTab(group.device_id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.deviceTabIcon}>🖥️</Text>
+                        <Text style={[styles.deviceTabText, isActive && styles.deviceTabTextActive]} numberOfLines={1}>
+                          {group.device_name}
+                        </Text>
+                        <Text style={[styles.deviceTabProgress, allDone ? styles.deviceTabDone : styles.deviceTabPending]}>
+                          {progress.checked}/{progress.total}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* Active Device Checklist */}
+                {deviceGroups.filter((g) => g.device_id === activeDeviceTab).map((group) => (
+                  <View key={group.device_id} style={{ marginBottom: 16 }}>
+                    <View style={styles.deviceHeader}>
+                      <Text style={styles.deviceHeaderIcon}>🖥️</Text>
+                      <Text style={styles.deviceHeaderText}>{group.device_name}</Text>
+                      {(() => { const p = getDeviceProgress(group.device_id);
+                        return <Text style={[styles.deviceProgressLabel, p.checked === p.total && p.total > 0 ? styles.deviceProgressDone : styles.deviceProgressPending]}>{p.checked}/{p.total}</Text>;
+                      })()}
+                    </View>
+                    {group.items.map((item: any) => {
+                      const stateKey = `${group.device_id}::${item.id}`;
+                      const state = itemStates[stateKey];
+                      if (!state) return null;
+
+                      const deviceConf = (routine?.device_items || []).find((di: any) => di.daily_routine_item_id === item.id);
+
+                      return (
+                        <View key={item.id} style={styles.checklistItem}>
+                          <TouchableOpacity style={styles.checkboxRow} onPress={() => handleCheckToggle(stateKey)} activeOpacity={0.7}>
+                            <View style={[styles.checkbox, state.is_checked && styles.checkboxChecked]}>
+                              {state.is_checked && <CheckRounded width={16} height={16} color="#fff" />}
+                            </View>
+                            <View style={styles.checkboxTextContainer}>
+                              <Text style={[styles.checkboxLabel, state.is_checked && styles.checkboxLabelChecked]}>{item.name}</Text>
+                              {item.description ? <Text style={[styles.checkboxDescription, state.is_checked && styles.textMuted]}>{item.description}</Text> : null}
+                            </View>
+                          </TouchableOpacity>
+                          {deviceConf?.is_photo_required && (
+                            <View style={styles.photoSection}>
+                              {state.evidence_file ? (
+                                <View style={styles.photoPreviewContainer}>
+                                  <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file))}>
+                                    <Image source={{ uri: state.local_uri || getImageUrl(state.evidence_file) }} style={styles.photoPreview} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity style={styles.retakeButton} onPress={() => handlePickImage(stateKey)} disabled={loadingImageKey === stateKey}>
+                                    <Text style={styles.retakeButtonText}>Retake</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : (
+                                <TouchableOpacity style={[styles.uploadPhotoButton, loadingImageKey === stateKey && { opacity: 0.6 }]} onPress={() => handlePickImage(stateKey)} disabled={loadingImageKey === stateKey}>
+                                  {loadingImageKey === stateKey ? <ActivityIndicator size="small" color="#666" /> : <ImageIcon color="#999" />}
+                                  <Text style={styles.uploadPhotoText}>Upload Foto</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+              </>
+            ) : (
+              <Text style={styles.sectionTitle}>Checklist</Text>
+            )}
+            {/* Flat checklist (no devices) */}
+            {!routine?.device_items?.length && routine?.items?.map((item) => {
+              const stateKey = `::${item.id}`;
+              const state = itemStates[stateKey];
               if (!state) return null;
 
               return (
@@ -330,7 +496,7 @@ export default function DailyRoutineDetailScreen() {
                   {/* Checkbox Row */}
                   <TouchableOpacity
                     style={styles.checkboxRow}
-                    onPress={() => handleCheckToggle(index)}
+                    onPress={() => handleCheckToggle(stateKey)}
                     activeOpacity={0.7}
                   >
                     <View
@@ -382,8 +548,8 @@ export default function DailyRoutineDetailScreen() {
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.retakeButton}
-                            onPress={() => handlePickImage(index)}
-                            disabled={loadingImageIndex === index}
+                            onPress={() => handlePickImage(stateKey)}
+                            disabled={loadingImageKey === stateKey}
                           >
                             <Text style={styles.retakeButtonText}>Retake</Text>
                           </TouchableOpacity>
@@ -392,12 +558,12 @@ export default function DailyRoutineDetailScreen() {
                         <TouchableOpacity
                           style={[
                             styles.uploadPhotoButton,
-                            loadingImageIndex === index && { opacity: 0.6 },
+                            loadingImageKey === stateKey && { opacity: 0.6 },
                           ]}
-                          onPress={() => handlePickImage(index)}
-                          disabled={loadingImageIndex === index}
+                          onPress={() => handlePickImage(stateKey)}
+                          disabled={loadingImageKey === stateKey}
                         >
-                          {loadingImageIndex === index ? (
+                          {loadingImageKey === stateKey ? (
                             <ActivityIndicator size="small" color="#666" />
                           ) : (
                             <>
@@ -419,7 +585,7 @@ export default function DailyRoutineDetailScreen() {
                       placeholder="Catatan (opsional)"
                       placeholderTextColor="#999"
                       value={state.notes}
-                      onChangeText={(text) => updateItemState(index, { notes: text })}
+                      onChangeText={(text) => updateItemState(stateKey, { notes: text })}
                       multiline
                       numberOfLines={2}
                       textAlignVertical="top"
@@ -515,6 +681,90 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#e0e0e0",
     marginVertical: 16,
+  },
+
+  // Device grouping
+  deviceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#E3F2FD",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  deviceHeaderIcon: { fontSize: 16 },
+  deviceHeaderText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1565C0",
+    flex: 1,
+  },
+  deviceProgressLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  deviceProgressDone: {
+    backgroundColor: "#E8F5E9",
+    color: "#2E7D32",
+  },
+  deviceProgressPending: {
+    backgroundColor: "#FFF3E0",
+    color: "#E65100",
+  },
+  deviceTabBar: {
+    marginBottom: 12,
+    marginTop: 4,
+    maxHeight: 72,
+  },
+  deviceTab: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderRadius: 12,
+    backgroundColor: "#F5F5F5",
+    borderWidth: 1.5,
+    borderColor: "#E0E0E0",
+    minWidth: 80,
+    gap: 2,
+  },
+  deviceTabActive: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#1E90FF",
+  },
+  deviceTabIcon: { fontSize: 14 },
+  deviceTabText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#666",
+    maxWidth: 90,
+  },
+  deviceTabTextActive: {
+    color: "#1565C0",
+  },
+  deviceTabProgress: {
+    fontSize: 10,
+    fontWeight: "700",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  deviceTabDone: {
+    backgroundColor: "#C8E6C9",
+    color: "#2E7D32",
+  },
+  deviceTabPending: {
+    backgroundColor: "#FFE0B2",
+    color: "#E65100",
   },
 
   // Checklist Item

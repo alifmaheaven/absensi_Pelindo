@@ -4,8 +4,6 @@ import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
 import { useToast } from "@/components/ui/toast";
 import {
   IMAGE_BASE_PATH,
-  IMAGE_MAX_WIDTH,
-  IMAGE_QUALITY,
   TIMEZONE,
 } from "@/constants";
 import {
@@ -31,10 +29,10 @@ import {
   ITicketStatus,
   THttpErrorResult,
 } from "@/types";
-import { compressImage } from "@/utils/utils";
+import { SeveritySelector } from "@/components/ticketing/SeveritySelector";
+import { useImagePicker, IImage } from "@/hooks/useImagePicker";
 import { useImagePreview } from "@/hooks/useImagePreview";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -43,7 +41,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -54,21 +51,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-interface IImage {
-  id: string | null;
-  uri: string;
-  path: string;
-  link: string;
-}
-
-interface Props {
-  value: string;
-  onChange: (value: string) => void;
-  options: ITicketSeverity[];
-}
-
-const DEFAULT_SEVERITY_COLOR = { bg: "rgba(150,150,150,0.15)", border: "#999", text: "#555" };
 
 const getNowJakarta = () =>
   new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE });
@@ -86,14 +68,21 @@ export default function TicketingEditScreen() {
   const [notes, setNotes] = useState("");
   const [title, setTitle] = useState("");
   const [deviceSelected, setDeviceSelected] = useState("");
-  const [images, setImages] = useState<IImage[]>([]);
   const [severitySelected, setSeveritySelected] = useState("");
   const [attendanceSelected, setAttendanceSelected] = useState("");
   const [statusSelected, setStatusSelected] = useState("");
 
   // form state
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [loadingImage, setLoadingImage] = useState(false);
+  const {
+    images,
+    loadingImage,
+    isModalVisible,
+    pickImage,
+    removeImage,
+    openModal,
+    closeModal,
+    setImages,
+  } = useImagePicker();
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const { user } = useAuthStore();
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
@@ -256,138 +245,10 @@ useFocusEffect(
     }, []),
   );
 
-  const pickImage = async (source: "camera" | "gallery") => {
-    // Gallery is disabled - camera only
-    if (source !== "camera") {
-      Alert.alert('Error', 'Hanya kamera yang diizinkan untuk mengambil gambar.');
-      setLoadingImage(false);
-      return;
-    }
-    setLoadingImage(true);
-
-    try {
-      const isCamera = source === "camera";
-      console.debug(`[PickImage] Starting... Source: ${source}`);
-
-      const getPermission = isCamera
-        ? ImagePicker.getCameraPermissionsAsync
-        : ImagePicker.getMediaLibraryPermissionsAsync;
-
-      const requestPermission = isCamera
-        ? ImagePicker.requestCameraPermissionsAsync
-        : ImagePicker.requestMediaLibraryPermissionsAsync;
-
-      const launchPicker = isCamera
-        ? ImagePicker.launchCameraAsync
-        : ImagePicker.launchImageLibraryAsync;
-
-      // 1. Cek Status Izin Saat Ini
-      let { status } = await getPermission();
-      console.debug(
-        `[PickImage] Initial Status: ${status}`,
-      );
-
-      // 2. Jika belum ditentukan (Undetermined), minta izin
-      if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
-        console.debug("[PickImage] Requesting Permission...");
-        const newPermission = await requestPermission();
-        status = newPermission.status;
-      }
-
-      // 3. Jika Ditolak (Denied), arahkan ke Settings
-      if (status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert(
-          "Izin Diperlukan",
-          `Aplikasi membutuhkan akses ${
-            isCamera ? "Kamera" : "Galeri"
-          } untuk fitur ini. Mohon aktifkan di pengaturan.`,
-          [
-            { text: "Batal", style: "cancel" },
-            { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
-          ],
-        );
-        return;
-      }
-
-      // 4. Jika Diizinkan (Granted), Buka Picker
-      console.debug("[PickImage] Launching picker...");
-      const result = await launchPicker({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      setIsModalVisible(false);
-
-      if (result.canceled) {
-        setLoadingImage(false);
-        return;
-      }
-
-      const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: IMAGE_MAX_WIDTH,
-        quality: IMAGE_QUALITY,
-      });
-      console.debug("[PickImage] Compressed result:", compressed);
-
-      try {
-        const res = await uploadEvidtmp({
-          uri: compressed?.uri,
-          name: `image-${Date.now()}.jpg`,
-          type: "image/jpeg",
-        } as any);
-        console.debug("[PickImage] Upload result:", res);
-
-        if (compressed?.uri) {
-          setImages((prev) => [
-            ...prev,
-            {
-              id: null,
-              uri: compressed.uri,
-              path: res.data?.[0]?.path ?? "",
-              link: res.data?.[0]?.link ?? "",
-            },
-          ]);
-        }
-      } finally {
-        setLoadingImage(false);
-      }
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("[PickImage Error]", err);
-      Alert.alert("Error", "Gagal: " + (err?.message || "Unknown error"));
-      setLoadingImage(false);
-    }
-  };
-
-  const removeImage = async (index: number) => {
-    try {
-      setLoadingImage(true);
-      const newImages = [...images];
-      const target = images[index];
-
-      if (target?.path) {
-        if (target?.id) {
-          setRemovedImages((prev) => [...prev, target]);
-        } else {
-          await deleteEvidtmp({ links: [target.path] });
-          // Log file remove to ticket timeline
-          const { default: api } = await import("@/lib/axios");
-          await api.post(`/ticket/${id}/log`, { action: 'FILE_REMOVE', field_changes: { removed: { url: target.path, name: target.path } } });
-        }
-      }
-
-      console.debug("Image deleted");
-      newImages.splice(index, 1);
-      setImages(newImages);
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("Remove Image Error:", err);
-      showToast("Gagal menghapus gambar", "error");
-    } finally {
-      setLoadingImage(false);
-    }
+  // Upload service adapter for useImagePicker
+  const imageUploadService = {
+    uploadTemp: uploadEvidtmp,
+    deleteTemp: deleteEvidtmp,
   };
 
   const submitComment = async (logId: string, parentCommentId?: string) => {
@@ -742,7 +603,7 @@ useFocusEffect(
                     {!loadingImage && (
                       <TouchableOpacity
                         style={styles.removeImageButton}
-                        onPress={() => removeImage(index)}
+                        onPress={() => removeImage(index, imageUploadService)}
                       >
                         <Text style={styles.removeImageText}>✕</Text>
                       </TouchableOpacity>
@@ -762,7 +623,7 @@ useFocusEffect(
                   (loadingImage || loadingSubmit) &&
                     styles.uploadButtonDisabled,
                 ]}
-                onPress={() => setIsModalVisible(true)}
+                onPress={() => openModal()}
                 disabled={loadingImage || loadingSubmit}
               >
                 {loadingImage ? (
@@ -1001,12 +862,12 @@ useFocusEffect(
           visible={isModalVisible}
           transparent={true}
           animationType="fade"
-          onRequestClose={() => setIsModalVisible(false)}
+          onRequestClose={() => closeModal()}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setIsModalVisible(false)}
+            onPress={() => closeModal()}
           >
             <View style={styles.modalContent}>
               <View style={styles.modalIndicator} />
@@ -1017,7 +878,7 @@ useFocusEffect(
                   styles.modalButtonPrimary,
                   { opacity: loadingImage ? 0.7 : 1 },
                 ]}
-                onPress={() => pickImage("camera")}
+                onPress={() => pickImage("camera", imageUploadService)}
                 disabled={loadingImage}
               >
                 <Text style={styles.modalButtonTextPrimary}>
@@ -1040,7 +901,7 @@ useFocusEffect(
 
               <TouchableOpacity
                 style={styles.modalButtonCancel}
-                onPress={() => setIsModalVisible(false)}
+                onPress={() => closeModal()}
               >
                 <Text style={styles.modalButtonTextCancel}>Kembali</Text>
               </TouchableOpacity>
@@ -1050,57 +911,6 @@ useFocusEffect(
 
         {PreviewModal}
       </KeyboardAvoidingView>
-    </View>
-  );
-}
-
-function parseSeverityColor(hex: string | undefined) {
-  if (!hex) return DEFAULT_SEVERITY_COLOR;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return {
-    bg: `rgba(${r},${g},${b},0.15)`,
-    border: hex,
-    text: hex,
-  };
-}
-
-export function SeveritySelector({ value, onChange, options }: Props) {
-  return (
-    <View style={styles.severityContainer}>
-      {options?.length > 0 ? (
-        options?.map((item) => {
-          const isActive = value === item.id;
-          const color = parseSeverityColor(item.color);
-
-          return (
-            <TouchableOpacity
-              key={item.id}
-              onPress={() => onChange(item.id)}
-              activeOpacity={0.8}
-              style={[
-                styles.severityButton,
-                isActive && {
-                  backgroundColor: color.bg,
-                  borderColor: color.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.severityText,
-                  isActive && { color: color.text, fontWeight: "600" },
-                ]}
-              >
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })
-      ) : (
-        <Text>Tidak ada severity</Text>
-      )}
     </View>
   );
 }
@@ -1431,26 +1241,6 @@ const styles = StyleSheet.create({
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
 
-  // SeveritySelector
-  severityContainer: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 24,
-  },
-
-  severityButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    alignItems: "center",
-  },
-
-  severityText: {
-    fontSize: 13,
-    color: "#555",
-  },
 
   // History
   historySection: {

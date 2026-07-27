@@ -127,6 +127,30 @@ export default function DeviceDrawer({
       showToast("Nama device harus diisi", "error");
       return;
     }
+    if (!formSerial.trim()) {
+      showToast("Serial number harus diisi", "error");
+      return;
+    }
+    if (!formProductNumber.trim()) {
+      showToast("Product number harus diisi", "error");
+      return;
+    }
+    if (!formBrand.trim()) {
+      showToast("Brand/Merk harus diisi", "error");
+      return;
+    }
+    if (!formIp.trim()) {
+      showToast("IP Address harus diisi", "error");
+      return;
+    }
+    if (!formDesc.trim()) {
+      showToast("Deskripsi harus diisi", "error");
+      return;
+    }
+    if (!formServiceId) {
+      showToast("Service harus dipilih", "error");
+      return;
+    }
     setFormSubmitting(true);
     try {
       if (editDevice) {
@@ -223,7 +247,7 @@ export default function DeviceDrawer({
             <>
               {/* Header */}
               <View style={styles.header}>
-                <Text style={styles.title}>Daftar Device{siteName ? ` pada ${siteName}` : ''}</Text>
+                <Text style={styles.title}>Daftar Device{siteName ? ` ${siteName}` : ''}</Text>
                 <TouchableOpacity onPress={openAddForm} style={styles.addButton}>
                   <Ionicons name="add-circle" size={22} color="#1e90ff" />
                   <Text style={styles.addButtonText}>Tambah Baru</Text>
@@ -309,7 +333,7 @@ export default function DeviceDrawer({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Nama Device *</Text>
+                  <Text style={styles.fieldLabel}>Nama Device <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formName}
@@ -320,7 +344,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Kode</Text>
+                  <Text style={styles.fieldLabel}>Kode <Text style={{ color: '#999' }}>(opsional)</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formCode}
@@ -331,7 +355,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Brand/Merk</Text>
+                  <Text style={styles.fieldLabel}>Brand/Merk <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formBrand}
@@ -342,7 +366,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Serial Number</Text>
+                  <Text style={styles.fieldLabel}>Serial Number <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formSerial}
@@ -353,7 +377,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Product Number</Text>
+                  <Text style={styles.fieldLabel}>Product Number <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formProductNumber}
@@ -364,7 +388,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>IP Address</Text>
+                  <Text style={styles.fieldLabel}>IP Address <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formIp}
@@ -376,7 +400,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Service</Text>
+                  <Text style={styles.fieldLabel}>Service <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TouchableOpacity
                     style={styles.input}
                     onPress={() => setServiceDropdownOpen(p => !p)}
@@ -400,7 +424,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Deskripsi</Text>
+                  <Text style={styles.fieldLabel}>Deskripsi <Text style={{ color: '#F44336' }}>*</Text></Text>
                   <TextInput
                     style={[styles.input, styles.textArea]}
                     value={formDesc}

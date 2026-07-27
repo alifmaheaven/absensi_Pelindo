@@ -1,5 +1,5 @@
 import { ArrowLeft, Device } from "@/components/icon";
-import { getTicket } from "@/services/ticket";
+import { getTicket, getDataStatus } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
 import {
@@ -19,6 +19,7 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
+  TextInput,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -119,14 +120,26 @@ const TicketingScreen = () => {
 
   const { setTicket } = useTicketStore();
 
+  // Filter state
+  const [statusOptions, setStatusOptions] = useState<ITicketStatus[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [appliedStatus, setAppliedStatus] = useState("");
+
   const fetchTickets = async (page: number) => {
-    return getTicket({
+    const params: Record<string, any> = {
       page,
       per_page: ticketMeta.per_page,
       order_by_desc: ["created_at"],
       company_id_exact: [user?.company_id ?? ""],
       include: "user,site,contract,severity,status,device",
-    });
+    };
+    if (appliedSearch) params.name_ilike = appliedSearch;
+    if (appliedStatus) params.status_id_exact = [appliedStatus];
+    return getTicket(params as any);
   };
 
   const handleGetTicketList = async () => {
@@ -238,6 +251,36 @@ const TicketingScreen = () => {
     handleGetTicketList();
   }, []);
 
+  // Fetch status options on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getDataStatus({ page: 1, per_page: 100 });
+        setStatusOptions(res.data?.data || []);
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  // Debounce filters: wait 500ms after user stops typing, then reset & refetch
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      if (appliedSearch !== searchQuery || appliedStatus !== statusFilter) {
+        setTicketDatas([]);
+        setTicketMeta(initialMeta);
+        setHasMore(true);
+        setAppliedSearch(searchQuery);
+        setAppliedStatus(statusFilter);
+      }
+    }, 500);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchQuery, statusFilter]);
+
+  // Refetch when applied filters change
+  useEffect(() => {
+    handleGetTicketList();
+  }, [appliedSearch, appliedStatus]);
+
   // Refresh list when returning from edit that changed data
   useEffect(() => {
     const store = useTicketStore.getState();
@@ -303,6 +346,59 @@ const TicketingScreen = () => {
           <Text style={styles.createButtonText}>Create New Ticket</Text>
         </TouchableOpacity>
 
+        {/* Filter Bar */}
+        <View style={styles.filterContainer}>
+          <View style={styles.searchInputContainer}>
+            <Ionicons name="search" size={18} color="#999" style={{ marginRight: 6 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari tiket..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={18} color="#999" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <View style={styles.statusFilterWrapper}>
+            <TouchableOpacity
+              style={styles.statusFilterButton}
+              onPress={() => setStatusDropdownOpen(!statusDropdownOpen)}
+            >
+              <Text style={statusFilter ? styles.statusFilterText : styles.statusFilterPlaceholder}>
+                {statusFilter
+                  ? statusOptions.find((s) => s.id === statusFilter)?.name || "Status"
+                  : "Status"}
+              </Text>
+              <Ionicons name={statusDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#666" />
+            </TouchableOpacity>
+            {statusDropdownOpen && (
+              <View style={styles.statusDropdown}>
+                <TouchableOpacity
+                  style={[styles.statusOption, !statusFilter && styles.statusOptionActive]}
+                  onPress={() => { setStatusFilter(""); setStatusDropdownOpen(false); }}
+                >
+                  <Text style={[styles.statusOptionText, !statusFilter && styles.statusOptionTextActive]}>Semua</Text>
+                </TouchableOpacity>
+                {statusOptions.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[styles.statusOption, statusFilter === s.id && styles.statusOptionActive]}
+                    onPress={() => { setStatusFilter(s.id); setStatusDropdownOpen(false); }}
+                  >
+                    <Text style={[styles.statusOptionText, statusFilter === s.id && styles.statusOptionTextActive]}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>All Ticket</Text>
           <Text style={styles.ticketCount}>{ticketMeta?.total} Ticket</Text>
@@ -329,6 +425,13 @@ const TicketingScreen = () => {
           refreshing={refreshing}
           onRefresh={handleRefresh}
           ListFooterComponent={loading ? <TicketSkeletonList /> : null}
+          ListEmptyComponent={!loading ? (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateEmoji}>🎫</Text>
+              <Text style={styles.emptyStateText}>Belum ada tiket</Text>
+              <Text style={styles.emptyStateSubText}>Buat tiket baru untuk mulai mencatat laporan</Text>
+            </View>
+          ) : null}
         />
       </View>
     </View>
@@ -622,5 +725,87 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 8,
     backgroundColor: "#E5E7EB",
+  },
+
+  // Filter
+  filterContainer: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  searchInputContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F7FA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    paddingVertical: 0,
+  },
+  statusFilterWrapper: {
+    position: "relative",
+    zIndex: 10,
+  },
+  statusFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F7FA",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 42,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    gap: 6,
+    minWidth: 100,
+    justifyContent: "space-between",
+  },
+  statusFilterPlaceholder: {
+    fontSize: 14,
+    color: "#999",
+  },
+  statusFilterText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "500",
+  },
+  statusDropdown: {
+    position: "absolute",
+    top: 48,
+    right: 0,
+    minWidth: 150,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  statusOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  statusOptionActive: {
+    backgroundColor: "#F0F7FF",
+  },
+  statusOptionText: {
+    fontSize: 14,
+    color: "#555",
+  },
+  statusOptionTextActive: {
+    color: "#1e90ff",
+    fontWeight: "600",
   },
 });

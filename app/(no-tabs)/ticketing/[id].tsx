@@ -121,6 +121,7 @@ export default function TicketingEditScreen() {
   const [history, setHistory] = useState<any[]>([]);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [commentSubmitting, setCommentSubmitting] = useState<Record<string, boolean>>({});
+  const [replyTo, setReplyTo] = useState<{ logId: string; commentId?: string; userName?: string } | null>(null);
   // Site id prefilled from ticket data on initial load — used to skip the
   // refetch effect when siteSelected is set programmatically (not by user).
   const initialSiteId = useRef<string>("");
@@ -389,14 +390,15 @@ useFocusEffect(
     }
   };
 
-  const submitComment = async (logId: string) => {
+  const submitComment = async (logId: string, parentCommentId?: string) => {
     const text = (commentInputs[logId] || "").trim();
     if (!text) return;
     setCommentSubmitting((p) => ({ ...p, [logId]: true }));
     try {
       const { default: api } = await import("@/lib/axios");
-      await api.post(`/ticket/${id}/comment`, { logId, comment: text });
+      await api.post(`/ticket/${id}/comment`, { logId, comment: text, parent_comment_id: parentCommentId || null });
       setCommentInputs((p) => ({ ...p, [logId]: "" }));
+      setReplyTo(null);
       // Refresh history
       const historyRes = await getTicketHistory(id as string).catch(() => ({ data: { logs: [] } }));
       setHistory((historyRes as any)?.data?.logs || []);
@@ -909,39 +911,79 @@ useFocusEffect(
                             <Text style={styles.noteText}>{log.note}</Text>
                           </View>
                         ) : null}
-                        {/* Comments */}
+                        {/* Comments (threaded) */}
                         {log.comments?.length > 0 ? (
                           <View style={styles.commentsContainer}>
                             {log.comments.map((c: any) => (
-                              <View key={c.id} style={styles.commentItem}>
-                                <View style={styles.commentAvatar}>
-                                  <Text style={styles.commentAvatarText}>{(c.user?.name || "?")[0]}</Text>
+                              <View key={c.id}>
+                                {/* Parent comment */}
+                                <View style={styles.commentItem}>
+                                  <View style={styles.commentAvatar}>
+                                    <Text style={styles.commentAvatarText}>{(c.user?.name || "?")[0]}</Text>
+                                  </View>
+                                  <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                      <Text style={styles.commentUserName}>{c.user?.name || "System"}</Text>
+                                      <TouchableOpacity onPress={() => setReplyTo({ logId: log.id, commentId: c.id, userName: c.user?.name })}>
+                                        <Text style={{ fontSize: 11, color: "#3B82F6" }}>Reply</Text>
+                                      </TouchableOpacity>
+                                    </View>
+                                    <Text style={styles.commentText}>{c.comment}</Text>
+                                  </View>
                                 </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={styles.commentUserName}>{c.user?.name || "System"}</Text>
-                                  <Text style={styles.commentText}>{c.comment}</Text>
-                                </View>
+                                {/* Replies */}
+                                {c.replies?.length > 0 ? (
+                                  <View style={styles.repliesContainer}>
+                                    {c.replies.map((r: any) => (
+                                      <View key={r.id} style={styles.commentItem}>
+                                        <View style={[styles.commentAvatar, { backgroundColor: "#DBEAFE" }]}>
+                                          <Text style={[styles.commentAvatarText, { color: "#2563EB" }]}>{(r.user?.name || "?")[0]}</Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                          <Text style={styles.commentUserName}>{r.user?.name || "System"}</Text>
+                                          <Text style={styles.commentText}>{r.comment}</Text>
+                                        </View>
+                                      </View>
+                                    ))}
+                                  </View>
+                                ) : null}
                               </View>
                             ))}
                           </View>
                         ) : null}
-                        {/* Comment input */}
-                        <View style={styles.commentInputRow}>
-                          <TextInput
-                            style={styles.commentInput}
-                            placeholder="Tambah komentar..."
-                            placeholderTextColor="#999"
-                            value={commentInputs[log.id] || ""}
-                            onChangeText={(t) => setCommentInputs((p) => ({ ...p, [log.id]: t }))}
-                          />
-                          <TouchableOpacity
-                            onPress={() => submitComment(log.id)}
-                            disabled={commentSubmitting[log.id] || !commentInputs[log.id]?.trim()}
-                            style={[styles.commentSendBtn, (commentSubmitting[log.id] || !commentInputs[log.id]?.trim()) && { opacity: 0.4 }]}
-                          >
-                            <Text style={styles.commentSendText}>Kirim</Text>
-                          </TouchableOpacity>
-                        </View>
+                        {/* Comment input (with reply context) */}
+                        {(() => {
+                          const isReply = replyTo && replyTo.logId === log.id;
+                          const parentId = isReply ? replyTo!.commentId : undefined;
+                          return (
+                            <View style={styles.commentInputRow}>
+                              {isReply ? (
+                                <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
+                                  <Text style={{ fontSize: 11, color: "#3B82F6" }}>
+                                    Balas <Text style={{ fontWeight: "700" }}>{replyTo!.userName}</Text>
+                                  </Text>
+                                  <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 4 }}>
+                                    <Text style={{ fontSize: 14, color: "#999" }}>✕</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null}
+                              <TextInput
+                                style={[styles.commentInput, { flex: 1 }]}
+                                placeholder={isReply ? "Ketik balasan..." : "Tambah komentar..."}
+                                placeholderTextColor="#999"
+                                value={commentInputs[log.id] || ""}
+                                onChangeText={(t) => setCommentInputs((p) => ({ ...p, [log.id]: t }))}
+                              />
+                              <TouchableOpacity
+                                style={[styles.commentSendBtn, (commentSubmitting[log.id] || !commentInputs[log.id]?.trim()) && { opacity: 0.4 }]}
+                                onPress={() => submitComment(log.id, parentId)}
+                                disabled={commentSubmitting[log.id] || !commentInputs[log.id]?.trim()}
+                              >
+                                <Text style={styles.commentSendText}>Kirim</Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })()}
                       </View>
                     );
                   })
@@ -1597,6 +1639,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#fff",
+  },
+  repliesContainer: {
+    marginLeft: 20,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+    borderLeftColor: "#DBEAFE",
+    marginTop: 4,
   },
   // Image changes
   imageChangesContainer: {

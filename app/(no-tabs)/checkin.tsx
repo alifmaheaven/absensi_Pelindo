@@ -206,11 +206,11 @@ export default function CheckinScreen() {
         });
       }
 
-      const res = await createAttendance({
+      // Build payload — filter out empty UUID strings
+      const payload: Record<string, any> = {
         user_id: user?.id ?? "",
-        company_id: user?.company_id ?? "",
-        contract_id: user?.contract_id ?? "",
-        site_id: selectedLocation || "",
+        company_id: user?.company_id || null,
+        site_id: selectedLocation || (user?.site_id as string | null) || null,
         name: "attendance",
         description: notes || "Attendance",
         code: `CHK-${Date.now()}`,
@@ -218,10 +218,12 @@ export default function CheckinScreen() {
           timeZone: TIMEZONE,
         }),
         attendance_status_id: checkinStatusId,
-        evidence_group_id: groupId,
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
-      });
+      };
+      if (user?.contract_id) payload.contract_id = user.contract_id;
+      if (groupId) payload.evidence_group_id = groupId;
+      const res = await createAttendance(payload as any);
       console.debug("Attendance created");
 
       await saveCheckInId(res.data?.id ?? "");

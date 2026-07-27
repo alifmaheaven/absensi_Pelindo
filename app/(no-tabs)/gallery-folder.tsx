@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ImageViewerModal from "@/components/ImageViewerModal";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { getPhotos, uploadPhotos, deletePhoto, generateShareToken } from "@/services/gallery";
@@ -28,6 +29,7 @@ export default function GalleryFolderScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const [photos, setPhotos] = useState<IGalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -158,6 +160,7 @@ export default function GalleryFolderScreen() {
 
   const renderPhoto = ({ item }: { item: IGalleryPhoto }) => (
     <TouchableOpacity
+      onPress={() => setPreviewImage(item.url)}
       onLongPress={() => handleDelete(item)}
       style={{
         width: CELL_SIZE,
@@ -225,6 +228,7 @@ export default function GalleryFolderScreen() {
           }
         />
       )}
+      <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
     </SafeAreaView>
   );
 }

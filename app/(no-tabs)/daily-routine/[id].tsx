@@ -18,13 +18,13 @@ import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
+import ImageViewerModal from "@/components/ImageViewerModal";
 import {
   ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -68,8 +68,6 @@ export default function DailyRoutineDetailScreen() {
   const [logItems, setLogItems] = useState<IDailyRoutineLogItem[]>([]);
   const [itemStates, setItemStates] = useState<Record<string, IItemState>>({});
 
-  const [imageModalVisible, setImageModalVisible] = useState(false);
-  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -621,11 +619,7 @@ export default function DailyRoutineDetailScreen() {
         </View>
 
         {/* Image Preview Modal */}
-        <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
-          <TouchableOpacity style={{flex:1,backgroundColor:"rgba(0,0,0,0.9)",justifyContent:"center",alignItems:"center"}} onPress={() => setPreviewImage(null)}>
-            {previewImage && <Image source={{uri: previewImage}} style={{width:"90%",height:"70%",resizeMode:"contain"}} />}
-          </TouchableOpacity>
-        </Modal>
+        <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
       </KeyboardAvoidingView>
     </View>
   );

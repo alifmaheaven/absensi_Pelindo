@@ -878,11 +878,12 @@ useFocusEffect(
                               {Object.entries(log.field_changes).map(([key, info]: [string, any]) => {
                                 const fileUrl = new URL(`${IMAGE_BASE_PATH}${info.url || info}`, BASE_URL).toString();
                                 return (
-                                  <Image
-                                    key={key}
-                                    source={{ uri: fileUrl }}
-                                    style={styles.historyImage}
-                                  />
+                                  <TouchableOpacity key={key} onPress={() => showPreview(fileUrl)}>
+                                    <Image
+                                      source={{ uri: fileUrl }}
+                                      style={styles.historyImage}
+                                    />
+                                  </TouchableOpacity>
                                 );
                               })}
                             </View>

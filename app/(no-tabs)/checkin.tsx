@@ -32,7 +32,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -42,6 +41,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ImageViewerModal from "@/components/ImageViewerModal";
 
 const imageUploadService = {
   uploadTemp: uploadEvid,
@@ -509,11 +509,7 @@ export default function CheckinScreen() {
         </Modal>
 
         {/* Image Preview Modal */}
-        <Modal visible={!!previewImage} transparent animationType="fade" onRequestClose={() => setPreviewImage(null)}>
-          <TouchableOpacity style={{flex:1,backgroundColor:"rgba(0,0,0,0.9)",justifyContent:"center",alignItems:"center"}} onPress={() => setPreviewImage(null)}>
-            {previewImage && <Image source={{uri: previewImage}} style={{width:"90%",height:"70%",resizeMode:"contain"}} />}
-          </TouchableOpacity>
-        </Modal>
+        <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
       </KeyboardAvoidingView>
     </View>
   );

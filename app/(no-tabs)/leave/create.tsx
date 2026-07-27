@@ -36,6 +36,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import ImageViewerModal from "@/components/ImageViewerModal";
 
 interface IImage {
   uri: string;
@@ -53,6 +54,7 @@ export default function LeaveScreen() {
   const [notes, setNotes] = useState("");
   const [leaveDate, setLeaveDate] = useState("");
   const [images, setImages] = useState<IImage[]>([]);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
   const [statusData, setStatusData] = useState<IAttendanceStatus[]>([]);
@@ -426,13 +428,15 @@ export default function LeaveScreen() {
             <View style={styles.imageGrid}>
               {images.map((image, index) => (
                 <View key={index} style={styles.imagePreviewContainer}>
-                  <Image
-                    source={{ uri: image.uri }}
-                    style={[
-                      styles.imagePreview,
-                      loadingImage && { opacity: 0.5 },
-                    ]}
-                  />
+                  <TouchableOpacity onPress={() => setPreviewImage(image.uri)}>
+                    <Image
+                      source={{ uri: image.uri }}
+                      style={[
+                        styles.imagePreview,
+                        loadingImage && { opacity: 0.5 },
+                      ]}
+                    />
+                  </TouchableOpacity>
                   {!loadingImage && (
                     <TouchableOpacity
                       style={styles.removeImageButton}
@@ -548,6 +552,8 @@ export default function LeaveScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
+        {/* Image Preview Modal */}
+        <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
       </KeyboardAvoidingView>
     </View>
   );

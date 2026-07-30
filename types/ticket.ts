@@ -56,6 +56,8 @@ export interface ITicket {
   created_at: string;
   updated_at: string;
   deleted_at: string;
+  incident_owners?: IIncidentOwner[];
+  incident_owner_ids?: string[];
   x1: null;
   x2: null;
   x3: null;
@@ -221,6 +223,17 @@ export interface ITicketContract {
   x20: null;
 }
 
+export interface IIncidentOwner {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  position: string;
+  company_name: string;
+  company_id?: string;
+  site_id?: string;
+}
+
 export interface ITicketSeverity {
   id: string;
   code: string;
@@ -336,4 +349,5 @@ export type TTicket = {
   device_id: string;
   name: string;
   description: string;
+  incident_owner_ids?: string[];
 };

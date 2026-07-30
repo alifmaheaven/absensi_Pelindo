@@ -32,6 +32,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,

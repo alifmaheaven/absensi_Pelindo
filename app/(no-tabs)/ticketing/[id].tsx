@@ -11,6 +11,7 @@ import {
   deleteEvidtmp,
   getActiveCheckins,
   getDataEvid,
+  getDataIncidentOwner,
   getDataSeverity,
   getDataSite, getDataStatus,
   getTicketDevice,
@@ -24,6 +25,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
 import {
   IAttendanceOptions,
+  IIncidentOwner,
   ITicketDevice,
   ITicketSeverity,
   ITicketStatus,
@@ -35,7 +37,7 @@ import { useImagePreview } from "@/hooks/useImagePreview";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -90,6 +92,29 @@ export default function TicketingEditScreen() {
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [removedImages, setRemovedImages] = useState<IImage[]>([]);
   const [loadingSkeleton, setLoadingSkeleton] = useState(true);
+  const [allIncidentOwners, setAllIncidentOwners] = useState<IIncidentOwner[]>([]);
+  const [selectedIncidentOwners, setSelectedIncidentOwners] = useState<string[]>([]);
+  const filteredIncidentOwners = useMemo(() => {
+    if (!siteSelected) return allIncidentOwners;
+    const selectedSiteCompanyId = siteData.find(s => s.id === siteSelected)?.company_id;
+    return allIncidentOwners.filter((o) => {
+      if (!o.company_id && !o.site_id) return true;
+      if (o.company_id && selectedSiteCompanyId && o.company_id === selectedSiteCompanyId) {
+        if (!o.site_id) return true;
+        if (o.site_id === siteSelected) return true;
+        return false;
+      }
+      if (o.site_id && o.site_id === siteSelected) return true;
+      return false;
+    });
+  }, [allIncidentOwners, siteSelected, siteData]);
+  const [incidentOwnerDropdownOpen, setIncidentOwnerDropdownOpen] = useState(false);
+  const [createOwnerVisible, setCreateOwnerVisible] = useState(false);
+  const [ownerFormName, setOwnerFormName] = useState("");
+  const [ownerFormEmail, setOwnerFormEmail] = useState("");
+  const [ownerFormPhone, setOwnerFormPhone] = useState("");
+  const [ownerFormPosition, setOwnerFormPosition] = useState("");
+  const [ownerFormSubmitting, setOwnerFormSubmitting] = useState(false);
   const { showPreview, PreviewModal } = useImagePreview();
 
   // Data Options
@@ -99,7 +124,7 @@ export default function TicketingEditScreen() {
   const [deviceDrawerSiteName, setDeviceDrawerSiteName] = useState<string>("");
 
   // Site state
-  const [siteData, setSiteData] = useState<{ id: string; name: string }[]>([]);
+  const [siteData, setSiteData] = useState<{ id: string; name: string; company_id?: string }[]>([]);
   const [siteSelected, setSiteSelected] = useState("");
   const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
   const [statusData, setStatusData] = useState<ITicketStatus[]>([]);
@@ -139,7 +164,7 @@ useFocusEffect(
         try {
           setLoadingSkeleton(true);
 
-          const [sitesRes, devices, attendanceOptions, severitys, evids, status, historyRes] =
+          const [sitesRes, devices, attendanceOptions, severitys, evids, status, historyRes, incidentOwners] =
             await Promise.all([
               getDataSite({
                 page: 1,
@@ -165,6 +190,7 @@ useFocusEffect(
                 company_id_exact: [ticket?.company_id || ""],
               }),
               getTicketHistory(id as string).catch(() => ({ data: { logs: [] } })),
+              getDataIncidentOwner({ page: 1, per_page: 200 }),
             ]);
 
           const device = devices.data?.data || [];
@@ -199,7 +225,9 @@ useFocusEffect(
           }
 
           setSeveritys(sortSeverity);
-          setSiteData(siteOpts.map((s: any) => ({ id: s.id, name: s.name })));
+          setAllIncidentOwners((incidentOwners as any)?.data?.data || []);
+          setSelectedIncidentOwners(ticket?.incident_owners?.map((o: any) => o.id) || []);
+          setSiteData(siteOpts.map((s: any) => ({ id: s.id, name: s.name, company_id: s.company_id })));
           setAttendanceOptions(attendanceOptionFilter);
           // Auto-select attendance from ticket data or first active check-in
           if (ticket?.attendance_id) {
@@ -245,10 +273,55 @@ useFocusEffect(
     }, []),
   );
 
-  // Upload service adapter for useImagePicker
   const imageUploadService = {
     uploadTemp: uploadEvidtmp,
     deleteTemp: deleteEvidtmp,
+  };
+
+  // Wrapper for removeImage that tracks server-stored images for deletion
+  const handleRemoveImage = async (index: number) => {
+    const target = images[index];
+    if (target?.id) {
+      // This is an existing image from server — track for deletion on submit
+      setRemovedImages(prev => [...prev, target as IImage]);
+      // Log file remove to ticket timeline
+      try {
+        const { default: api } = await import("@/lib/axios");
+        await api.post(`/ticket/${id}/log`, { action: 'FILE_REMOVE', field_changes: { removed: { url: target.path, name: target.path } } });
+      } catch {}
+    }
+    await removeImage(index, imageUploadService);
+  };
+
+  // Quick-create incident owner
+  const handleCreateOwner = async () => {
+    if (!ownerFormName.trim()) { showToast("Nama harus diisi", "error"); return; }
+    setOwnerFormSubmitting(true);
+    try {
+      const selectedSite = siteData.find(site => site.id === siteSelected);
+      const ownerCompanyId = selectedSite?.company_id || user?.company_id;
+      const { default: api } = await import("@/lib/axios");
+      const res = await api.post("/incident-owner/", {
+        name: ownerFormName.trim(),
+        ...(ownerFormEmail.trim() && { email: ownerFormEmail.trim() }),
+        ...(ownerFormPhone.trim() && { phone: ownerFormPhone.trim() }),
+        ...(ownerFormPosition.trim() && { position: ownerFormPosition.trim() }),
+        ...(selectedSite && { site_id: selectedSite.id }),
+        ...(ownerCompanyId && { company_id: ownerCompanyId }),
+      });
+      const newOwner = res.data?.data;
+      if (newOwner) {
+        const ownersRes = await getDataIncidentOwner({ page: 1, per_page: 200 });
+        setAllIncidentOwners((ownersRes as any)?.data?.data || []);
+        setSelectedIncidentOwners(prev => [...prev, newOwner.id]);
+      }
+      setOwnerFormName(""); setOwnerFormEmail(""); setOwnerFormPhone("");
+      setOwnerFormPosition(""); setCreateOwnerVisible(false);
+    } catch (err: any) {
+      showToast(err?.response?.data?.message || "Gagal membuat owner", "error");
+    } finally {
+      setOwnerFormSubmitting(false);
+    }
   };
 
   const submitComment = async (logId: string, parentCommentId?: string) => {
@@ -356,6 +429,7 @@ useFocusEffect(
         device_id: deviceSelected,
         name: title,
         description: notes,
+        incident_owner_ids: selectedIncidentOwners,
       });
 
       console.debug("Ticket created");
@@ -570,6 +644,70 @@ useFocusEffect(
                 onChange={setSeveritySelected}
               />
 
+              {/* Incident Owner */}
+              <Text style={styles.sectionTitle}>Incident Owner</Text>
+              <View style={styles.dropdownRow}>
+                <View style={styles.dropdownWrapper}>
+                  <TouchableOpacity
+                    style={styles.selectInputDropdown}
+                    onPress={() => setIncidentOwnerDropdownOpen(p => !p)}
+                  >
+                    <Text style={selectedIncidentOwners.length ? styles.value : styles.placeholder}>
+                      {selectedIncidentOwners.length > 0
+                        ? `${selectedIncidentOwners.length} owner dipilih`
+                        : "Pilih incident owner"}
+                    </Text>
+                    <Ionicons name={incidentOwnerDropdownOpen ? "chevron-up" : "chevron-down"} size={18} />
+                  </TouchableOpacity>
+                  {incidentOwnerDropdownOpen && (
+                    <View style={[styles.dropdown, { maxHeight: 200 }]}>
+                      {filteredIncidentOwners.map((owner) => {
+                        const isSelected = selectedIncidentOwners.includes(owner.id);
+                        return (
+                          <TouchableOpacity
+                            key={owner.id}
+                            style={styles.option}
+                            onPress={() => {
+                              setSelectedIncidentOwners(prev =>
+                                isSelected ? prev.filter(id => id !== owner.id) : [...prev, owner.id]
+                              );
+                            }}
+                          >
+                            <View style={{ width: 24 }}>
+                              {isSelected && <Ionicons name="checkmark" size={18} color="#1e90ff" />}
+                            </View>
+                            <Text style={styles.optionText}>
+                              {owner.name}{owner.phone ? ` - ${owner.phone}` : ''}{owner.company_name ? ` (${owner.company_name})` : ''}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity style={styles.addDeviceButton} onPress={() => { setCreateOwnerVisible(true); setIncidentOwnerDropdownOpen(false); }}>
+                  <Ionicons name="add" size={24} color="#1e90ff" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Selected Owners */}
+              {selectedIncidentOwners.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
+                  {selectedIncidentOwners.map((oid) => {
+                    const owner = allIncidentOwners.find((o) => o.id === oid);
+                    if (!owner) return null;
+                    return (
+                      <View key={oid} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#DBEAFE", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
+                        <Text style={{ fontSize: 12, color: "#1e40af", fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
+                        <TouchableOpacity onPress={() => setSelectedIncidentOwners(prev => prev.filter(id => id !== oid))}>
+                          <Ionicons name="close-circle" size={16} color="#1e40af" />
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
               {/* Description */}
               <Text style={styles.sectionTitle}>Description</Text>
               <View style={styles.notesContainer}>
@@ -603,7 +741,7 @@ useFocusEffect(
                     {!loadingImage && (
                       <TouchableOpacity
                         style={styles.removeImageButton}
-                        onPress={() => removeImage(index, imageUploadService)}
+                        onPress={() => handleRemoveImage(index)}
                       >
                         <Text style={styles.removeImageText}>✕</Text>
                       </TouchableOpacity>
@@ -707,6 +845,7 @@ useFocusEffect(
                       attendance_id: "Presensi", user_id: "User", site_id: "Site",
                       contract_id: "Kontrak", company_id: "Perusahaan",
                       start_ticket: "Mulai", end_ticket: "Selesai", due_date: "Tenggat",
+                      incident_owner_ids: "Incident Owner",
                     };
                     const formatVal = (v: any) => v === null || v === undefined || v === "" ? "(kosong)" : String(v);
                     const displayValue = (change: any) => ({
@@ -910,6 +1049,59 @@ useFocusEffect(
         </Modal>
 
         {PreviewModal}
+
+        {/* Quick-create Incident Owner Modal */}
+        <Modal visible={createOwnerVisible} transparent animationType="slide" onRequestClose={() => setCreateOwnerVisible(false)}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCreateOwnerVisible(false)}>
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalIndicator} />
+              <Text style={styles.modalTitle}>Tambah Incident Owner</Text>
+              <TextInput
+                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                placeholder="Nama *"
+                placeholderTextColor="#999"
+                value={ownerFormName}
+                onChangeText={setOwnerFormName}
+              />
+              <TextInput
+                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                placeholder="Email"
+                placeholderTextColor="#999"
+                value={ownerFormEmail}
+                onChangeText={setOwnerFormEmail}
+                keyboardType="email-address"
+              />
+              <TextInput
+                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                placeholder="Phone"
+                placeholderTextColor="#999"
+                value={ownerFormPhone}
+                onChangeText={setOwnerFormPhone}
+              />
+              <TextInput
+                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                placeholder="Position"
+                placeholderTextColor="#999"
+                value={ownerFormPosition}
+                onChangeText={setOwnerFormPosition}
+              />
+                            <TouchableOpacity
+                style={[styles.modalButtonPrimary, { opacity: (ownerFormSubmitting || !ownerFormName.trim()) ? 0.7 : 1 }]}
+                onPress={handleCreateOwner}
+                disabled={ownerFormSubmitting || !ownerFormName.trim()}
+              >
+                {ownerFormSubmitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonTextPrimary}>Simpan</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalButtonCancel} onPress={() => setCreateOwnerVisible(false)}>
+                <Text style={styles.modalButtonTextCancel}>Batal</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </KeyboardAvoidingView>
     </View>
   );

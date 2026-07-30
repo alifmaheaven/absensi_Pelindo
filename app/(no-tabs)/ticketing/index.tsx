@@ -3,6 +3,7 @@ import { getTicket, getDataStatus } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
 import {
+  IIncidentOwner,
   IMeta,
   ITicket,
   ITicketContract,
@@ -62,6 +63,7 @@ interface TicketData extends ITicket {
   severity?: ITicketSeverity;
   device?: ITicketDevice;
   status?: ITicketStatus;
+  incident_owners?: IIncidentOwner[];
 }
 
 const BADGE_VARIANT: Record<BadgeVariant, { bg: string; color: string }> = {
@@ -135,7 +137,7 @@ const TicketingScreen = () => {
       per_page: ticketMeta.per_page,
       order_by_desc: ["created_at"],
       company_id_exact: [user?.company_id ?? ""],
-      include: "user,site,contract,severity,status,device",
+      include: "user,site,contract,severity,status,device,incident_owners",
     };
     if (appliedSearch) params.name_ilike = appliedSearch;
     if (appliedStatus) params.status_id_exact = [appliedStatus];
@@ -168,6 +170,7 @@ const TicketingScreen = () => {
         severity: item.severity || undefined,
         device: item.device || undefined,
         status: item.status || undefined,
+        incident_owners: item.incident_owners || [],
       }));
 
       setTicketDatas((prev) => {
@@ -224,6 +227,7 @@ const TicketingScreen = () => {
         severity: item.severity || undefined,
         device: item.device || undefined,
         status: item.status || undefined,
+        incident_owners: item.incident_owners || [],
       }));
 
       setTicketDatas(ticketMap);
@@ -416,6 +420,7 @@ const TicketingScreen = () => {
               progress={item.severity?.name || ""}
               date={item.start_ticket}
               onPress={() => handleTicketDetail(item)}
+              incidentOwners={item.incident_owners}
             />
           )}
           showsVerticalScrollIndicator={false}
@@ -450,7 +455,8 @@ const TicketItem = ({
   progress,
   date,
   onPress,
-}: TicketItemProps) => {
+  incidentOwners,
+}: TicketItemProps & { incidentOwners?: IIncidentOwner[] }) => {
   const variantStatus = status.toLowerCase() as BadgeVariant;
   const variantProgress = progress.toLowerCase() as BadgeVariant;
 
@@ -468,6 +474,16 @@ const TicketItem = ({
         <Text style={styles.deviceText}>{device}</Text>
       </View>
       <Text style={styles.description}>{description}</Text>
+
+      {incidentOwners && incidentOwners.length > 0 && (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+          {incidentOwners.map((owner) => (
+            <View key={owner.id} style={{ backgroundColor: "#DBEAFE", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 11, color: "#1e40af", fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.footerRow}>
         <View style={styles.dateRow}>

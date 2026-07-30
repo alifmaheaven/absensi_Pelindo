@@ -4,6 +4,7 @@ import NetInfo from "@react-native-community/netinfo";
 import axios from "@/lib/axios";
 import {
   IAttendanceOptions,
+  IIncidentOwner,
   IMeta,
   ITicket,
   ITicketContract,
@@ -330,6 +331,18 @@ export async function updateTicket(
 ) {
   try {
     const response = await axios.put("/ticket/", payload);
+    return response.data;
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+}
+
+export async function getDataIncidentOwner(
+  params: TParams,
+): Promise<Response<{ data: IIncidentOwner[] }>> {
+  try {
+    const response = await axios.get("/incident-owner/", { params });
     return response.data;
   } catch (error) {
     console.error(error);

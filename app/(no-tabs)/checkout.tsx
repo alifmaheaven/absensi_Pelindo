@@ -28,6 +28,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,

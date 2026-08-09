@@ -14,7 +14,7 @@ import { getUnreadCount } from "@/services/notification";
 import { useAuthStore } from "@/stores/auth";
 import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
-import { getTodayDateString, smartCapitalize } from "@/utils/utils";
+import { getTodayDateString, parseWIBDate, smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -29,6 +29,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { getTodaySchedule } from "@/services/schedule";
+import { TIMEZONE } from "@/constants";
 import type { IScheduleToday, Ishift } from "@/types";
 
 export function getWorkStatus(
@@ -47,9 +48,9 @@ export function getWorkStatus(
 
   if (!datetime) return defaultText;
 
-  const formattedDate = datetime.replace(" ", "T");
-  const actualTime = new Date(formattedDate);
-  if (isNaN(actualTime.getTime())) return defaultText;
+  // checkin/checkout = WIB wall-clock string → parse WIB (bukan device-local).
+  const actualTime = parseWIBDate(datetime);
+  if (!actualTime) return defaultText;
 
   // Build scheduledTime using actualTime's date but shift's hours,
   // then attach the original timezone offset so DST/timezone shifts don't
@@ -117,10 +118,13 @@ export default function HomeScreen() {
   // Record attendance hari ini (tanggal WIB). Tetap ada setelah checkout
   // (record tidak hilang — beda dengan endpoint active-checkins yang hanya
   // mengembalikan record belum checkout).
+  // Bandingkan tanggal WIB dari `checkin` (disimpan WIB), BUKAN `created_at`
+  // (UTC) — di jam 00:00–06:59 WIB, UTC masih tanggal kemarin → salah.
+  // Lihat .planning/notes/timezone-audit-2026-08-09.md
   const activeCheckin = useMemo(() => {
     if (!checkInData?.length) return null;
     const today = getTodayDateString();
-    return checkInData.find((c) => c.created_at?.split(" ")[0] === today) ?? null;
+    return checkInData.find((c) => c.checkin?.split(" ")[0] === today) ?? null;
   }, [checkInData]);
 
   const fetchSchedule = async () => {
@@ -205,20 +209,25 @@ export default function HomeScreen() {
     return () => clearInterval(timer);
   }, []);
 
+  // Jam/tanggal/hari tampil di zona WIB (bukan device-local) — lihat
+  // .planning/notes/timezone-audit-2026-08-09.md
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
+      timeZone: TIMEZONE,
     });
   };
 
   const formatDate = (date: Date) => {
-    const day = date.getDate().toString().padStart(2, "0");
-    const month = (date.getMonth() + 1).toString().padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: TIMEZONE,
+      year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(date);
+    const get = (t: string) => (parts.find((p) => p.type === t) || {}).value || "00";
+    return `${get("day")}/${get("month")}/${get("year")}`;
   };
 
   const getDayName = (date: Date) => {
@@ -231,11 +240,11 @@ export default function HomeScreen() {
       "Jumat",
       "Sabtu",
     ];
-    return days[date.getDay()];
+    return days[Number(new Intl.DateTimeFormat("en-US", { timeZone: TIMEZONE, weekday: "short" }).format(date).toUpperCase().replace(/SUN/, "0").replace(/MON/, "1").replace(/TUE/, "2").replace(/WED/, "3").replace(/THU/, "4").replace(/FRI/, "5").replace(/SAT/, "6"))];
   };
 
   const getGreeting = () => {
-    const hour = currentTime.getHours();
+    const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: TIMEZONE, hour: "2-digit", hour12: false }).format(currentTime));
     if (hour < 12) return "Good Morning";
     if (hour < 17) return "Good Afternoon";
     return "Good Evening";

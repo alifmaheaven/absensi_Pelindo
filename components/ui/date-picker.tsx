@@ -25,8 +25,11 @@ interface Props {
 }
 
 export default function DatePicker({ visible, value, onConfirm, onClose, disabledDates = [] }: Props) {
-  const today = new Date();
-  const initial = value ? new Date(value) : today;
+  // value = "YYYY-MM-DD" (tanggal WIB). new Date("YYYY-MM-DD") = UTC midnight
+  // → getDate() local bisa beda hari di device non-WIB. Parse sebagai WIB.
+  const parseWIB = (s: string) => new Date(`${s}T00:00:00+07:00`);
+  const today = parseWIB(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
+  const initial = value ? parseWIB(value) : today;
   const [year, setYear] = useState(initial.getFullYear());
   const [month, setMonth] = useState(initial.getMonth()); // 0-indexed
   const [selectedDay, setSelectedDay] = useState(initial.getDate());

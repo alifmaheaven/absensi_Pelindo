@@ -23,7 +23,7 @@ export default function JadwalScreen() {
     fetchSchedule();
   }, []);
 
-  const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
 
   return (
     <View style={styles.container}>

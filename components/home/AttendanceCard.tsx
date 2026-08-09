@@ -1,5 +1,6 @@
 import { DEFAULT_WORK_HOURS } from "@/constants";
 import { Ishift } from "@/types";
+import { parseWIBDate } from "@/utils/utils";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function getHourMinute(datetime?: string | null): string {
@@ -35,11 +36,9 @@ export function mapTimeToColor(
   if (!datetime)
     return { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
 
-  // 2. Convert ke format ISO aman
-  const isoString = datetime.replace(" ", "T");
-
-  const targetTime = new Date(isoString);
-  if (isNaN(targetTime.getTime())) {
+  // 2. Parse WIB (checkin/checkout = WIB wall-clock), bukan device-local
+  const targetTime = parseWIBDate(datetime);
+  if (!targetTime) {
     return { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
   }
 

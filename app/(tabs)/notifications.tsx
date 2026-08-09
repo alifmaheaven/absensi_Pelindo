@@ -15,6 +15,7 @@ import {
   markAsRead,
   markAllAsRead,
 } from "@/services/notification";
+import { parseUTCDate } from "@/utils/utils";
 
 interface Notification {
   id: string;
@@ -26,7 +27,8 @@ interface Notification {
 }
 
 function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
+  // created_at = UTC space string → parse UTC (bukan device-local)
+  const date = parseUTCDate(dateStr) ?? new Date();
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);

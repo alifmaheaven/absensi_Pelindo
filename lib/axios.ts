@@ -1,6 +1,8 @@
 import { handleHttpError } from "@/utils/handle-request";
 import axios from "axios";
-import { getToken, saveToken, removeToken } from "./storage";
+import { getToken, saveToken } from "./storage";
+import { router } from "expo-router";
+import { useAuthStore } from "@/stores/auth";
 
 const API = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
@@ -45,8 +47,13 @@ API.interceptors.response.use(
           return API(originalRequest);
         }
       } catch {
-        // Refresh failed — clear auth
-        await removeToken();
+        // Refresh failed — token tidak valid → auto logout + redirect ke login
+        // (samakan perilaku dengan FE Web). useAuthStore.logout() membersihkan
+        // token + cache + reset state user; router.replace("/auth") membawa
+        // user ke halaman login. Khusus pesan 401 lain (mis. "Authorization not
+        // found") yang tidak ter-capture oleh handleHttpError, dijamin tetap logout.
+        useAuthStore.getState().logout();
+        router.replace("/auth");
       }
     }
 

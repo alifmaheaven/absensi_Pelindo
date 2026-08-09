@@ -17,7 +17,15 @@ const DEFAULT_MESSAGES: Record<number, string> = {
 function isTokenExpiredMessage(data: unknown): boolean {
   if (data && typeof data === "object" && "message" in data) {
     const msg = String((data as Record<string, unknown>).message).toLowerCase();
-    return msg.includes("expired") || msg.includes("token") || msg.includes("unauthorized");
+    // "authorization" mencakup pesan umum backend seperti "Authorization not found"
+    // (token tidak ada/rusak) — pesan login dengan kredensial salah berbeda
+    // (mis. "Invalid email or password"), jadi aman tidak kena false positive.
+    return (
+      msg.includes("expired") ||
+      msg.includes("token") ||
+      msg.includes("unauthorized") ||
+      msg.includes("authorization")
+    );
   }
   return false;
 }

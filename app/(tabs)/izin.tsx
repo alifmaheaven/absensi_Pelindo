@@ -4,6 +4,7 @@ import {
   getEvidGroupId,
   uploadEvid,
   deleteEvidtmp,
+  createGroupId,
   uploadEvidPermanent,
   uploadEvidGroupId,
 } from "@/services/attendance";
@@ -115,12 +116,20 @@ export default function IzinScreen() {
     }
     setResubmitting(true);
     try {
-      // Upload evidence baru ke group yang sama (evidence_group_id tetap)
-      const groupId = detailItem.evidence_group_id;
+      // Upload evidence ke group. Bila leave tidak punya evidence_group_id
+      // (dibuat tanpa bukti), buat group baru dulu.
+      let groupId = detailItem.evidence_group_id;
       if (!groupId) {
-        showToast("Data bukti tidak ditemukan", "error");
-        setResubmitting(false);
-        return;
+        const group = await createGroupId({
+          name: `Leave ${user?.name}`,
+          description: "Leave evidence",
+        });
+        groupId = group.data?.id ?? "";
+        if (!groupId) {
+          showToast("Gagal membuat bukti", "error");
+          setResubmitting(false);
+          return;
+        }
       }
       for (const img of images) {
         const uploaded = await uploadEvidPermanent({ links: [img.path] });

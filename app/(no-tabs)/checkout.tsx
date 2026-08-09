@@ -3,7 +3,6 @@ import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
-  DEFAULT_PAGE_SIZE,
   IMAGE_BASE_PATH,
   TIMEZONE,
 } from "@/constants";
@@ -12,19 +11,18 @@ import { useRequest } from "@/hooks/use-request";
 import axios from "@/lib/axios";
 import {
   deleteEvid,
-  getAttendanceList,
   getEvidGroupId,
   updateAttendance,
   uploadEvidPermanent,
   uploadEvidGroupId,
 } from "@/services/attendance";
+import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
-import { getTodayDateString } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -67,36 +65,26 @@ export default function CheckoutScreen() {
   // --- State ---
   const [notes, setNotes] = useState("");
   const [loadingSubmit, setLoadingSubmit] = useState(false);
-  const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
+  // active-checkins adalah sumber kebenaran record check-in aktif hari ini
+  // (endpoint eksplisit timezone-safe), bukan list + pencocokan tanggal di
+  // client yang rapuh. Lihat .planning/notes/bug-dashboard-not-detecting-checkin.md
+  const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
   const [removedImages, setRemovedImages] = useState<Array<{ id: string | null; path: string }>>([]);
-  const [selectedSiteName, setSelectedSiteName] = useState("");
 
-  const { run: getCheckIn } = useRequest(() =>
-    getAttendanceList({
-      page: 1,
-      per_page: DEFAULT_PAGE_SIZE,
-      order_by_desc: ["created_at"],
-      user_id_exact: [user?.id ?? ""],
-    }),
-  );
+  const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
 
-  // Find today's check-in record
-  const checkInDataById = useMemo(() => {
-    if (!checkInData?.length) return null;
-    // created_at disimpan dalam WIB — pakai tanggal WIB, bukan UTC (toISOString)
-    const today = getTodayDateString();
-    return checkInData.find((c) => c.created_at?.split(" ")[0] === today) || null;
-  }, [checkInData]);
-
-  // Load check-in data + evidence on mount
+  // Load check-in data on mount
   useEffect(() => {
     const fetchCheckIn = async () => {
       try {
-        const res = await getCheckIn();
-        setCheckInData(res.data?.data || []);
+        const res = await fetchActiveCheckinsReq();
+        // getActiveCheckins mengembalikan Response<{ data: IAttendance[] }> atau
+        // array mentah (sudah di-unwrap service). Ambil record aktif pertama.
+        const list = Array.isArray(res) ? res : (res?.data ?? []);
+        setActiveCheckin(Array.isArray(list) && list.length > 0 ? (list[0] as IAttendance) : null);
       } catch (error) {
         console.error("Error fetching checkIn:", error);
-        setCheckInData([]);
+        setActiveCheckin(null);
       }
     };
     fetchCheckIn();
@@ -124,19 +112,18 @@ export default function CheckoutScreen() {
   }, []);
 
   useEffect(() => {
-    if (!checkInDataById) return;
-    setSelectedSiteName(checkInDataById.name || checkInDataById.code || "Site");
-    setNotes(checkInDataById.description || "");
+    if (!activeCheckin) return;
+    setNotes(activeCheckin.description || "");
 
     (async () => {
       try {
         const evidData = await getEvidGroupId({
           page: 1,
           per_page: 5,
-          evidence_group_id_exact: [checkInDataById.evidence_group_id],
+          evidence_group_id_exact: [activeCheckin.evidence_group_id],
         });
         const evidences = evidData?.data?.data?.filter(
-          (e) => e.evidence_group_id === checkInDataById.evidence_group_id,
+          (e) => e.evidence_group_id === activeCheckin.evidence_group_id,
         );
         if (evidences?.length) {
           setImages(
@@ -152,7 +139,7 @@ export default function CheckoutScreen() {
         console.error(error);
       }
     })();
-  }, [checkInDataById]);
+  }, [activeCheckin]);
 
   // Upload service adapter for useImagePicker
   const uploadService = {
@@ -190,14 +177,14 @@ export default function CheckoutScreen() {
       showToast("Upload minimal 1 gambar sebagai bukti!", "error");
       return;
     }
-    if (!checkInDataById?.id) {
+    if (!activeCheckin?.id) {
       showToast("Data check-in tidak ditemukan!", "error");
       return;
     }
 
     setLoadingSubmit(true);
     try {
-      const groupId = checkInDataById?.evidence_group_id ?? "";
+      const groupId = activeCheckin?.evidence_group_id ?? "";
 
       // Delete removed evidence
       for (const img of removedImages) {
@@ -224,7 +211,7 @@ export default function CheckoutScreen() {
 
       // Update attendance checkout with GPS location + editable notes (description)
       await updateAttendance({
-        id: checkInDataById?.id!,
+        id: activeCheckin?.id!,
         checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
         ...(notes.trim() ? { description: notes.trim() } : {}),
         ...(location ? {
@@ -297,15 +284,15 @@ export default function CheckoutScreen() {
 
             {/* Location Info — from check-in record */}
             <Text style={styles.sectionTitle}>Lokasi Check In</Text>
-            {checkInDataById ? (
+            {activeCheckin ? (
               <View style={[styles.locationOption, styles.locationOptionSelected]}>
                 <View style={styles.locationIconContainer}>
                   <Text style={{ fontSize: 22 }}>📍</Text>
                 </View>
                 <View style={styles.locationTextContainer}>
-                  <Text style={styles.locationTitle}>{selectedSiteName || "Site"}</Text>
+                  <Text style={styles.locationTitle}>{activeCheckin?.name || activeCheckin?.code || "Site"}</Text>
                   <Text style={styles.locationCoords}>
-                    {checkInDataById.latitude}, {checkInDataById.longitude}
+                    {activeCheckin.latitude}, {activeCheckin.longitude}
                   </Text>
                 </View>
               </View>

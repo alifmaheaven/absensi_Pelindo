@@ -21,6 +21,7 @@ import {
   uploadEvidtmp,
 } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
+import { formatAttendanceDate } from "@/utils/utils";
 import {
   IAttendanceOptions,
   IIncidentOwner,
@@ -33,7 +34,7 @@ import { SeveritySelector } from "@/components/ticketing/SeveritySelector";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -71,6 +72,7 @@ export default function TicketingCreateScreen() {
 
   // form state
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const submittingRef = useRef(false);
   const { user } = useAuthStore();
   const {
     images,
@@ -183,9 +185,7 @@ export default function TicketingCreateScreen() {
           const attendanceOptionFilter =
             attendanceOption?.map((item) => ({
               ...item,
-              name: `${item.code} - ${new Date(
-                item.checkin,
-              ).toLocaleString()}`,
+              name: `${item.code} - ${formatAttendanceDate(item.checkin)}`,
             })) || [];
 
           const sortSeverity =
@@ -222,6 +222,7 @@ export default function TicketingCreateScreen() {
   );
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
     // Title
     if (!title) {
       showToast("Masukkan title!", "error");
@@ -259,6 +260,7 @@ export default function TicketingCreateScreen() {
     }
 
     setLoadingSubmit(true);
+    submittingRef.current = true;
 
     try {
       const group = await createEvidGroupId({
@@ -327,6 +329,7 @@ export default function TicketingCreateScreen() {
       );
     } finally {
       setLoadingSubmit(false);
+      submittingRef.current = false;
     }
   };
 
@@ -740,7 +743,7 @@ export default function TicketingCreateScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 style={[
                   styles.modalButtonSecondary,
                   { opacity: loadingImage ? 0.7 : 1 },
@@ -751,7 +754,7 @@ export default function TicketingCreateScreen() {
                 <Text style={styles.modalButtonTextSecondary}>
                   Ambil Dari Galeri
                 </Text>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.modalButtonCancel}

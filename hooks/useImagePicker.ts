@@ -34,13 +34,6 @@ export function useImagePicker() {
     source: "camera" | "gallery",
     uploadService: IImageUploadService,
   ) => {
-    // Gallery is disabled - camera only
-    if (source !== "camera") {
-      Alert.alert("Error", "Hanya kamera yang diizinkan untuk mengambil gambar.");
-      setLoadingImage(false);
-      return;
-    }
-
     setLoadingImage(true);
     try {
       const isCamera = source === "camera";

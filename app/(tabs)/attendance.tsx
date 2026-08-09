@@ -1,5 +1,6 @@
 import { getAttendanceList } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
+import { parseWIBDate, parseUTCDate } from "@/utils/utils";
 import {
   IAttendance,
   IMeta,
@@ -94,13 +95,18 @@ export default function AttendanceTabScreen() {
     handleGetList();
   }, []);
 
-  const formatDateTime = (s?: string | null) => {
-    if (!s) return null;
-    return new Date(s).toLocaleString("id-ID", {
+  // checkin/checkout = WIB, created_at = UTC. Pakai helper timezone-aware
+  // (new Date(spasi) engine-dependent di Hermes → jam salah).
+  const formatWIB = (s?: string | null) =>
+    s ? new Intl.DateTimeFormat("id-ID", {
       day: "numeric", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  };
+      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
+    }).format(parseWIBDate(s) ?? 0) : null;
+  const formatUTC = (s?: string | null) =>
+    s ? new Intl.DateTimeFormat("id-ID", {
+      day: "numeric", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
+    }).format(parseUTCDate(s) ?? 0) : null;
 
   const renderItem = ({ item }: { item: IAttendance }) => (
     <View style={styles.card}>
@@ -117,13 +123,13 @@ export default function AttendanceTabScreen() {
           <View style={styles.timeBlock}>
             <Ionicons name="log-in-outline" size={14} color="#22C55E" />
             <Text style={styles.timeLabel}>Check In</Text>
-            <Text style={styles.timeValue}>{formatDateTime(item.checkin) || "-"}</Text>
+            <Text style={styles.timeValue}>{formatWIB(item.checkin) || "-"}</Text>
           </View>
           <View style={styles.timeDivider} />
           <View style={styles.timeBlock}>
             <Ionicons name="log-out-outline" size={14} color="#EF4444" />
             <Text style={styles.timeLabel}>Check Out</Text>
-            <Text style={styles.timeValue}>{formatDateTime(item.checkout) || "-"}</Text>
+            <Text style={styles.timeValue}>{formatWIB(item.checkout) || "-"}</Text>
           </View>
         </View>
         {item.description ? (
@@ -132,7 +138,7 @@ export default function AttendanceTabScreen() {
       </View>
       <View style={styles.cardFooter}>
         <Ionicons name="time-outline" size={12} color="#999" />
-        <Text style={styles.footerText}>{formatDateTime(item.created_at)}</Text>
+        <Text style={styles.footerText}>{formatUTC(item.created_at)}</Text>
       </View>
     </View>
   );

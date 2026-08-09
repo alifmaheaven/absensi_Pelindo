@@ -380,6 +380,7 @@ export default function HomeScreen() {
                 type="checkin"
                 time={activeCheckin?.checkin}
                 subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", todaySchedule?.shift)}
+                shift={todaySchedule?.shift}
                 badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
                 onPress={() => {
                   if (activeCheckin?.checkin) {
@@ -394,6 +395,7 @@ export default function HomeScreen() {
                 type="checkout"
                 time={activeCheckin?.checkout}
                 subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", todaySchedule?.shift)}
+                shift={todaySchedule?.shift}
                 badgeText={
                   activeCheckin?.checkout ? "Checked Out" : "Check Out"
                 }

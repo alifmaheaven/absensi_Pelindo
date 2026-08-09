@@ -1,6 +1,7 @@
 import { getAttendanceList, getAttendanceStatus } from "@/services/attendance";
 import { getMyLeaves, ILeaveRequest } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
+import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
 import { IAttendance } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -83,9 +84,12 @@ export default function IzinScreen() {
 
       // Leave requests (pending/rejected — show even if not yet approved)
       leaves.forEach((lr) => {
-        // Skip if already has an attendance record for same date (approved)
+        // Skip if already has an attendance record for same date (approved).
+        // Bandingkan bagian tanggal saja (WIB) — m.date = checkin WIB
+        // "2026-08-09 17:47:11", lr.leave_date mungkin "2026-08-09" atau ISO.
+        const leaveDay = lr.leave_date?.split(/[T ]/)[0];
         const alreadyApproved = merged.some(
-          (m) => m.type === "attendance" && m.date?.startsWith(lr.leave_date?.split("T")[0])
+          (m) => m.type === "attendance" && (m.date?.split(/[T ]/)[0] === leaveDay)
         );
         if (!alreadyApproved) {
           const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
@@ -101,8 +105,12 @@ export default function IzinScreen() {
         }
       });
 
-      // Sort by date desc
-      merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Sort by date desc — parse WIB (andal di Hermes), NaN → 0 (stabil)
+      const dateVal = (d?: string) => {
+        const parsed = parseWIBDate(d);
+        return parsed ? parsed.getTime() : 0;
+      };
+      merged.sort((a, b) => dateVal(b.date) - dateVal(a.date));
 
       setMergedData(merged);
     } catch (error) {
@@ -143,7 +151,7 @@ export default function IzinScreen() {
           </View>
         </View>
         <View style={styles.izinDetails}>
-          <Text style={styles.izinDate}>📅 {item.date ? new Date(item.date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : "--"}</Text>
+          <Text style={styles.izinDate}>📅 {formatAttendanceDate(item.date, false, { day: "numeric", month: "long", year: "numeric" })}</Text>
         </View>
         {item.reason ? (
           <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>

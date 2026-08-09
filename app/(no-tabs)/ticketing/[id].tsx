@@ -21,6 +21,8 @@ import {
   uploadEvidtmp,
   getTicketHistory,
 } from "@/services/ticket";
+import { getAttendanceList } from "@/services/attendance";
+import { formatAttendanceDate } from "@/utils/utils";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
 import {
@@ -86,6 +88,7 @@ export default function TicketingEditScreen() {
     setImages,
   } = useImagePicker();
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const submittingRef = useRef(false);
   const { user } = useAuthStore();
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
@@ -166,7 +169,7 @@ useFocusEffect(
         try {
           setLoadingSkeleton(true);
 
-          const [sitesRes, devices, attendanceOptions, severitys, evids, status, historyRes, incidentOwners] =
+          const [sitesRes, devices, attendanceOptions, ticketAttendanceRes, severitys, evids, status, historyRes, incidentOwners] =
             await Promise.all([
               getDataSite({
                 page: 1,
@@ -180,6 +183,15 @@ useFocusEffect(
                 order_by_desc: ["created_at"],
               }),
               getActiveCheckins(),
+              // Ambil record attendance milik tiket ini sendiri (bisa yang sudah
+              // checkout — tidak muncul di active-checkins). Mencegah record
+              // ter-link hilang dari dropdown setelah checkout.
+              getAttendanceList({
+                page: 1,
+                per_page: 5,
+                order_by_desc: ["created_at"],
+                id_exact: [ticket?.attendance_id || ""],
+              }).catch(() => null),
               getDataSeverity({ page: 1, per_page: 100 }),
               getDataEvid({
                 page: 1,
@@ -198,16 +210,27 @@ useFocusEffect(
           const device = devices.data?.data || [];
           const siteOpts = sitesRes?.data?.data || [];
           // active-checkins array is already unwrapped by service
-          const attendanceOption: IAttendanceOptions[] = (attendanceOptions as any) || [];
+          const activeOption: IAttendanceOptions[] = (attendanceOptions as any) || [];
+          // Record attendance milik tiket ini sendiri (bisa yang sudah checkout).
+          const ticketAttendanceList = (ticketAttendanceRes?.data?.data || []) as IAttendanceOptions[];
+          // Merge active check-ins + record tiket sendiri, dedup by id. Record
+          // tiket sendiri selalu ada di depan agar tidak hilang setelah checkout.
+          const seenIds = new Set<string>();
+          const mergedOptions: IAttendanceOptions[] = [];
+          for (const item of [...ticketAttendanceList, ...activeOption]) {
+            if (item?.id && !seenIds.has(item.id)) {
+              seenIds.add(item.id);
+              mergedOptions.push(item);
+            }
+          }
+          const attendanceOption = mergedOptions;
           const severityData = severitys.data?.data || [];
           const statusData = status.data?.data || [];
 
           const attendanceOptionFilter =
             attendanceOption?.map((item) => ({
               ...item,
-              name: `${item.code} - ${new Date(
-                item.checkin,
-              ).toLocaleString()}`,
+              name: `${item.code} - ${formatAttendanceDate(item.checkin)}`,
             })) || [];
 
           const sortSeverity =
@@ -346,6 +369,7 @@ useFocusEffect(
   };
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
     // Title
     if (!title) {
       showToast("Masukkan title!", "error");
@@ -378,6 +402,7 @@ useFocusEffect(
     }
 
     setLoadingSubmit(true);
+    submittingRef.current = true;
 
     try {
       const groupId = ticket?.evidence_group_id ?? "";
@@ -436,16 +461,17 @@ useFocusEffect(
 
       console.debug("Ticket created");
 
-      showToast("Berhasil create ticket!", "success");
+      showToast("Berhasil edit ticket!", "success");
 
       useTicketStore.getState().setNeedsRefresh(true);
       router.replace("/ticketing");
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(err);
-      showToast("Gagal create ticket!", "error");
+      showToast("Gagal edit ticket!", "error");
     } finally {
       setLoadingSubmit(false);
+      submittingRef.current = false;
     }
   };
 
@@ -862,7 +888,7 @@ useFocusEffect(
                             {actionLabel[log.action] || log.action}
                           </Text>
                           <Text style={styles.historyTime}>
-                            {new Date(log.created_at).toLocaleString("id-ID")}
+                            {formatAttendanceDate(log.created_at, true)}
                           </Text>
                         </View>
                         <Text style={styles.historyUserName}>
@@ -1028,18 +1054,18 @@ useFocusEffect(
                 </Text>
               </TouchableOpacity>
 
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 style={[
                   styles.modalButtonSecondary,
                   { opacity: loadingImage ? 0.7 : 1 },
                 ]}
-                onPress={() => pickImage("gallery")}
+                onPress={() => pickImage("gallery", imageUploadService)}
                 disabled={loadingImage}
               >
                 <Text style={styles.modalButtonTextSecondary}>
                   Ambil Dari Galeri
                 </Text>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.modalButtonCancel}

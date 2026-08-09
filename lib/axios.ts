@@ -24,6 +24,29 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Mutex refresh: bila banyak request paralel dapat 401 bersamaan, hanya satu
+// /auth/refresh yang dijalankan; request lain menunggu promise yang sama lalu
+// replay pakai token baru. Mencegah race N-refresh → logout tak terduga.
+let refreshPromise: Promise<string | null> | null = null;
+
+async function getRefreshedToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const refreshRes = await API.post('/auth/refresh');
+      const newToken = refreshRes.data?.data?.token || refreshRes.data?.token;
+      if (newToken) {
+        await saveToken(newToken);
+        return newToken;
+      }
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 // Response interceptor — auto-refresh on 401
 API.interceptors.response.use(
   async (response) => response,
@@ -39,19 +62,13 @@ API.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const refreshRes = await API.post('/auth/refresh');
-        const newToken = refreshRes.data?.data?.token || refreshRes.data?.token;
+        const newToken = await getRefreshedToken();
         if (newToken) {
-          await saveToken(newToken);
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return API(originalRequest);
         }
       } catch {
-        // Refresh failed — token tidak valid → auto logout + redirect ke login
-        // (samakan perilaku dengan FE Web). useAuthStore.logout() membersihkan
-        // token + cache + reset state user; router.replace("/auth") membawa
-        // user ke halaman login. Khusus pesan 401 lain (mis. "Authorization not
-        // found") yang tidak ter-capture oleh handleHttpError, dijamin tetap logout.
+        // Refresh failed — token tidak valid → auto logout + redirect ke login.
         useAuthStore.getState().logout();
         router.replace("/auth");
       }

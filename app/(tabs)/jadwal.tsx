@@ -46,8 +46,9 @@ export default function JadwalScreen() {
           </View>
         ) : (
           schedules.map((item, index) => {
-            const date = new Date(item.date);
-            const dateNum = date.getDate().toString().padStart(2, "0");
+            // item.date format "YYYY-MM-DD" — ambil tanggal langsung (hindari
+            // new Date(spasi/zone) yang bisa off-by-one lintas timezone device).
+            const dateNum = item.date ? item.date.split("-")[2] : "--";
             const bg = item.is_today ? "#1e90ff" : item.has_schedule ? item.shift!.color : "#e3f2fd";
             const textColor = item.is_today || item.has_schedule ? "#fff" : "#999";
 

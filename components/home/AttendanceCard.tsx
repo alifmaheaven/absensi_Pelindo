@@ -1,4 +1,5 @@
 import { DEFAULT_WORK_HOURS } from "@/constants";
+import { Ishift } from "@/types";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function getHourMinute(datetime?: string | null): string {
@@ -23,7 +24,8 @@ type StatusColor =
 
 export function mapTimeToColor(
   datetime?: string | null,
-  type: "checkin" | "checkout" = "checkin"
+  type: "checkin" | "checkout" = "checkin",
+  shift?: Ishift | null
 ): {
   text: StatusColor;
   container: StatusColor;
@@ -41,32 +43,39 @@ export function mapTimeToColor(
     return { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
   }
 
-  const scheduledTime = new Date(targetTime);
-  scheduledTime.setHours(type === "checkin" ? DEFAULT_WORK_HOURS.checkin : DEFAULT_WORK_HOURS.checkout);
-  scheduledTime.setMinutes(0);
-  scheduledTime.setSeconds(0);
-  scheduledTime.setMilliseconds(0);
+  // Scheduled hour: pakai shift real bila ada (sinkron dengan getWorkStatus),
+  // fallback DEFAULT_WORK_HOURS.
+  const scheduledHourStr =
+    type === "checkin"
+      ? shift?.start_time ?? `0${DEFAULT_WORK_HOURS.checkin}:00`
+      : shift?.end_time ?? `0${DEFAULT_WORK_HOURS.checkout}:00`;
+  const [sh, sm] = scheduledHourStr.split(":").map(Number);
 
+  const scheduledTime = new Date(targetTime);
+  scheduledTime.setHours(sh, sm ?? 0, 0, 0);
+  // Overnight shift: checkout lewat tengah malam
+  if (type === "checkout" && shift?.is_overnight) {
+    const eh = sh;
+    const checkinSh = Number(shift.start_time.split(":")[0]);
+    if (eh < checkinSh) scheduledTime.setDate(scheduledTime.getDate() + 1);
+  }
+
+  const graceMs = (type === "checkin" ? shift?.grace_late : shift?.grace_early) ? (type === "checkin" ? shift!.grace_late : shift!.grace_early) * 60 * 1000 : 0;
   const diffMs = targetTime.getTime() - scheduledTime.getTime();
   const diffMinutes = Math.floor(diffMs / 60000); // Minutes
 
-  const now = new Date();
-
   // 3. Bandingkan waktu
   if (type === "checkin") {
-    // Check In: Late (diff > 0) -> Bad (Red-ish)
-    // On Time (diff <= 0) -> Good (Green-ish)
-    const isLate = diffMinutes > 0;
+    // Check In: Late (diff > grace) -> Bad (Red-ish), else Good (Green-ish)
+    const isLate = diffMs > graceMs;
     if (isLate) {
       return { text: "#F7F9FC", container: "#ff9999", button: "#B30000" };
     } else {
       return { text: "#F7F9FC", container: "#85e09c", button: "#00B383" };
     }
   } else {
-    // Check Out
-    // Early (diff < 0) -> Bad (Red-ish)
-    // On Time / Overtime (diff >= 0) -> Good (Green-ish)
-    const isEarly = diffMinutes < 0;
+    // Check Out: Early (diff < -grace) -> Bad, else Good
+    const isEarly = diffMs < -graceMs;
     if (isEarly) {
       return { text: "#F7F9FC", container: "#ff9999", button: "#B30000" };
     } else {
@@ -80,6 +89,7 @@ interface AttendanceCardProps {
   time?: string | null;
   subtitle: string;
   subtitle2?: string;
+  shift?: Ishift | null;
   onPress: () => void;
   badgeText: string;
 }
@@ -88,10 +98,11 @@ export default function AttendanceCard({
   type,
   time,
   subtitle,
+  shift,
   onPress,
   badgeText,
 }: AttendanceCardProps) {
-  const colors = mapTimeToColor(time, type);
+  const colors = mapTimeToColor(time, type, shift);
   const formattedTime = getHourMinute(time);
 
   // Default styles based on type (fallback if time is null/empty)

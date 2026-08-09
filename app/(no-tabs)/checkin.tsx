@@ -25,12 +25,13 @@ import { getDistanceInMeters } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -55,10 +56,12 @@ export default function CheckinScreen() {
     null,
   );
   const [loadingLocation, setLoadingLocation] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const submittingRef = useRef(false);
   const [checkinStatusId, setCheckinStatusId] = useState<string>("");
   const { user } = useAuthStore();
   const {
@@ -132,36 +135,40 @@ export default function CheckinScreen() {
     return withDistance;
   }, [siteData, location]);
 
-  useEffect(() => {
-    let mounted = true;
+  const requestLocation = async () => {
+    setLoadingLocation(true);
+    setPermissionDenied(false);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
 
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== "granted") {
-          showToast("Izin lokasi diperlukan", "error");
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        if (mounted) setLocation(loc);
-      } catch (e) {
-        console.debug("Location error:", e);
-      } finally {
-        if (mounted) setLoadingLocation(false);
+      if (status !== "granted") {
+        setPermissionDenied(true);
+        setLoadingLocation(false);
+        return;
       }
-    })();
 
-    return () => {
-      mounted = false;
-    };
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setLocation(loc);
+    } catch (e) {
+      console.debug("Location error:", e);
+      setPermissionDenied(true);
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
+
+  useEffect(() => {
+    // Defer ke microtask agar setState pertama di requestLocation tidak
+    // synchronous-in-effect (React Compiler flag) — pola fetch async legit.
+    Promise.resolve().then(() => requestLocation());
   }, []);
 
   const handleSubmit = async () => {
+    // Guard double-submit: flag synchronous (loadingSubmit state async)
+    if (submittingRef.current) return;
     // Validasi lokasi GPS
     if (!location) {
       showToast("Tunggu deteksi lokasi...", "info");
@@ -186,6 +193,8 @@ export default function CheckinScreen() {
       return;
     }
 
+    // Lolos validasi → kunci submit
+    submittingRef.current = true;
     setLoadingSubmit(true);
     try {
       const group = await createGroupId({
@@ -247,6 +256,7 @@ export default function CheckinScreen() {
       );
     } finally {
       setLoadingSubmit(false);
+      submittingRef.current = false;
     }
   };
 
@@ -290,10 +300,36 @@ export default function CheckinScreen() {
             {/* Map View */}
             <View style={styles.mapContainer}>
               {!location ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#1e90ff" />
-                  <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
-                </View>
+                permissionDenied ? (
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.locationDeniedEmoji}>📍</Text>
+                    <Text style={styles.locationDeniedTitle}>
+                      Izin lokasi diperlukan
+                    </Text>
+                    <Text style={styles.locationDeniedText}>
+                      Aktifkan izin lokasi untuk melakukan check-in
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.retryButton}
+                      onPress={requestLocation}
+                    >
+                      <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.settingsButton}
+                      onPress={() => Linking.openSettings()}
+                    >
+                      <Text style={styles.settingsButtonText}>
+                        Buka Pengaturan
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#1e90ff" />
+                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
+                  </View>
+                )
               ) : (
                 <MapEmbed location={location} />
               )}
@@ -492,7 +528,7 @@ export default function CheckinScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* <TouchableOpacity
+              <TouchableOpacity
                 style={[
                   styles.modalButtonSecondary,
                   { opacity: loadingImage ? 0.7 : 1 },
@@ -503,7 +539,7 @@ export default function CheckinScreen() {
                 <Text style={styles.modalButtonTextSecondary}>
                   Ambil Dari Galeri
                 </Text>
-              </TouchableOpacity> */}
+              </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.modalButtonCancel}
@@ -586,6 +622,44 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     color: "#666",
+  },
+  locationDeniedEmoji: {
+    fontSize: 40,
+    marginBottom: 10,
+  },
+  locationDeniedTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
+  },
+  locationDeniedText: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: "#3B82F6",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  settingsButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  settingsButtonText: {
+    color: "#3B82F6",
+    fontWeight: "600",
+    fontSize: 14,
   },
   locationOverlay: {
     position: "absolute",

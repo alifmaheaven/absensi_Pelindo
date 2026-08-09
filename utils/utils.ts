@@ -45,6 +45,65 @@ export function getTodayDateString(): string {
   }).format(new Date());
 }
 
+/**
+ * Parse timestamp backend (format spasi "YYYY-MM-DD HH:MM:SS[.fff]") sebagai
+ * WIB (Asia/Jakarta) → Date absolut. ANDAL di Hermes (bukan new Date(spasi)
+ * yang engine-dependent). Pakai untuk field WIB: checkin, checkout.
+ *
+ * "2026-08-09 17:47:11" → Date di 17:47:11 WIB.
+ */
+export function parseWIBDate(value?: string | null): Date | null {
+  if (!value) return null;
+  // Normalisasi ke ISO dengan offset WIB: ganti spasi → "T", append "+07:00"
+  // bila belum ada offset/Z.
+  let s = value.replace(" ", "T");
+  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    s = s + "+07:00";
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Parse timestamp backend sebagai UTC → Date absolut. Pakai untuk field
+ * UTC: created_at, updated_at (backend Postgres default tanpa zona = UTC).
+ *
+ * "2026-08-09 10:47:12" → Date di 10:47:12 UTC.
+ */
+export function parseUTCDate(value?: string | null): Date | null {
+  if (!value) return null;
+  let s = value.replace(" ", "T");
+  if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    s = s + "Z";
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Format timestamp backend ke "id-ID" untuk tampilan, di-zona WIB. Otomatis
+ * deteksi WIB vs UTC berdasarkan field (isUTC). Hasil konsisten lintas timezone
+ * device karena pakai timeZone: "Asia/Jakarta" di Intl.
+ */
+export function formatAttendanceDate(
+  value?: string | null,
+  isUTC = false,
+  options: Intl.DateTimeFormatOptions = {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }
+): string {
+  const d = isUTC ? parseUTCDate(value) : parseWIBDate(value);
+  if (!d) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    ...options,
+    timeZone: "Asia/Jakarta",
+  }).format(d);
+}
+
 type CompressOptions = {
   maxWidth?: number;
   quality?: number; // 0 - 1

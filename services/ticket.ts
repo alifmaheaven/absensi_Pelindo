@@ -95,7 +95,7 @@ export async function getDataUser(
 }
 
 export async function getDataSite(
-  params: TParams & { site_id_exact?: string[] },
+  params: TParams & { site_id_exact?: string[]; company_id_exact?: string[] },
 ): Promise<Response<{ data: ITicketSite[] }>> {
   try {
     const response = await axios.get("/site/", { params });

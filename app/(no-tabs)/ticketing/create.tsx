@@ -161,6 +161,7 @@ export default function TicketingCreateScreen() {
             getDataSite({
               page: 1,
               per_page: 100,
+              company_id_exact: [user?.company_id || ""],
             }),
             getTicketDevice({
               page: 1,

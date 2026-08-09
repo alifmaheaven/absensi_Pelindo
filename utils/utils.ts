@@ -26,6 +26,25 @@ export const getDistanceInMeters = (
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
+/**
+ * Today's date in Asia/Jakarta as "YYYY-MM-DD".
+ *
+ * Pakai Intl.DateTimeFormat("en-CA", ...) yang menghasilkan "YYYY-MM-DD"
+ * langsung — ANDAL di Hermes (engine RN). Hindari pola lama
+ * `new Date(date.toLocaleString("en-US", {timeZone}))` (round-trip string
+ * yang bisa melempar Invalid Date / tanggal salah di Hermes). Cocok
+ * dengan `created_at` backend format "2026-08-09 10:47:12" (bagian tanggal
+ * = `split(" ")[0]`).
+ */
+export function getTodayDateString(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
 type CompressOptions = {
   maxWidth?: number;
   quality?: number; // 0 - 1

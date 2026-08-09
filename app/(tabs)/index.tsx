@@ -9,15 +9,15 @@ import {
 } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { useRequest } from "@/hooks/use-request";
+import { getAttendanceList } from "@/services/attendance";
 import { getUnreadCount } from "@/services/notification";
-import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
-import { smartCapitalize } from "@/utils/utils";
+import { getTodayDateString, smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -96,15 +96,32 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   const { showToast } = useToast();
 
-  // active-checkins adalah sumber kebenaran status check-in hari ini
-  // (endpoint eksplisit timezone-safe), bukan list + pencocokan tanggal di
-  // client yang rapuh. Lihat .planning/DASHBOARD_ACTIVE_CHECKINS_PLAN.md
-  const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
+  // Record attendance hari ini (check-in DAN check-out) — sumber status card.
+  // Pakai getAttendanceList + filter tanggal hari ini via getTodayDateString()
+  // (Intl.DateTimeFormat "en-CA" — andal di Hermes, tidak seperti pola round-trip
+  // toLocaleString). Lihat .planning/notes/bug-dashboard-not-detecting-checkin.md
+  const { run: getCheckIn } = useRequest(() =>
+    getAttendanceList({
+      page: 1,
+      per_page: 10,
+      order_by_desc: ["created_at"],
+      user_id_exact: [user?.id ?? ""],
+    })
+  );
 
-  const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
+  const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Record attendance hari ini (tanggal WIB). Tetap ada setelah checkout
+  // (record tidak hilang — beda dengan endpoint active-checkins yang hanya
+  // mengembalikan record belum checkout).
+  const activeCheckin = useMemo(() => {
+    if (!checkInData?.length) return null;
+    const today = getTodayDateString();
+    return checkInData.find((c) => c.created_at?.split(" ")[0] === today) ?? null;
+  }, [checkInData]);
 
   const fetchSchedule = async () => {
     try {
@@ -118,14 +135,11 @@ export default function HomeScreen() {
   const fetchAttendance = async () => {
     if (!user?.id) return;
     try {
-      const res = await fetchActiveCheckinsReq();
-      // getActiveCheckins mengembalikan Response<{ data: IAttendance[] }> atau
-      // array mentah (sudah di-unwrap service). Ambil record aktif pertama.
-      const list = Array.isArray(res) ? res : (res?.data ?? []);
-      setActiveCheckin(Array.isArray(list) && list.length > 0 ? (list[0] as IAttendance) : null);
+      const res = await getCheckIn();
+      setCheckInData(res.data?.data || []);
     } catch (error) {
       showToast("Gagal memuat data absensi", "error");
-      setActiveCheckin(null);
+      setCheckInData([]);
     }
   };
 

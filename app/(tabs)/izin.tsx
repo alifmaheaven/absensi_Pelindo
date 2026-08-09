@@ -1,18 +1,32 @@
-import { getAttendanceList, getAttendanceStatus } from "@/services/attendance";
-import { getMyLeaves, ILeaveRequest } from "@/services/leave";
+import {
+  getAttendanceList,
+  getAttendanceStatus,
+  getEvidGroupId,
+  uploadEvidPermanent,
+  uploadEvidGroupId,
+} from "@/services/attendance";
+import { getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
-import { IAttendance } from "@/types";
+import { IAttendance, IAttendanceEvidGroupId } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useImagePicker } from "@/hooks/useImagePicker";
+import { useToast } from "@/components/ui/toast";
+import { IMAGE_BASE_PATH } from "@/constants";
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -35,12 +49,93 @@ interface MergedItem {
   status: string;
   reason?: string;
   leave_type?: string;
+  evidence_group_id?: string;
+  rejection_reason?: string;
 }
 
 export default function IzinScreen() {
   const { user } = useAuthStore();
+  const { showToast } = useToast();
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Detail modal state
+  const [detailItem, setDetailItem] = useState<MergedItem | null>(null);
+  const [detailEvidence, setDetailEvidence] = useState<IAttendanceEvidGroupId[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
+  const {
+    images,
+    loadingImage,
+    isModalVisible,
+    pickImage,
+    removeImage,
+    openModal,
+    closeModal,
+    setImages,
+  } = useImagePicker();
+
+  const openDetail = async (item: MergedItem) => {
+    setDetailItem(item);
+    setDetailEvidence([]);
+    setDetailLoading(true);
+    // Fetch evidence bila item punya evidence_group_id (leave_request)
+    if (item.type === "leave_request" && item.evidence_group_id) {
+      try {
+        const res = await getEvidGroupId({
+          page: 1,
+          per_page: 20,
+          evidence_group_id_exact: [item.evidence_group_id],
+        });
+        const evs = (res?.data?.data || []).filter(
+          (e) => e.evidence_group_id === item.evidence_group_id,
+        );
+        setDetailEvidence(evs);
+      } catch (e) {
+        console.error("Error fetching evidence:", e);
+      }
+    }
+    setDetailLoading(false);
+  };
+
+  const handleResubmit = async () => {
+    if (!detailItem || detailItem.type !== "leave_request") return;
+    if (images.length === 0) {
+      showToast("Upload minimal 1 gambar sebagai bukti!", "error");
+      return;
+    }
+    setResubmitting(true);
+    try {
+      // Upload evidence baru ke group yang sama (evidence_group_id tetap)
+      const groupId = detailItem.evidence_group_id;
+      if (!groupId) {
+        showToast("Data bukti tidak ditemukan", "error");
+        setResubmitting(false);
+        return;
+      }
+      for (const img of images) {
+        const uploaded = await uploadEvidPermanent({ links: [img.path] });
+        const file = uploaded.data?.links?.[0];
+        if (!file) continue;
+        await uploadEvidGroupId({
+          name: `Leave ${user?.name}`,
+          description: "Evidence",
+          file,
+          evidence_group_id: groupId,
+        });
+      }
+      await resubmitLeave({ id: detailItem.id, evidence_group_id: groupId });
+      showToast("Pengajuan diajukan ulang!", "success");
+      setDetailItem(null);
+      setImages([]);
+      fetchAll();
+    } catch (error) {
+      console.error("Resubmit error:", error);
+      showToast("Gagal mengajukan ulang", "error");
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
@@ -101,6 +196,8 @@ export default function IzinScreen() {
             status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Menunggu",
             reason: lr.reason,
             leave_type: lr.leave_type,
+            evidence_group_id: lr.evidence_group_id,
+            rejection_reason: lr.rejection_reason,
           });
         }
       });
@@ -135,7 +232,12 @@ export default function IzinScreen() {
     content = <EmptyState />;
   } else {
     content = mergedData.map((item) => (
-      <View key={`${item.type}-${item.id}`} style={styles.izinCard}>
+      <TouchableOpacity
+        key={`${item.type}-${item.id}`}
+        style={styles.izinCard}
+        onPress={() => openDetail(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.izinHeader}>
           <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={styles.izinType}>
@@ -156,7 +258,7 @@ export default function IzinScreen() {
         {item.reason ? (
           <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>
         ) : null}
-      </View>
+      </TouchableOpacity>
     ));
   }
 
@@ -188,6 +290,155 @@ export default function IzinScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Detail Modal */}
+      <Modal
+        visible={!!detailItem}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setDetailItem(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIndicator} />
+            <Text style={styles.modalTitle}>Detail Pengajuan</Text>
+
+            {detailItem ? (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Tipe</Text>
+                  <Text style={styles.detailValue}>
+                    {detailItem.title}
+                    {detailItem.leave_type === "cuti" ? " (Cuti)" : detailItem.leave_type === "izin" ? " (Izin)" : ""}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Tanggal</Text>
+                  <Text style={styles.detailValue}>
+                    {formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "long", year: "numeric" })}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailItem.status) }]}>
+                    <Text style={styles.statusText}>{detailItem.status}</Text>
+                  </View>
+                </View>
+                {detailItem.reason ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Alasan</Text>
+                    <Text style={styles.detailValue}>{detailItem.reason}</Text>
+                  </View>
+                ) : null}
+                {detailItem.rejection_reason ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Alasan Ditolak</Text>
+                    <Text style={[styles.detailValue, { color: "#F44336" }]}>{detailItem.rejection_reason}</Text>
+                  </View>
+                ) : null}
+
+                {/* Evidence */}
+                <Text style={styles.sectionTitle}>Bukti</Text>
+                {detailLoading ? (
+                  <ActivityIndicator size="small" color="#1e90ff" />
+                ) : detailEvidence.length > 0 ? (
+                  <View style={styles.evidenceGrid}>
+                    {detailEvidence.map((ev) => (
+                      <Image
+                        key={ev.id}
+                        source={{ uri: new URL(`${IMAGE_BASE_PATH}${ev.file}`, BASE_URL).toString() }}
+                        style={styles.evidenceThumb}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.noEvidenceText}>Tidak ada bukti</Text>
+                )}
+
+                {/* Update evidence bila ditolak */}
+                {detailItem.type === "leave_request" && detailItem.status === "Ditolak" ? (
+                  <View style={styles.resubmitSection}>
+                    <Text style={styles.resubmitHint}>
+                      Pengajuan ditolak. Upload ulang bukti untuk mengajukan ulang.
+                    </Text>
+                    {images.length > 0 ? (
+                      <View style={styles.evidenceGrid}>
+                        {images.map((img, i) => (
+                          <View key={i} style={styles.newEvidenceWrap}>
+                            <Image source={{ uri: img.uri }} style={styles.evidenceThumb} />
+                            <TouchableOpacity
+                              style={styles.removeBtn}
+                              onPress={() => removeImage(i, { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+                            >
+                              <Text style={styles.removeBtnText}>✕</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.uploadBtn}
+                      onPress={openModal}
+                      disabled={loadingImage || resubmitting}
+                    >
+                      <Text style={styles.uploadBtnText}>
+                        {loadingImage ? "Memproses..." : "+ Tambah Bukti"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.resubmitBtn, (resubmitting || images.length === 0) && { opacity: 0.5 }]}
+                      onPress={handleResubmit}
+                      disabled={resubmitting || images.length === 0}
+                    >
+                      {resubmitting ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.resubmitBtnText}>Ajukan Ulang</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                <TouchableOpacity style={styles.closeBtn} onPress={() => setDetailItem(null)}>
+                  <Text style={styles.closeBtnText}>Tutup</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Image source modal (untuk update evidence) */}
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeModal}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeModal}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalIndicator} />
+            <Text style={styles.modalTitle}>Pilih sumber Gambar</Text>
+            <TouchableOpacity
+              style={[styles.sourceBtnPrimary, { opacity: loadingImage ? 0.7 : 1 }]}
+              onPress={() => pickImage("camera", { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+              disabled={loadingImage}
+            >
+              <Text style={styles.sourceBtnTextPrimary}>Ambil Dari Kamera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sourceBtnSecondary, { opacity: loadingImage ? 0.7 : 1 }]}
+              onPress={() => pickImage("gallery", { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+              disabled={loadingImage}
+            >
+              <Text style={styles.sourceBtnTextSecondary}>Ambil Dari Galeri</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sourceBtnCancel} onPress={closeModal}>
+              <Text style={styles.sourceBtnTextCancel}>Kembali</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -369,5 +620,177 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#666",
     textAlign: "center",
+  },
+
+  // Detail modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: "85%",
+  },
+  modalIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 20,
+    color: "#1a1a1a",
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 12,
+    gap: 12,
+  },
+  detailLabel: {
+    fontSize: 13,
+    color: "#999",
+    width: 100,
+  },
+  detailValue: {
+    fontSize: 13,
+    color: "#333",
+    fontWeight: "500",
+    flex: 1,
+    textAlign: "right",
+  },
+  evidenceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 8,
+  },
+  evidenceThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    backgroundColor: "#f0f0f0",
+  },
+  noEvidenceText: {
+    fontSize: 13,
+    color: "#999",
+    marginBottom: 8,
+  },
+  resubmitSection: {
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  resubmitHint: {
+    fontSize: 13,
+    color: "#F44336",
+    marginBottom: 12,
+  },
+  newEvidenceWrap: {
+    position: "relative",
+  },
+  removeBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  removeBtnText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "bold",
+  },
+  uploadBtn: {
+    borderWidth: 1.5,
+    borderColor: "#e0e0e0",
+    borderStyle: "dashed",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+    marginBottom: 12,
+    backgroundColor: "#fafafa",
+  },
+  uploadBtnText: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "600",
+  },
+  resubmitBtn: {
+    backgroundColor: "#3B82F6",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  resubmitBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  closeBtn: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  closeBtnText: {
+    color: "#666",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  sourceBtnPrimary: {
+    backgroundColor: "#3B82F6",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  sourceBtnTextPrimary: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  sourceBtnSecondary: {
+    backgroundColor: "#fff",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+  },
+  sourceBtnTextSecondary: {
+    color: "#333",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  sourceBtnCancel: {
+    backgroundColor: "#f8f9fa",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  sourceBtnTextCancel: {
+    color: "#666",
+    fontWeight: "600",
+    fontSize: 15,
   },
 });

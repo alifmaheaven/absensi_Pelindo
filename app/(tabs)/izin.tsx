@@ -2,6 +2,8 @@ import {
   getAttendanceList,
   getAttendanceStatus,
   getEvidGroupId,
+  uploadEvid,
+  deleteEvidtmp,
   uploadEvidPermanent,
   uploadEvidGroupId,
 } from "@/services/attendance";
@@ -74,6 +76,13 @@ export default function IzinScreen() {
     closeModal,
     setImages,
   } = useImagePicker();
+
+  // Upload service untuk useImagePicker — upload ke temp dulu (sama pola
+  // checkin/checkout), lalu handleResubmit memindahkan ke permanent.
+  const imageUploadService = {
+    uploadTemp: uploadEvid,
+    deleteTemp: deleteEvidtmp,
+  };
 
   const openDetail = async (item: MergedItem) => {
     setDetailItem(item);
@@ -368,7 +377,7 @@ export default function IzinScreen() {
                             <Image source={{ uri: img.uri }} style={styles.evidenceThumb} />
                             <TouchableOpacity
                               style={styles.removeBtn}
-                              onPress={() => removeImage(i, { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+                              onPress={() => removeImage(i, imageUploadService)}
                             >
                               <Text style={styles.removeBtnText}>✕</Text>
                             </TouchableOpacity>
@@ -421,14 +430,14 @@ export default function IzinScreen() {
             <Text style={styles.modalTitle}>Pilih sumber Gambar</Text>
             <TouchableOpacity
               style={[styles.sourceBtnPrimary, { opacity: loadingImage ? 0.7 : 1 }]}
-              onPress={() => pickImage("camera", { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+              onPress={() => pickImage("camera", imageUploadService)}
               disabled={loadingImage}
             >
               <Text style={styles.sourceBtnTextPrimary}>Ambil Dari Kamera</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.sourceBtnSecondary, { opacity: loadingImage ? 0.7 : 1 }]}
-              onPress={() => pickImage("gallery", { uploadTemp: async () => {}, deleteTemp: async () => {} })}
+              onPress={() => pickImage("gallery", imageUploadService)}
               disabled={loadingImage}
             >
               <Text style={styles.sourceBtnTextSecondary}>Ambil Dari Galeri</Text>

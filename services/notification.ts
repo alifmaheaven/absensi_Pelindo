@@ -3,7 +3,7 @@ import apiClient from "@/lib/axios";
 export async function getNotifications(page = 1, perPage = 20) {
   try {
     const response = await apiClient.get(
-      `/notification?page=${page}&per_page=${perPage}`
+      `/notification?page=${page}&per_page=${perPage}&order_by_desc=created_at`
     );
     return response.data;
   } catch (error: any) {

@@ -9,15 +9,15 @@ import {
 } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { useRequest } from "@/hooks/use-request";
-import { getAttendanceList } from "@/services/attendance";
 import { getUnreadCount } from "@/services/notification";
+import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
-import { getTodayDateString, smartCapitalize } from "@/utils/utils";
+import { smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -96,37 +96,15 @@ export default function HomeScreen() {
   const { user } = useAuthStore();
   const { showToast } = useToast();
 
-  const { run: getCheckIn } = useRequest(() =>
-    getAttendanceList({
-      page: 1,
-      per_page: 10,
-      order_by_desc: ["created_at"],
-      user_id_exact: [user?.id ?? ""],
-    })
-  );
+  // active-checkins adalah sumber kebenaran status check-in hari ini
+  // (endpoint eksplisit timezone-safe), bukan list + pencocokan tanggal di
+  // client yang rapuh. Lihat .planning/DASHBOARD_ACTIVE_CHECKINS_PLAN.md
+  const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
 
-  const [checkInData, setCheckInData] = useState<IAttendance[]>([]);
+  const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const checkInDataById = useMemo(() => {
-    if (!checkInData?.length) return null;
-
-    // created_at disimpan dalam WIB — pakai tanggal WIB, bukan UTC (toISOString)
-    const todayDate = getTodayDateString(); // yyyy-mm-dd
-
-    const checkInById = checkInData.find((c) => {
-      if (!c.created_at) return false;
-
-      // Ambil tanggal dari "2025-12-25 12:15:06.978681"
-      const createdDate = c.created_at.split(" ")[0];
-
-      return createdDate === todayDate;
-    });
-
-    return checkInById ?? null;
-  }, [checkInData]);
 
   const fetchSchedule = async () => {
     try {
@@ -140,11 +118,14 @@ export default function HomeScreen() {
   const fetchAttendance = async () => {
     if (!user?.id) return;
     try {
-      const res = await getCheckIn();
-      setCheckInData(res.data?.data || []);
+      const res = await fetchActiveCheckinsReq();
+      // getActiveCheckins mengembalikan Response<{ data: IAttendance[] }> atau
+      // array mentah (sudah di-unwrap service). Ambil record aktif pertama.
+      const list = Array.isArray(res) ? res : (res?.data ?? []);
+      setActiveCheckin(Array.isArray(list) && list.length > 0 ? (list[0] as IAttendance) : null);
     } catch (error) {
       showToast("Gagal memuat data absensi", "error");
-      setCheckInData([]);
+      setActiveCheckin(null);
     }
   };
 
@@ -253,7 +234,7 @@ export default function HomeScreen() {
       color: "#FF8D28",
       containerColor: "#ffc999",
       onPress: () => {
-        if (!checkInDataById?.checkin) {
+        if (!activeCheckin?.checkin) {
           showToast("Anda belum check in", "info");
           return;
         }
@@ -266,7 +247,7 @@ export default function HomeScreen() {
       color: "#22C55E",
       containerColor: "#a7f3d0",
       onPress: () => {
-        if (!checkInDataById?.checkin) {
+        if (!activeCheckin?.checkin) {
           showToast("Anda belum check in", "info");
           return;
         }
@@ -383,11 +364,11 @@ export default function HomeScreen() {
             <View style={styles.attendanceRow}>
               <AttendanceCard
                 type="checkin"
-                time={checkInDataById?.checkin}
-                subtitle={getWorkStatus(checkInDataById?.checkin, "checkin", todaySchedule?.shift)}
-                badgeText={checkInDataById?.checkin ? "Checked In" : "Check In"}
+                time={activeCheckin?.checkin}
+                subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", todaySchedule?.shift)}
+                badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
                 onPress={() => {
-                  if (checkInDataById?.checkin) {
+                  if (activeCheckin?.checkin) {
                     showToast("Anda sudah check in", "info");
                     return;
                   }
@@ -397,17 +378,17 @@ export default function HomeScreen() {
 
               <AttendanceCard
                 type="checkout"
-                time={checkInDataById?.checkout}
-                subtitle={getWorkStatus(checkInDataById?.checkout, "checkout", todaySchedule?.shift)}
+                time={activeCheckin?.checkout}
+                subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", todaySchedule?.shift)}
                 badgeText={
-                  checkInDataById?.checkout ? "Checked Out" : "Check Out"
+                  activeCheckin?.checkout ? "Checked Out" : "Check Out"
                 }
                 onPress={() => {
-                  if (!checkInDataById?.checkin) {
+                  if (!activeCheckin?.checkin) {
                     showToast("Anda belum check in", "info");
                     return;
                   }
-                  if (checkInDataById?.checkout) {
+                  if (activeCheckin?.checkout) {
                     showToast("Anda sudah check out", "info");
                     return;
                   }

@@ -11,14 +11,44 @@ import {
   Share,
   ActionSheetIOS,
   Platform,
+  Linking,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import ImageViewerModal from "@/components/ImageViewerModal";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { getPhotos, uploadPhotos, deletePhoto, generateShareToken } from "@/services/gallery";
 import { IGalleryPhoto } from "@/types/gallery";
+
+/** File siap-upload yang dinormalisasi dari image picker ataupun document picker. */
+type UploadFile = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+function imageToUploadFile(asset: ImagePicker.ImagePickerAsset): UploadFile {
+  const filename = asset.uri.split("/").pop() || "photo.jpg";
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : "image/jpeg";
+  return { uri: asset.uri, name: filename, type };
+}
+
+function docToUploadFile(asset: DocumentPicker.DocumentPickerAsset): UploadFile {
+  return {
+    uri: asset.uri,
+    name: asset.name || "document",
+    type: asset.mimeType || "application/octet-stream",
+  };
+}
+
+/** Gambar vs dokumen ditentukan dari mime_type yang disimpan server. */
+function isImageItem(item: IGalleryPhoto): boolean {
+  return !!item.mime_type?.toLowerCase().startsWith("image/");
+}
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_COLS = 3;
@@ -55,19 +85,31 @@ export default function GalleryFolderScreen() {
     fetchPhotos();
   }, [fetchPhotos]);
 
+  const handlePickDocuments = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "*/*",
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets?.length) return;
+    await uploadAssets(result.assets.map(docToUploadFile));
+  };
+
   const showUploadOptions = () => {
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Batal", "Kamera", "Galeri"], cancelButtonIndex: 0 },
+        { options: ["Batal", "Kamera", "Galeri", "Dokumen (PDF/DOCX/XLSX)"], cancelButtonIndex: 0 },
         (idx) => {
           if (idx === 1) handleTakePhoto();
           else if (idx === 2) handlePickImages();
+          else if (idx === 3) handlePickDocuments();
         },
       );
     } else {
-      Alert.alert("Upload Foto", "Pilih sumber:", [
+      Alert.alert("Upload", "Pilih sumber:", [
         { text: "Kamera", onPress: handleTakePhoto },
         { text: "Galeri", onPress: handlePickImages },
+        { text: "Dokumen (PDF/DOCX/XLSX)", onPress: handlePickDocuments },
         { text: "Batal", style: "cancel" },
       ]);
     }
@@ -81,7 +123,7 @@ export default function GalleryFolderScreen() {
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
     if (result.canceled || !result.assets?.length) return;
-    await uploadAssets(result.assets);
+    await uploadAssets(result.assets.map(imageToUploadFile));
   };
 
   const handlePickImages = async () => {
@@ -98,28 +140,25 @@ export default function GalleryFolderScreen() {
     });
 
     if (result.canceled || !result.assets?.length) return;
-    await uploadAssets(result.assets);
+    await uploadAssets(result.assets.map(imageToUploadFile));
   };
 
-  const uploadAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
+  const uploadAssets = async (files: UploadFile[]) => {
     setUploading(true);
     try {
       const formData = new FormData();
-      for (const asset of assets) {
-        const filename = asset.uri.split("/").pop() || "photo.jpg";
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : "image/jpeg";
+      for (const file of files) {
         formData.append("photos", {
-          uri: asset.uri,
-          name: filename,
-          type,
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
         } as any);
       }
       const res = await uploadPhotos(id!, formData);
       const newPhotos = res?.data || [];
       setPhotos((prev) => [...newPhotos, ...prev]);
     } catch {
-      Alert.alert("Error", "Gagal upload foto");
+      Alert.alert("Error", "Gagal upload");
     } finally {
       setUploading(false);
     }
@@ -160,7 +199,9 @@ export default function GalleryFolderScreen() {
 
   const renderPhoto = ({ item }: { item: IGalleryPhoto }) => (
     <TouchableOpacity
-      onPress={() => setPreviewImage(item.url)}
+      onPress={() =>
+        isImageItem(item) ? setPreviewImage(item.url) : Linking.openURL(item.url)
+      }
       onLongPress={() => handleDelete(item)}
       style={{
         width: CELL_SIZE,
@@ -171,7 +212,19 @@ export default function GalleryFolderScreen() {
         backgroundColor: "#f0f0f0",
       }}
     >
-      <Image source={{ uri: item.url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+      {isImageItem(item) ? (
+        <Image source={{ uri: item.url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+      ) : (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 6 }}>
+          <Ionicons name="document-text-outline" size={34} color="#1e90ff" />
+          <Text
+            numberOfLines={2}
+            style={{ fontSize: 9, color: "#555", textAlign: "center", marginTop: 4 }}
+          >
+            {item.original_name}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 
@@ -206,7 +259,7 @@ export default function GalleryFolderScreen() {
           }}
         >
           <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
-            {uploading ? "Upload..." : "+ Foto"}
+            {uploading ? "Upload..." : "+ Tambah"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -223,7 +276,7 @@ export default function GalleryFolderScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 80 }}>
-              <Text style={{ color: "#999", fontSize: 14 }}>Belum ada foto</Text>
+              <Text style={{ color: "#999", fontSize: 14 }}>Belum ada file</Text>
             </View>
           }
         />

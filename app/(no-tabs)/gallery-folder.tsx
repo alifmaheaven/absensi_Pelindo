@@ -9,9 +9,9 @@ import {
   Alert,
   Dimensions,
   Share,
-  ActionSheetIOS,
-  Platform,
+  Modal,
   Linking,
+  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -62,6 +62,7 @@ export default function GalleryFolderScreen() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showSourceModal, setShowSourceModal] = useState(false);
 
   const fetchPhotos = useCallback(async () => {
     if (!id) return;
@@ -96,23 +97,7 @@ export default function GalleryFolderScreen() {
   };
 
   const showUploadOptions = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Batal", "Kamera", "Galeri", "Dokumen (PDF/DOCX/XLSX)"], cancelButtonIndex: 0 },
-        (idx) => {
-          if (idx === 1) handleTakePhoto();
-          else if (idx === 2) handlePickImages();
-          else if (idx === 3) handlePickDocuments();
-        },
-      );
-    } else {
-      Alert.alert("Upload", "Pilih sumber:", [
-        { text: "Kamera", onPress: handleTakePhoto },
-        { text: "Galeri", onPress: handlePickImages },
-        { text: "Dokumen (PDF/DOCX/XLSX)", onPress: handlePickDocuments },
-        { text: "Batal", style: "cancel" },
-      ]);
-    }
+    setShowSourceModal(true);
   };
 
   const handleTakePhoto = async () => {
@@ -282,6 +267,123 @@ export default function GalleryFolderScreen() {
         />
       )}
       <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
+
+      {/* Modal pilih sumber upload — konsisten dengan checkin/checkout/ticketing */}
+      <Modal
+        visible={showSourceModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSourceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSourceModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalIndicator} />
+            <Text style={styles.modalTitle}>Pilih sumber Upload</Text>
+
+            <TouchableOpacity
+              style={[styles.modalButtonPrimary, { opacity: uploading ? 0.7 : 1 }]}
+              onPress={() => { setShowSourceModal(false); handleTakePhoto(); }}
+              disabled={uploading}
+            >
+              <Text style={styles.modalButtonTextPrimary}>Ambil Dari Kamera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButtonSecondary, { opacity: uploading ? 0.7 : 1 }]}
+              onPress={() => { setShowSourceModal(false); handlePickImages(); }}
+              disabled={uploading}
+            >
+              <Text style={styles.modalButtonTextSecondary}>Ambil Dari Galeri</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButtonSecondary, { opacity: uploading ? 0.7 : 1 }]}
+              onPress={() => { setShowSourceModal(false); handlePickDocuments(); }}
+              disabled={uploading}
+            >
+              <Text style={styles.modalButtonTextSecondary}>Dokumen (PDF/DOCX/XLSX)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalButtonCancel}
+              onPress={() => setShowSourceModal(false)}
+            >
+              <Text style={styles.modalButtonTextCancel}>Kembali</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalIndicator: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 24,
+    color: "#1a1a1a",
+  },
+  modalButtonPrimary: {
+    backgroundColor: "#3B82F6",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalButtonTextPrimary: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  modalButtonSecondary: {
+    backgroundColor: "#fff",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: "#eee",
+  },
+  modalButtonTextSecondary: {
+    color: "#333",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  modalButtonCancel: {
+    backgroundColor: "#f8f9fa",
+    padding: 18,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  modalButtonTextCancel: {
+    color: "#666",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+});

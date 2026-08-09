@@ -26,39 +26,6 @@ export const getDistanceInMeters = (
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
-export function getTodayStaticTimeString(
-  hour: number,
-  minute = 0,
-  second = 0
-): string {
-  const now = getNowJakarta();
-
-  const pad = (n: number) => String(n).padStart(2, "0");
-
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(
-    now.getDate()
-  )} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
-}
-
-/**
- * Today's date in Asia/Jakarta as "YYYY-MM-DD".
- *
- * Attendance `created_at` timestamps are stored in WIB, so comparing them
- * against `new Date().toISOString().split("T")[0]` (which is UTC) produces
- * wrong "today" between 00:00–07:00 WIB. Always compare against this helper.
- */
-export function getTodayDateString(): string {
-  const now = getNowJakarta();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-function getNowJakarta(): Date {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" })
-  );
-}
-
 type CompressOptions = {
   maxWidth?: number;
   quality?: number; // 0 - 1

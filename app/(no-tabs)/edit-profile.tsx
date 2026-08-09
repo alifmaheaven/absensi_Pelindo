@@ -39,7 +39,7 @@ export default function EditProfileScreen() {
       const payload: any = {};
       if (name !== user?.name) payload.name = name.trim();
       if (email !== user?.email) payload.email = email.trim();
-      if (phone !== user?.phone) payload.phone = phone.trim();
+      if (phone !== String(user?.phone ?? "")) payload.phone = phone.trim();
 
       if (Object.keys(payload).length === 0) {
         showToast("Tidak ada perubahan", "info");

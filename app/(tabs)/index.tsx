@@ -14,7 +14,7 @@ import { getUnreadCount } from "@/services/notification";
 import { useAuthStore } from "@/stores/auth";
 import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
-import { smartCapitalize } from "@/utils/utils";
+import { getTodayDateString, smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -113,8 +113,8 @@ export default function HomeScreen() {
   const checkInDataById = useMemo(() => {
     if (!checkInData?.length) return null;
 
-    const today = new Date();
-    const todayDate = today.toISOString().split("T")[0]; // yyyy-mm-dd
+    // created_at disimpan dalam WIB — pakai tanggal WIB, bukan UTC (toISOString)
+    const todayDate = getTodayDateString(); // yyyy-mm-dd
 
     const checkInById = checkInData.find((c) => {
       if (!c.created_at) return false;

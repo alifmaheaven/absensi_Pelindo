@@ -3,7 +3,6 @@ import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
-  DEFAULT_PAGE_SIZE,
   MAX_SITES_PROXIMITY,
   TIMEZONE,
 } from "@/constants";
@@ -74,7 +73,12 @@ export default function CheckinScreen() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const { run: getSite } = useRequest(() =>
-    getAttendanceSite({ page: 1, per_page: DEFAULT_PAGE_SIZE }),
+    getAttendanceSite({
+      page: 1,
+      per_page: 100,
+      ...(user?.company_id ? { company_id_exact: [user?.company_id] } : {}),
+      ...(user?.site_id ? { site_id_exact: [user?.site_id] } : {}),
+    }),
   );
   const { run: getStatus } = useRequest(() =>
     getAttendanceStatus({ page: 1, per_page: 100 }),
@@ -227,7 +231,9 @@ export default function CheckinScreen() {
       const res = await createAttendance(payload as any);
       console.debug("Attendance created");
 
-      await saveCheckInId(res.data?.id ?? "");
+      // Simpan check-in id hanya jika server mengembalikannya (offline queue
+      // mengembalikan payload palsu tanpa id — jangan simpan string kosong)
+      if (res.data?.id) await saveCheckInId(res.data.id);
 
       showToast("Berhasil Check In!", "success");
 

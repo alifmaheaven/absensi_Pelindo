@@ -20,6 +20,7 @@ import {
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
+import { getTodayDateString } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -82,7 +83,8 @@ export default function CheckoutScreen() {
   // Find today's check-in record
   const checkInDataById = useMemo(() => {
     if (!checkInData?.length) return null;
-    const today = new Date().toISOString().split("T")[0];
+    // created_at disimpan dalam WIB — pakai tanggal WIB, bukan UTC (toISOString)
+    const today = getTodayDateString();
     return checkInData.find((c) => c.created_at?.split(" ")[0] === today) || null;
   }, [checkInData]);
 
@@ -220,10 +222,11 @@ export default function CheckoutScreen() {
         }
       }
 
-      // Update attendance checkout with GPS location
+      // Update attendance checkout with GPS location + editable notes (description)
       await updateAttendance({
         id: checkInDataById?.id!,
         checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
+        ...(notes.trim() ? { description: notes.trim() } : {}),
         ...(location ? {
           checkout_longitude: location.coords.longitude,
           checkout_latitude: location.coords.latitude,

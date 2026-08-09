@@ -7,6 +7,7 @@ import {
   IAttendanceSite,
   IAttendanceStatus,
   IGroupID,
+  IMeta,
   IUpload,
   Response,
   TAttendance,
@@ -15,7 +16,7 @@ import {
 
 export async function getAttendanceList(
   params: TParams & { order_by_desc: string[]; user_id_exact?: string[] },
-): Promise<Response<{ data: IAttendance[] }>> {
+): Promise<Response<{ data: IAttendance[]; meta?: IMeta }>> {
   try {
     const response = await axios.get("/attendance/", { params });
     return response.data;
@@ -120,6 +121,7 @@ export async function updateAttendance(payload: {
   checkout: string;
   checkout_longitude?: number;
   checkout_latitude?: number;
+  description?: string;
 }) {
   try {
     const state = await NetInfo.fetch();

@@ -4,12 +4,14 @@ import { removeToken } from "@/lib/storage";
 import { useAuthStore } from "@/stores/auth";
 import { smartCapitalize } from "@/utils/utils";
 import API from "@/lib/axios";
+import { getLatestVersion } from "@/services/version";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -34,17 +36,48 @@ export default function ProfileScreen() {
     { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => setAboutModalVisible(true) },
   ];
 
-  const handleCheckUpdate = () => {
+  const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
-    // Simulate checking for updates
-    setTimeout(() => {
-      setCheckingUpdate(false);
+    try {
+      const latest = await getLatestVersion();
+      if (!latest?.name) {
+        Alert.alert(
+          "Update Aplikasi",
+          "Tidak dapat memeriksa update. Coba lagi nanti.",
+          [{ text: "OK" }]
+        );
+        return;
+      }
+      if (latest.name !== APP_VERSION) {
+        Alert.alert(
+          "Update Tersedia",
+          `Versi baru ${latest.name} tersedia. Versi Anda: ${APP_VERSION}.`,
+          [
+            { text: "Nanti", style: "cancel" },
+            {
+              text: "Download",
+              onPress: () => {
+                if (latest.url) Linking.openURL(latest.url);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Update Aplikasi",
+          `Anda sudah menggunakan versi terbaru.\n\nVersi: ${APP_VERSION}`,
+          [{ text: "OK" }]
+        );
+      }
+    } catch {
       Alert.alert(
         "Update Aplikasi",
-        `Anda sudah menggunakan versi terbaru.\n\nVersi: ${APP_VERSION}`,
+        "Gagal memeriksa update. Periksa koneksi Anda.",
         [{ text: "OK" }]
       );
-    }, 1500);
+    } finally {
+      setCheckingUpdate(false);
+    }
   };
 
   const handleLogout = async () => {

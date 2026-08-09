@@ -459,8 +459,8 @@ export default function DailyRoutineDetailScreen() {
                             <View style={styles.photoSection}>
                               {state.evidence_file ? (
                                 <View style={styles.photoPreviewContainer}>
-                                  <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file))}>
-                                    <Image source={{ uri: state.local_uri || getImageUrl(state.evidence_file) }} style={styles.photoPreview} />
+                                  <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file!))}>
+                                    <Image source={{ uri: state.local_uri || getImageUrl(state.evidence_file!) }} style={styles.photoPreview} />
                                   </TouchableOpacity>
                                   <TouchableOpacity style={styles.retakeButton} onPress={() => handlePickImage(stateKey)} disabled={loadingImageKey === stateKey}>
                                     <Text style={styles.retakeButtonText}>Retake</Text>
@@ -534,12 +534,12 @@ export default function DailyRoutineDetailScreen() {
                     <View style={styles.photoSection}>
                       {state.evidence_file ? (
                         <View style={styles.photoPreviewContainer}>
-                          <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file))}>
+                          <TouchableOpacity onPress={() => setPreviewImage(state.local_uri || getImageUrl(state.evidence_file!))}>
                             <Image
                               source={{
                                 uri:
                                   state.local_uri ||
-                                  getImageUrl(state.evidence_file),
+                                  getImageUrl(state.evidence_file!),
                               }}
                               style={styles.photoPreview}
                             />

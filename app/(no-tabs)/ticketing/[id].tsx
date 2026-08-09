@@ -94,6 +94,12 @@ export default function TicketingEditScreen() {
   const [loadingSkeleton, setLoadingSkeleton] = useState(true);
   const [allIncidentOwners, setAllIncidentOwners] = useState<IIncidentOwner[]>([]);
   const [selectedIncidentOwners, setSelectedIncidentOwners] = useState<string[]>([]);
+
+  // Site state — declared before filteredIncidentOwners which references it
+  const [siteData, setSiteData] = useState<{ id: string; name: string; company_id?: string }[]>([]);
+  const [siteSelected, setSiteSelected] = useState("");
+  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
+
   const filteredIncidentOwners = useMemo(() => {
     if (!siteSelected) return allIncidentOwners;
     const selectedSiteCompanyId = siteData.find(s => s.id === siteSelected)?.company_id;
@@ -123,10 +129,6 @@ export default function TicketingEditScreen() {
   const [deviceDrawerSiteId, setDeviceDrawerSiteId] = useState<string>("");
   const [deviceDrawerSiteName, setDeviceDrawerSiteName] = useState<string>("");
 
-  // Site state
-  const [siteData, setSiteData] = useState<{ id: string; name: string; company_id?: string }[]>([]);
-  const [siteSelected, setSiteSelected] = useState("");
-  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
   const [statusData, setStatusData] = useState<ITicketStatus[]>([]);
   const [attendanceOptions, setAttendanceOptions] = useState<
     IAttendanceOptions[]
@@ -150,7 +152,7 @@ export default function TicketingEditScreen() {
     }
     const fetchDevicesBySite = async () => {
       try {
-        const res = await getTicketDevice({ page: 1, per_page: 100, site_id_exact: siteSelected, order_by_desc: ["created_at"] });
+        const res = await getTicketDevice({ page: 1, per_page: 100, site_id_exact: [siteSelected], order_by_desc: ["created_at"] });
         setDeviceData(res.data?.data || []);
         setDeviceSelected("");
       } catch (e) { console.error(e); }
@@ -785,6 +787,7 @@ useFocusEffect(
                 onSelect={(device) => {
                   setDeviceSelected(device.id);
                   getTicketDevice({
+                    page: 1,
                     per_page: 100,
                     company_id_exact: [user?.company_id || ""],
                     user_id_exact: [user?.id || ""],

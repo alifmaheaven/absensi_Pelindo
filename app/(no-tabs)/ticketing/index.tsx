@@ -127,7 +127,7 @@ const TicketingScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [appliedSearch, setAppliedSearch] = useState("");
   const [appliedStatus, setAppliedStatus] = useState("");
 
@@ -823,5 +823,28 @@ const styles = StyleSheet.create({
   statusOptionTextActive: {
     color: "#1e90ff",
     fontWeight: "600",
+  },
+
+  // Empty state
+  emptyStateContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyStateEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  emptyStateSubText: {
+    fontSize: 13,
+    color: "#999",
+    textAlign: "center",
   },
 });

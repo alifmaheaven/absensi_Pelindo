@@ -33,6 +33,7 @@ export async function getTicketDevice(
   params: TParams & {
     company_id_exact?: string[];
     user_id_exact?: string[];
+    site_id_exact?: string[];
     order_by_desc?: string[];
   },
 ): Promise<Response<{ data: ITicketDevice[] }>> {

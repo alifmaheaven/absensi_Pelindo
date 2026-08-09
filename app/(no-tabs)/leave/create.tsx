@@ -1,22 +1,21 @@
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import DatePicker from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast";
-import { IMAGE_MAX_WIDTH, IMAGE_QUALITY, TIMEZONE } from "@/constants";
 import API from "@/lib/axios";
 import { useRequest } from "@/hooks/use-request";
+import { useImagePicker } from "@/hooks/useImagePicker";
 import { getMyLeaves } from "@/services/leave";
 import {
+  createGroupId,
   deleteEvidtmp,
-  getAttendanceSite,
   getAttendanceStatus,
   uploadEvid,
+  uploadEvidGroupId,
+  uploadEvidPermanent,
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
-import { IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
-import { compressImage } from "@/utils/utils";
+import { IAttendanceStatus, THttpErrorResult } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -25,7 +24,6 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -38,51 +36,44 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import ImageViewerModal from "@/components/ImageViewerModal";
 
-interface IImage {
-  uri: string;
-  path: string;
-  link: string;
-}
+const imageUploadService = {
+  uploadTemp: uploadEvid,
+  deleteTemp: deleteEvidtmp,
+};
 
 export default function LeaveScreen() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { user } = useAuthStore();
 
-  const [location, setLocation] = useState<Location.LocationObject | null>(
-    null,
-  );
   const [notes, setNotes] = useState("");
   const [leaveDate, setLeaveDate] = useState("");
-  const [images, setImages] = useState<IImage[]>([]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
   const [statusData, setStatusData] = useState<IAttendanceStatus[]>([]);
-  const [loadingImage, setLoadingImage] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
   const [attendanceSelected, setAttendanceSelected] = useState("");
   const [disabledDates, setDisabledDates] = useState<string[]>([]);
-  const { user } = useAuthStore();
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  const { run: getSite } = useRequest(() =>
-    getAttendanceSite({
-      page: 1,
-      per_page: 10,
-      ...(user?.company_id ? { company_id_exact: [user?.company_id] } : {}),
-      ...(user?.site_id ? { site_id_exact: [user?.site_id] } : {}),
-    }),
+  const {
+    images,
+    loadingImage,
+    isModalVisible,
+    pickImage,
+    removeImage,
+    openModal,
+    closeModal,
+  } = useImagePicker();
+
+  const { run: getStatus } = useRequest(() =>
+    getAttendanceStatus({ page: 1, per_page: 100 }),
   );
 
   useEffect(() => {
-    const fetchSites = async () => {
+    const fetchStatuses = async () => {
       try {
-        const [sitesRes, statusRes] = await Promise.all([
-          getSite(),
-          getAttendanceStatus({ page: 1, per_page: 10 }),
-        ]);
-        const sites = sitesRes.data?.data;
+        const statusRes = await getStatus();
         const status = statusRes.data?.data;
 
         // Exclude only "Attend" — show Izin, Cuti, Sakit, Alpha, dll
@@ -91,13 +82,12 @@ export default function LeaveScreen() {
             ? status.filter((s) => s.name?.toLowerCase() !== "attend")
             : [],
         );
-        setSiteData(sites ? sites : []);
       } catch (error) {
-        console.error("Error fetching sites:", error);
-        setSiteData([]);
+        console.error("Error fetching status:", error);
+        setStatusData([]);
       }
     };
-    fetchSites();
+    fetchStatuses();
 
     // Fetch existing leave dates to disable in calendar
     getMyLeaves({ page: 1, per_page: 50 })
@@ -113,165 +103,18 @@ export default function LeaveScreen() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-
-        if (status !== "granted") {
-          return;
-        }
-
-        const loc = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-        });
-
-        if (mounted) setLocation(loc);
-      } catch (e) {
-        console.debug("Location error:", e);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const pickImage = async (source: "camera" | "gallery") => {
-    // Gallery is disabled - camera only
-    if (source !== "camera") {
-      Alert.alert('Error', 'Hanya kamera yang diizinkan untuk mengambil gambar.');
-      setLoadingImage(false);
-      return;
-    }
-    setLoadingImage(true);
-    try {
-      const isCamera = source === "camera";
-      console.debug(`[PickImage] Starting... Source: ${source}`);
-
-      const getPermission = isCamera
-        ? ImagePicker.getCameraPermissionsAsync
-        : ImagePicker.getMediaLibraryPermissionsAsync;
-
-      const requestPermission = isCamera
-        ? ImagePicker.requestCameraPermissionsAsync
-        : ImagePicker.requestMediaLibraryPermissionsAsync;
-
-      const launchPicker = isCamera
-        ? ImagePicker.launchCameraAsync
-        : ImagePicker.launchImageLibraryAsync;
-
-      // 1. Cek Status Izin Saat Ini
-      let { status } = await getPermission();
-      console.debug(
-        `[PickImage] Initial Status: ${status}`,
-      );
-
-      // 2. Jika belum ditentukan (Undetermined), minta izin
-      if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
-        console.debug("[PickImage] Requesting Permission...");
-        const newPermission = await requestPermission();
-        status = newPermission.status;
-      }
-
-      // 3. Jika Ditolak (Denied), arahkan ke Settings
-      if (status !== ImagePicker.PermissionStatus.GRANTED) {
-        Alert.alert(
-          "Izin Diperlukan",
-          `Aplikasi membutuhkan akses ${
-            isCamera ? "Kamera" : "Galeri"
-          } untuk fitur ini. Mohon aktifkan di pengaturan.`,
-          [
-            { text: "Batal", style: "cancel" },
-            { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
-          ],
-        );
-        return;
-      }
-
-      // 4. Jika Diizinkan (Granted), Buka Picker
-      console.debug("[PickImage] Launching picker...");
-      const result = await launchPicker({
-        mediaTypes: ["images"],
-        allowsEditing: false,
-        aspect: [4, 3],
-        quality: 1,
-      });
-
-      setIsModalVisible(false);
-
-      if (result.canceled) {
-        setLoadingImage(false);
-        return;
-      }
-
-      const compressed = await compressImage(result.assets?.[0], {
-        maxWidth: IMAGE_MAX_WIDTH,
-        quality: IMAGE_QUALITY,
-      });
-      console.debug("[PickImage] Compressed result:", compressed);
-
-      try {
-        const res = await uploadEvid({
-          uri: compressed?.uri,
-          name: `image-${Date.now()}.jpg`,
-          type: "image/jpeg",
-        } as any);
-        console.debug("[PickImage] Upload result:", res);
-
-        if (compressed?.uri) {
-          setImages((prev) => [
-            ...prev,
-            {
-              uri: compressed.uri,
-              path: res.data?.[0]?.path ?? "",
-              link: res.data?.[0]?.link ?? "",
-            },
-          ]);
-        }
-      } finally {
-        setLoadingImage(false);
-      }
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("[PickImage Error]", err);
-      Alert.alert("Error", "Gagal: " + (err?.message || "Unknown error"));
-      setLoadingImage(false);
-    }
-  };
-
-  const removeImage = async (index: number) => {
-    try {
-      setLoadingImage(true);
-      const newImages = [...images];
-      const target = images[index];
-      if (target?.path) await deleteEvidtmp({ links: [target.path] });
-      console.debug("Image deleted");
-      newImages.splice(index, 1);
-      setImages(newImages);
-    } catch (error) {
-      const err = error as THttpErrorResult;
-      console.error("Remove Image Error:", err);
-      showToast("Gagal menghapus gambar", "error");
-    } finally {
-      setLoadingImage(false);
-    }
-  };
-
   const handleSubmit = async () => {
-    if (notes == "") {
+    if (notes === "") {
       showToast("Masukkan catatan!", "error");
       return;
     }
 
-    if (leaveDate == "") {
+    if (leaveDate === "") {
       showToast("Pilih tanggal izin/cuti!", "error");
       return;
     }
 
-    if (attendanceSelected == "") {
+    if (attendanceSelected === "") {
       showToast("Pilih status kehadiran!", "error");
       return;
     }
@@ -281,11 +124,36 @@ export default function LeaveScreen() {
 
     setLoadingSubmit(true);
     try {
+      // Create evidence group (sama seperti flow check-in) — leave_requests
+      // punya kolom evidence_group_id dan related ke attendance via status.
+      let evidenceGroupId = "";
+      if (images.length > 0) {
+        const group = await createGroupId({
+          name: `Leave ${user?.name}`,
+          description: "Leave evidence",
+        });
+        evidenceGroupId = group.data?.id ?? "";
+
+        // Upload permanent + link evidence ke group
+        for (const img of images) {
+          const uploaded = await uploadEvidPermanent({ links: [img.path] });
+          const file = uploaded.data?.links?.[0];
+          if (!file) continue;
+          await uploadEvidGroupId({
+            name: `Leave ${user?.name}`,
+            description: "Evidence",
+            file,
+            evidence_group_id: evidenceGroupId,
+          });
+        }
+      }
+
       await API.post("/leave/", {
         leave_date: leaveDate,
         leave_type: isCuti ? "cuti" : "izin",
         attendance_status_id: attendanceSelected,
         reason: notes,
+        ...(evidenceGroupId ? { evidence_group_id: evidenceGroupId } : {}),
       });
 
       showToast("Pengajuan izin/cuti berhasil dikirim!", "success");
@@ -440,7 +308,7 @@ export default function LeaveScreen() {
                   {!loadingImage && (
                     <TouchableOpacity
                       style={styles.removeImageButton}
-                      onPress={() => removeImage(index)}
+                      onPress={() => removeImage(index, imageUploadService)}
                     >
                       <Text style={styles.removeImageText}>✕</Text>
                     </TouchableOpacity>
@@ -459,7 +327,7 @@ export default function LeaveScreen() {
                 styles.uploadButton,
                 (loadingImage || loadingSubmit) && styles.uploadButtonDisabled,
               ]}
-              onPress={() => setIsModalVisible(true)}
+              onPress={() => openModal()}
               disabled={loadingImage || loadingSubmit}
             >
               {loadingImage ? (
@@ -506,12 +374,12 @@ export default function LeaveScreen() {
           visible={isModalVisible}
           transparent={true}
           animationType="fade"
-          onRequestClose={() => setIsModalVisible(false)}
+          onRequestClose={() => closeModal()}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => setIsModalVisible(false)}
+            onPress={() => closeModal()}
           >
             <View style={styles.modalContent}>
               <View style={styles.modalIndicator} />
@@ -522,7 +390,7 @@ export default function LeaveScreen() {
                   styles.modalButtonPrimary,
                   { opacity: loadingImage ? 0.7 : 1 },
                 ]}
-                onPress={() => pickImage("camera")}
+                onPress={() => pickImage("camera", imageUploadService)}
                 disabled={loadingImage}
               >
                 <Text style={styles.modalButtonTextPrimary}>
@@ -530,30 +398,22 @@ export default function LeaveScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* <TouchableOpacity
-                style={[
-                  styles.modalButtonSecondary,
-                  { opacity: loadingImage ? 0.7 : 1 },
-                ]}
-                onPress={() => pickImage("gallery")}
-                disabled={loadingImage}
-              >
-                <Text style={styles.modalButtonTextSecondary}>
-                  Ambil Dari Galeri
-                </Text>
-              </TouchableOpacity> */}
-
               <TouchableOpacity
                 style={styles.modalButtonCancel}
-                onPress={() => setIsModalVisible(false)}
+                onPress={() => closeModal()}
               >
                 <Text style={styles.modalButtonTextCancel}>Kembali</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
+
         {/* Image Preview Modal */}
-        <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
+        <ImageViewerModal
+          visible={!!previewImage}
+          uri={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
       </KeyboardAvoidingView>
     </View>
   );
@@ -601,51 +461,6 @@ const styles = StyleSheet.create({
     paddingTop: 25,
   },
 
-  // Map
-  mapContainer: {
-    height: 180,
-    borderRadius: 20,
-    overflow: "hidden",
-    marginBottom: 24,
-    backgroundColor: "#f5f5f5",
-    // Shadow for map container
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 10,
-    color: "#666",
-  },
-  locationOverlay: {
-    position: "absolute",
-    bottom: 10,
-    left: 10,
-    right: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  locationOverlayText: {
-    fontSize: 10,
-    color: "#333",
-    textAlign: "center",
-    fontWeight: "600",
-  },
-
   // Section Title
   sectionTitle: {
     fontSize: 16,
@@ -678,106 +493,6 @@ const styles = StyleSheet.create({
   value: { color: "#111" },
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
-
-  // Location Options
-  locationOption: {
-    flexDirection: "row",
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: "#f0f0f0",
-    borderRadius: 16,
-    marginBottom: 12,
-    backgroundColor: "#fff",
-  },
-  locationOptionSelected: {
-    borderColor: "#1e90ff",
-    backgroundColor: "#f8fbff",
-  },
-  radioContainer: {
-    marginRight: 14,
-    marginTop: 2,
-  },
-  radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: "#d1d5db",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  radioOuterSelected: {
-    borderColor: "#1e90ff",
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#1e90ff",
-  },
-  locationTextContainer: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 4,
-  },
-  locationAddress: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 6,
-    lineHeight: 18,
-  },
-  locationCoords: {
-    fontSize: 10,
-    color: "#999",
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: "#F0F7FF", // Hijau muda/Biru muda yang lembut
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#E3F2FD",
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  infoIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    color: "#1a1a1a",
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: "rgba(30, 144, 255, 0.1)",
-    marginBottom: 12,
-  },
-  infoDetailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#333",
-  },
 
   // Date Input
   dateContainer: {
@@ -956,20 +671,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 15,
   },
-  modalButtonSecondary: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: "#eee",
-  },
-  modalButtonTextSecondary: {
-    color: "#333",
-    fontWeight: "600",
-    fontSize: 15,
-  },
   modalButtonCancel: {
     backgroundColor: "#f8f9fa",
     padding: 18,
@@ -980,33 +681,5 @@ const styles = StyleSheet.create({
     color: "#666",
     fontWeight: "600",
     fontSize: 15,
-  },
-  // Empty State
-  emptyStateContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 30,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#f0f0f0",
-    marginBottom: 24,
-    borderStyle: "dashed",
-  },
-  emptyStateEmoji: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    textAlign: "center",
-    marginBottom: 4,
-  },
-  emptyStateSubText: {
-    fontSize: 13,
-    color: "#999",
-    textAlign: "center",
   },
 });

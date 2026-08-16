@@ -37,7 +37,7 @@ export function useImagePicker() {
     setLoadingImage(true);
     try {
       const isCamera = source === "camera";
-      console.debug(`[PickImage] Starting... Source: ${source}`);
+      if (__DEV__) console.debug(`[PickImage] Starting... Source: ${source}`);
 
       const getPermission = isCamera
         ? ImagePicker.getCameraPermissionsAsync

@@ -10,7 +10,6 @@ import { useImagePicker } from "@/hooks/useImagePicker";
 import { useRequest } from "@/hooks/use-request";
 import axios from "@/lib/axios";
 import {
-  deleteEvid,
   getEvidGroupId,
   updateAttendance,
   uploadEvidPermanent,
@@ -47,7 +46,7 @@ export default function CheckoutScreen() {
   const { showToast } = useToast();
   const { user } = useAuthStore();
 
-  // --- Location state (direct, not via useLocationCheck) ---
+  // --- Location state ---
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -65,14 +64,10 @@ export default function CheckoutScreen() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // --- State ---
-  const [notes, setNotes] = useState("");
+  const [checkoutNotes, setCheckoutNotes] = useState("");
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const submittingRef = useRef(false);
-  // active-checkins adalah sumber kebenaran record check-in aktif hari ini
-  // (endpoint eksplisit timezone-safe), bukan list + pencocokan tanggal di
-  // client yang rapuh. Lihat .planning/notes/bug-dashboard-not-detecting-checkin.md
   const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
-  const [removedImages, setRemovedImages] = useState<Array<{ id: string | null; path: string }>>([]);
 
   const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
 
@@ -81,8 +76,6 @@ export default function CheckoutScreen() {
     const fetchCheckIn = async () => {
       try {
         const res = await fetchActiveCheckinsReq();
-        // getActiveCheckins mengembalikan Response<{ data: IAttendance[] }> atau
-        // array mentah (sudah di-unwrap service). Ambil record aktif pertama.
         const list = Array.isArray(res) ? res : (res?.data ?? []);
         setActiveCheckin(Array.isArray(list) && list.length > 0 ? (list[0] as IAttendance) : null);
       } catch (error) {
@@ -93,7 +86,7 @@ export default function CheckoutScreen() {
     fetchCheckIn();
   }, []);
 
-  // Get GPS location — dapat di-retry bila izin ditolak
+  // Get GPS location
   const requestLocation = async () => {
     setLoadingLocation(true);
     setPermissionDenied(false);
@@ -115,14 +108,12 @@ export default function CheckoutScreen() {
   };
 
   useEffect(() => {
-    // Defer ke microtask agar setState pertama di requestLocation tidak
-    // synchronous-in-effect (React Compiler flag) — pola fetch async legit.
     Promise.resolve().then(() => requestLocation());
   }, []);
 
+  // Fetch check-in evidence photos
   useEffect(() => {
-    if (!activeCheckin) return;
-    setNotes(activeCheckin.description || "");
+    if (!activeCheckin?.evidence_group_id) return;
 
     (async () => {
       try {
@@ -169,13 +160,9 @@ export default function CheckoutScreen() {
     },
   };
 
-  const handleRemoveImage = async (index: number) => {
-    const target = images[index];
-    if (target?.id) {
-      setRemovedImages((prev) => [...prev, { id: target.id as string, path: target.path }]);
-    }
-    await removeImage(index, uploadService);
-  };
+  // Filter existing (check-in) vs new (check-out) images
+  const existingCheckinImages = images.filter((img) => !!img.id);
+  const newCheckoutImages = images.filter((img) => !img.id);
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
@@ -183,10 +170,13 @@ export default function CheckoutScreen() {
       showToast("Tunggu deteksi lokasi...", "info");
       return;
     }
-    if (images.length === 0) {
-      showToast("Upload minimal 1 gambar sebagai bukti!", "error");
+
+    // Wajib melampirkan minimal 1 gambar kedua (evidence checkout baru)
+    if (newCheckoutImages.length === 0) {
+      showToast("Wajib melampirkan foto bukti check out baru melalui kamera!", "error");
       return;
     }
+
     if (!activeCheckin?.id) {
       showToast("Data check-in tidak ditemukan!", "error");
       return;
@@ -198,34 +188,33 @@ export default function CheckoutScreen() {
     try {
       const groupId = activeCheckin?.evidence_group_id ?? "";
 
-      // Delete removed evidence
-      for (const img of removedImages) {
-        if (img.id) {
-          try { await deleteEvid({ id: img.id }); } catch { /* continue */ }
+      // Upload ONLY new checkout evidence to group
+      for (const img of newCheckoutImages) {
+        const uploaded = await uploadEvidPermanent({ links: [img.path] });
+        const file = uploaded.data?.links?.[0];
+        if (file) {
+          await uploadEvidGroupId({
+            name: `Attendance ${user?.name}`,
+            description: "Checkout Evidence",
+            file,
+            evidence_group_id: groupId,
+          });
         }
       }
 
-      // Upload new evidence
-      for (const img of images) {
-        if (!img.id) {
-          const uploaded = await uploadEvidPermanent({ links: [img.path] });
-          const file = uploaded.data?.links?.[0];
-          if (file) {
-            await uploadEvidGroupId({
-              name: `Attendance ${user?.name}`,
-              description: "Evidence",
-              file,
-              evidence_group_id: groupId,
-            });
-          }
-        }
+      // Build updated description without removing check-in notes
+      let finalDescription = activeCheckin?.description || "";
+      if (checkoutNotes.trim()) {
+        finalDescription = finalDescription
+          ? `${finalDescription}\n[Check Out]: ${checkoutNotes.trim()}`
+          : `[Check Out]: ${checkoutNotes.trim()}`;
       }
 
-      // Update attendance checkout with GPS location + editable notes (description)
+      // Update attendance checkout with GPS location + notes
       await updateAttendance({
-        id: activeCheckin?.id!,
+        id: activeCheckin.id,
         checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
-        ...(notes.trim() ? { description: notes.trim() } : {}),
+        ...(finalDescription ? { description: finalDescription } : {}),
         ...(location ? {
           checkout_longitude: location.coords.longitude,
           checkout_latitude: location.coords.latitude,
@@ -321,7 +310,7 @@ export default function CheckoutScreen() {
               </View>
             </View>
 
-            {/* Location Info — from check-in record */}
+            {/* Location Info — from check-in record (Read-Only) */}
             <Text style={styles.sectionTitle}>Lokasi Check In</Text>
             {activeCheckin ? (
               <View style={[styles.locationOption, styles.locationOptionSelected]}>
@@ -344,59 +333,102 @@ export default function CheckoutScreen() {
               </View>
             )}
 
-            {/* Notes */}
-            <Text style={styles.sectionTitle}>Notes (opsional)</Text>
+            {/* Catatan Check In (Read-Only) */}
+            <Text style={styles.sectionTitle}>Catatan Check In (Terkunci)</Text>
+            <View style={styles.readOnlyCard}>
+              <Text style={styles.readOnlyText}>
+                {activeCheckin?.description?.trim()
+                  ? activeCheckin.description
+                  : "Tidak ada catatan saat check in"}
+              </Text>
+            </View>
+
+            {/* Catatan Check Out (opsional) */}
+            <Text style={styles.sectionTitle}>Catatan Check Out (opsional)</Text>
             <View style={styles.notesContainer}>
               <TextInput
                 style={styles.notesInput}
-                placeholder="Add any notes here"
+                placeholder="Tambahkan catatan check out di sini"
                 placeholderTextColor="#999"
                 multiline
-                numberOfLines={4}
-                value={notes}
-                onChangeText={setNotes}
+                numberOfLines={3}
+                value={checkoutNotes}
+                onChangeText={setCheckoutNotes}
                 textAlignVertical="top"
                 maxLength={2000}
               />
             </View>
 
-            {/* Image Upload */}
-            <Text style={styles.sectionTitle}>Upload Gambar</Text>
-            <View style={styles.imageGrid}>
-              {images.map((image, index) => (
-                <View key={index} style={styles.imagePreviewContainer}>
+            {/* Foto Bukti Check In (Tersimpan - Tidak bisa dihapus) */}
+            <Text style={styles.sectionTitle}>Bukti Foto Check In (Tersimpan)</Text>
+            {existingCheckinImages.length > 0 ? (
+              <View style={styles.imageGrid}>
+                {existingCheckinImages.map((image, index) => (
+                  <View key={`checkin-img-${image.id || index}`} style={styles.imagePreviewContainer}>
                     <TouchableOpacity onPress={() => setPreviewImage(image.uri)}>
                       <Image
                         source={{ uri: image.uri }}
-                        style={[
-                          styles.imagePreview,
-                          loadingImage && { opacity: 0.5 },
-                        ]}
+                        style={styles.imagePreview}
                       />
                     </TouchableOpacity>
-                  {!loadingImage && (
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => handleRemoveImage(index)}
-                    >
-                      <Text style={styles.removeImageText}>✕</Text>
-                    </TouchableOpacity>
-                  )}
-                  {loadingImage && (
-                    <View style={styles.imageLoadingOverlay}>
-                      <ActivityIndicator size="small" color="#fff" />
+                    <View style={styles.imageLockedBadge}>
+                      <Text style={styles.imageLockedText}>🔒 Check In</Text>
                     </View>
-                  )}
-                </View>
-              ))}
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyEvidenceCard}>
+                <Text style={styles.emptyEvidenceText}>Tidak ada foto bukti check in tersimpan</Text>
+              </View>
+            )}
+
+            {/* Foto Bukti Check Out (Wajib - Hanya via Kamera) */}
+            <View style={styles.requiredSectionHeader}>
+              <Text style={styles.sectionTitle}>Bukti Foto Check Out</Text>
+              <Text style={styles.requiredBadge}>* Wajib (Kamera)</Text>
             </View>
+
+            {newCheckoutImages.length > 0 && (
+              <View style={styles.imageGrid}>
+                {newCheckoutImages.map((image, index) => {
+                  const fullIndex = images.findIndex((img) => img === image);
+                  return (
+                    <View key={`checkout-new-${image.path || index}`} style={styles.imagePreviewContainer}>
+                      <TouchableOpacity onPress={() => setPreviewImage(image.uri)}>
+                        <Image
+                          source={{ uri: image.uri }}
+                          style={[
+                            styles.imagePreview,
+                            loadingImage && { opacity: 0.5 },
+                          ]}
+                        />
+                      </TouchableOpacity>
+                      {!loadingImage && (
+                        <TouchableOpacity
+                          style={styles.removeImageButton}
+                          onPress={() => removeImage(fullIndex, uploadService)}
+                        >
+                          <Text style={styles.removeImageText}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                      {loadingImage && (
+                        <View style={styles.imageLoadingOverlay}>
+                          <ActivityIndicator size="small" color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
                 styles.uploadButton,
                 (loadingImage || loadingSubmit) && styles.uploadButtonDisabled,
               ]}
-              onPress={openModal}
+              onPress={() => openModal()}
               disabled={loadingImage || loadingSubmit}
             >
               {loadingImage ? (
@@ -409,11 +441,11 @@ export default function CheckoutScreen() {
                 <ImageIcon color="#999" style={styles.uploadButtonIcon} />
               )}
               <Text style={styles.uploadButtonText}>
-                {loadingImage ? "Memproses..." : "Tambah Gambar"}
+                {loadingImage ? "Memproses..." : "Tambah Foto Check Out"}
               </Text>
             </TouchableOpacity>
 
-            {/* Submit */}
+            {/* Submit Button */}
             <TouchableOpacity
               style={[
                 styles.submitButton,
@@ -439,7 +471,7 @@ export default function CheckoutScreen() {
         )}
         </View>
 
-        {/* Image Picker Modal */}
+        {/* Image Picker Modal (Gallery option hidden - Camera only) */}
         <Modal
           visible={isModalVisible}
           transparent={true}
@@ -454,13 +486,20 @@ export default function CheckoutScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalIndicator} />
               <Text style={styles.modalTitle}>Pilih sumber Gambar</Text>
+
               <TouchableOpacity
-                style={[styles.modalButtonPrimary, { opacity: loadingImage ? 0.7 : 1 }]}
+                style={[
+                  styles.modalButtonPrimary,
+                  { opacity: loadingImage ? 0.7 : 1 },
+                ]}
                 onPress={() => pickImage("camera", uploadService)}
                 disabled={loadingImage}
               >
-                <Text style={styles.modalButtonTextPrimary}>Ambil Dari Kamera</Text>
+                <Text style={styles.modalButtonTextPrimary}>
+                  Ambil Dari Kamera
+                </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.modalButtonCancel}
                 onPress={closeModal}
@@ -500,36 +539,31 @@ const styles = StyleSheet.create({
   settingsButtonText: { color: "#3B82F6", fontWeight: "600", fontSize: 14 },
   locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: "rgba(255, 255, 255, 0.95)", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   locationOverlayText: { fontSize: 10, color: "#333", textAlign: "center", fontWeight: "600" },
-  sectionTitle: { fontSize: 16, fontWeight: "bold", color: "#1a1a1a", marginBottom: 12 },
-  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: "#f0f0f0", borderRadius: 16, marginBottom: 12, backgroundColor: "#fff" },
+  sectionTitle: { fontSize: 15, fontWeight: "bold", color: "#1a1a1a", marginBottom: 10 },
+  requiredSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  requiredBadge: { fontSize: 12, fontWeight: "700", color: "#E53935" },
+  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: "#f0f0f0", borderRadius: 16, marginBottom: 20, backgroundColor: "#fff" },
   locationOptionSelected: { borderColor: "#1e90ff", backgroundColor: "#f8fbff" },
-  radioContainer: { marginRight: 14, marginTop: 2 },
   locationIconContainer: { marginRight: 14, marginTop: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: "#e9f0ff", justifyContent: "center", alignItems: "center" },
-  radioOuter: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: "#d1d5db", justifyContent: "center", alignItems: "center" },
-  radioOuterSelected: { borderColor: "#1e90ff" },
-  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#1e90ff" },
   locationTextContainer: { flex: 1 },
   locationTitle: { fontSize: 14, fontWeight: "bold", color: "#333", marginBottom: 4 },
-  locationAddress: { fontSize: 12, color: "#666", marginBottom: 6, lineHeight: 18 },
   locationCoords: { fontSize: 10, color: "#999" },
-  infoCard: { backgroundColor: "#F0F7FF", borderRadius: 16, padding: 20, marginBottom: 24, marginTop: 8, borderWidth: 1, borderColor: "#E3F2FD" },
-  infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  infoIcon: { fontSize: 16, marginRight: 8 },
-  infoTitle: { fontSize: 15, fontWeight: "bold", color: "#1a1a1a" },
-  infoDivider: { height: 1, backgroundColor: "rgba(30, 144, 255, 0.1)", marginBottom: 12 },
-  infoDetailRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  infoLabel: { fontSize: 14, color: "#666" },
-  infoValue: { fontSize: 14, fontWeight: "600", color: "#333" },
-  notesContainer: { backgroundColor: "#fafafa", borderRadius: 16, borderWidth: 1, borderColor: "#f0f0f0", marginBottom: 24 },
-  notesInput: { padding: 16, height: 100, fontSize: 14, color: "#333" },
+  readOnlyCard: { backgroundColor: "#f8f9fa", borderRadius: 14, borderWidth: 1, borderColor: "#e9ecef", padding: 14, marginBottom: 20 },
+  readOnlyText: { fontSize: 13, color: "#495057", lineHeight: 18 },
+  notesContainer: { backgroundColor: "#fafafa", borderRadius: 16, borderWidth: 1, borderColor: "#f0f0f0", marginBottom: 20 },
+  notesInput: { padding: 14, height: 80, fontSize: 14, color: "#333" },
   imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
   imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: "#f0f0f0" },
   imagePreview: { width: "100%", height: "100%" },
-  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.5)", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#fff" },
+  imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(30, 144, 255, 0.88)", paddingVertical: 4, alignItems: "center", justifyContent: "center" },
+  imageLockedText: { color: "#fff", fontSize: 9, fontWeight: "700" },
+  emptyEvidenceCard: { backgroundColor: "#fafafa", borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: "#f0f0f0" },
+  emptyEvidenceText: { fontSize: 12, color: "#999" },
+  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.55)", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#fff" },
   removeImageText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
-  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#e0e0e0", borderRadius: 16, padding: 16, marginBottom: 30, borderStyle: "dashed", backgroundColor: "#fafafa" },
+  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#1e90ff", borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: "#f8fbff" },
   uploadButtonIcon: { marginRight: 8, fontSize: 18 },
-  uploadButtonText: { fontSize: 14, color: "#666", fontWeight: "600" },
+  uploadButtonText: { fontSize: 14, color: "#1e90ff", fontWeight: "700" },
   submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: "#3B82F6", borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
   submitButtonDisabled: { opacity: 0.7 },
@@ -541,12 +575,9 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: "#1a1a1a" },
   modalButtonPrimary: { backgroundColor: "#3B82F6", padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
   modalButtonTextPrimary: { color: "#fff", fontWeight: "bold", fontSize: 15 },
-  modalButtonSecondary: { backgroundColor: "#fff", padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12, borderWidth: 1.5, borderColor: "#eee" },
-  modalButtonTextSecondary: { color: "#333", fontWeight: "600", fontSize: 15 },
   modalButtonCancel: { backgroundColor: "#f8f9fa", padding: 18, borderRadius: 16, alignItems: "center" },
   modalButtonTextCancel: { color: "#666", fontWeight: "600", fontSize: 15 },
   emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: "#f0f0f0", marginBottom: 24, borderStyle: "dashed" },
   emptyStateEmoji: { fontSize: 40, marginBottom: 10 },
   emptyStateText: { fontSize: 16, fontWeight: "bold", color: "#333", textAlign: "center", marginBottom: 4 },
-  emptyStateSubText: { fontSize: 13, color: "#999", textAlign: "center" },
 });

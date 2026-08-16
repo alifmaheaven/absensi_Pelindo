@@ -63,18 +63,16 @@ export default function RootLayout() {
       const sevenDays = 7 * 24 * 60 * 60 * 1000;
 
       if (expiresInMs < sevenDays) {
-        console.debug('[TokenRefresh] Token expires soon, refreshing...');
+        if (__DEV__) console.debug('[TokenRefresh] Token expires soon, refreshing...');
         const refreshRes = await API.post('/auth/refresh');
         const newToken = refreshRes.data?.data?.token || refreshRes.data?.token;
         if (newToken) {
           await saveToken(newToken);
-          console.debug('[TokenRefresh] Token refreshed successfully');
+          if (__DEV__) console.debug('[TokenRefresh] Token refreshed successfully');
         }
-      } else {
-        console.debug('[TokenRefresh] Token still valid for', Math.round(expiresInMs / 86400000), 'days');
       }
-    } catch (err) {
-      console.debug('[TokenRefresh] Token check skipped:', err instanceof Error ? err.message : String(err));
+    } catch {
+      // Token check failed
     }
   }
 

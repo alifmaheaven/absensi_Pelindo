@@ -220,13 +220,17 @@ export default function CheckinScreen() {
         });
       }
 
+      const formattedNotes = notes.trim()
+        ? `[Check In]: ${notes.trim()}`
+        : "[Check In]: -";
+
       // Build payload — filter out empty UUID strings
       const payload: Record<string, any> = {
         user_id: user?.id ?? "",
         company_id: user?.company_id || null,
         site_id: selectedLocation || (user?.site_id as string | null) || null,
         name: "attendance",
-        description: notes || "Attendance",
+        description: formattedNotes,
         code: `CHK-${Date.now()}`,
         checkin: new Date().toLocaleString("sv-SE", {
           timeZone: TIMEZONE,
@@ -499,7 +503,7 @@ export default function CheckinScreen() {
         )}
         </View>
 
-        {/* Image Picker Modal */}
+        {/* Image Picker Modal (Gallery option hidden - Camera only) */}
         <Modal
           visible={isModalVisible}
           transparent={true}
@@ -525,19 +529,6 @@ export default function CheckinScreen() {
               >
                 <Text style={styles.modalButtonTextPrimary}>
                   Ambil Dari Kamera
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalButtonSecondary,
-                  { opacity: loadingImage ? 0.7 : 1 },
-                ]}
-                onPress={() => pickImage("gallery", imageUploadService)}
-                disabled={loadingImage}
-              >
-                <Text style={styles.modalButtonTextSecondary}>
-                  Ambil Dari Galeri
                 </Text>
               </TouchableOpacity>
 

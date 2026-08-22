@@ -1,4 +1,5 @@
-import { ArrowLeft, Device } from "@/components/icon";
+import { ArrowLeft, Device, Ticket } from "@/components/icon";
+import EmptyState from "@/components/ui/EmptyState";
 import { getTicket, getDataStatus } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
@@ -431,11 +432,13 @@ const TicketingScreen = () => {
           onRefresh={handleRefresh}
           ListFooterComponent={loading ? <TicketSkeletonList /> : null}
           ListEmptyComponent={!loading ? (
-            <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateEmoji}>🎫</Text>
-              <Text style={styles.emptyStateText}>Belum ada tiket</Text>
-              <Text style={styles.emptyStateSubText}>Buat tiket baru untuk mulai mencatat laporan</Text>
-            </View>
+            <EmptyState
+              title="Belum Ada Tiket"
+              description="Tidak ada laporan tiket kendala atau perbaikan saat ini."
+              actionLabel="+ Buat Tiket Baru"
+              onAction={() => router.push("/ticketing/create")}
+              icon={<Ticket color="#1e90ff" width={36} height={36} />}
+            />
           ) : null}
         />
       </View>

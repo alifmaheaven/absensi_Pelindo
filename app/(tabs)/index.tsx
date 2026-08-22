@@ -16,7 +16,7 @@ import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
 import { getTodayDateString, parseWIBDate, smartCapitalize } from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   RefreshControl,
@@ -27,8 +27,8 @@ import {
   View,
   AppState,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { getTodaySchedule } from "@/services/schedule";
+import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
+import { syncShiftNotifications } from "@/services/notification-scheduler";
 import { TIMEZONE } from "@/constants";
 import type { IScheduleToday, Ishift } from "@/types";
 
@@ -129,10 +129,22 @@ export default function HomeScreen() {
 
   const fetchSchedule = async () => {
     try {
-      const res = await getTodaySchedule();
-      setTodaySchedule(res.data);
+      const [todayRes, weekRes] = await Promise.allSettled([
+        getTodaySchedule(),
+        getWeekSchedule(),
+      ]);
+
+      if (todayRes.status === "fulfilled") {
+        setTodaySchedule(todayRes.value.data);
+      } else {
+        showToast("Gagal memuat jadwal hari ini", "error");
+      }
+
+      if (weekRes.status === "fulfilled" && weekRes.value.data?.schedules) {
+        syncShiftNotifications(weekRes.value.data.schedules);
+      }
     } catch (error) {
-      showToast("Gagal memuat jadwal hari ini", "error");
+      showToast("Gagal memuat jadwal", "error");
     }
   };
 
@@ -158,8 +170,19 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchSchedule(), fetchAttendance(), fetchUnreadCount()]);
-    setRefreshing(false);
+    try {
+      const { getProfile } = await import("@/services/auth");
+      await Promise.allSettled([
+        fetchSchedule(),
+        fetchAttendance(),
+        fetchUnreadCount(),
+        getProfile().then((res) => {
+          if (res.data) useAuthStore.getState().setUser(res.data);
+        }).catch(() => {}),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Re-fetch attendance + schedule every time this screen gains focus

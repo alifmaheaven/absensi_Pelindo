@@ -5,6 +5,9 @@ import {
   IAttendance,
   IMeta,
 } from "@/types";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import { ClockOutline } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
@@ -154,29 +157,35 @@ export default function AttendanceTabScreen() {
         </SafeAreaView>
       </LinearGradient>
       <View style={styles.content}>
-        <FlatList
-          data={attendanceData}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          onEndReached={handleGetList}
-          onEndReachedThreshold={0.5}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          ListFooterComponent={loading ? (
-            <View style={styles.loadingFooter}>
-              <ActivityIndicator size="small" color="#1e90ff" />
-            </View>
-          ) : null}
-          ListEmptyComponent={!loading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>📋</Text>
-              <Text style={styles.emptyText}>Belum ada riwayat absensi</Text>
-              <Text style={styles.emptySubText}>Lakukan check in untuk memulai</Text>
-            </View>
-          ) : null}
-        />
+        {loading && !attendanceData.length ? (
+          <ListSkeleton count={4} />
+        ) : (
+          <FlatList
+            data={attendanceData}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            onEndReached={handleGetList}
+            onEndReachedThreshold={0.5}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            ListFooterComponent={loading && attendanceData.length ? (
+              <View style={styles.loadingFooter}>
+                <ActivityIndicator size="small" color="#1e90ff" />
+              </View>
+            ) : null}
+            ListEmptyComponent={!loading ? (
+              <EmptyState
+                title="Belum Ada Riwayat Absensi"
+                description="Lakukan check in untuk memulai pencatatan kehadiran kerja Anda."
+                actionLabel="Muat Ulang"
+                onAction={handleRefresh}
+                icon={<ClockOutline color="#1e90ff" width={36} height={36} />}
+              />
+            ) : null}
+          />
+        )}
       </View>
     </View>
   );

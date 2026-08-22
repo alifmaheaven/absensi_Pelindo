@@ -6,6 +6,7 @@ export interface Ishift {
   end_time: string;
   grace_late: number;
   grace_early: number;
+  reminder_minutes?: number;
   is_overnight: boolean;
   color: string;
 }

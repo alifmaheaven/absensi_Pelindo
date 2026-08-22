@@ -1,3 +1,4 @@
+import ForceUpdateModal from "@/components/ForceUpdateModal";
 import NetworkStatusBar from "@/components/NetworkStatusBar";
 import OfflineBanner from "@/components/OfflineBanner";
 import { ToastProvider } from "@/components/ui/toast";
@@ -6,14 +7,15 @@ import { DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
-import { Alert, Linking } from "react-native";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import "../lib/i18n";
 import { useColorScheme } from "react-native";
 import { lightTheme, darkTheme } from "@/lib/theme";
 import { getToken, saveToken } from "@/lib/storage";
 import API from "@/lib/axios";
+
+import { startOfflineSync, syncQueuedRequests } from "@/lib/offlineQueue";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -36,9 +38,18 @@ export default function RootLayout() {
     },
   };
 
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [latestVersionData, setLatestVersionData] = useState<{
+    name?: string;
+    url?: string;
+    description?: string;
+  } | null>(null);
+
   useEffect(() => {
     checkVersion();
     checkTokenExpiry();
+    startOfflineSync();
+    syncQueuedRequests();
   }, []);
 
   // Proactively refresh token on app launch if it expires within 7 days
@@ -78,42 +89,33 @@ export default function RootLayout() {
 
   async function checkVersion() {
     try {
-      console.debug("[VersionCheck] Fetching latest version...");
+      if (__DEV__) console.debug("[VersionCheck] Fetching latest version...");
       const latest = await getLatestVersion();
-      console.debug("[VersionCheck] Latest:", JSON.stringify(latest));
+      if (__DEV__) console.debug("[VersionCheck] Latest:", JSON.stringify(latest));
 
       if (!latest?.name) {
-        console.debug("[VersionCheck] No version name, skipping");
+        if (__DEV__) console.debug("[VersionCheck] No version name, skipping");
         return;
       }
 
       const currentNativeVersion = Constants.expoConfig?.version || "1.0.0";
-      console.debug("[VersionCheck] Current native version:", currentNativeVersion);
+      if (__DEV__) console.debug("[VersionCheck] Current native version:", currentNativeVersion);
 
       if (latest.name !== currentNativeVersion) {
-        console.debug("[VersionCheck] New version detected, showing alert");
-        // Small delay to ensure navigation has settled before showing alert
-        setTimeout(() => {
-          Alert.alert(
-            "Update Available",
-            `A new version (${latest.name}) is available. Please update to continue using the app.`,
-            [
-              { text: "Later", style: "cancel" },
-              {
-                text: "Download",
-                onPress: () => {
-                  const url = latest.url;
-                  if (url) Linking.openURL(url);
-                },
-              },
-            ]
-          );
-        }, 1000);
+        if (__DEV__) console.debug("[VersionCheck] New version detected, showing force update overlay");
+        setLatestVersionData({
+          name: latest.name,
+          url: latest.url,
+          description: (latest as any)?.description || "",
+        });
+        setUpdateAvailable(true);
       }
     } catch (err) {
-      console.error("[VersionCheck] Error:", JSON.stringify(err));
+      if (__DEV__) console.error("[VersionCheck] Error:", JSON.stringify(err));
     }
   }
+
+  const currentNativeVersion = Constants.expoConfig?.version || "1.0.0";
 
   return (
     <ThemeProvider value={navTheme}>
@@ -123,14 +125,20 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="(no-tabs)" options={{ headerShown: false }} />
-
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
           <Stack.Screen
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}
           />
         </Stack>
+
+        <ForceUpdateModal
+          visible={updateAvailable}
+          latestVersion={latestVersionData?.name}
+          currentVersion={currentNativeVersion}
+          updateUrl={latestVersionData?.url}
+          description={latestVersionData?.description}
+        />
       </ToastProvider>
 
       <StatusBar style={isDark ? "light" : "dark"} />

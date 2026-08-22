@@ -44,6 +44,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import ImageViewerModal from "@/components/ImageViewerModal";
 
+import NetInfo from "@react-native-community/netinfo";
+import {
+  cacheSites,
+  getCachedSites,
+  cacheAttendanceStatuses,
+  getCachedAttendanceStatuses,
+  queueOfflineCheckIn,
+} from "@/lib/offlineQueue";
+
 const imageUploadService = {
   uploadTemp: uploadEvid,
   deleteTemp: deleteEvidtmp,
@@ -90,26 +99,39 @@ export default function CheckinScreen() {
   useEffect(() => {
     const fetchSites = async () => {
       try {
-        const [siteRes, statusRes] = await Promise.all([getSite(), getStatus()]);
-        const sites = siteRes.data?.data;
-        setSiteData(sites ? sites : []);
+        const [siteRes, statusRes] = await Promise.allSettled([getSite(), getStatus()]);
+        let sites: IAttendanceSite[] = [];
+        if (siteRes.status === "fulfilled" && siteRes.value?.data?.data?.length) {
+          sites = siteRes.value.data.data;
+          await cacheSites(sites);
+        } else {
+          sites = await getCachedSites();
+        }
+        setSiteData(sites || []);
 
-        const statuses: IAttendanceStatus[] = statusRes.data?.data || [];
+        let statuses: IAttendanceStatus[] = [];
+        if (statusRes.status === "fulfilled" && statusRes.value?.data?.data?.length) {
+          statuses = statusRes.value.data.data;
+          await cacheAttendanceStatuses(statuses);
+        } else {
+          statuses = await getCachedAttendanceStatuses();
+        }
+
         // Find checkin status by exact code (ATST001 = Attend)
         const checkinStatus = statuses.find(
-          (s) => s.name?.toLowerCase() === "attend",
+          (s) => s.name?.toLowerCase() === "attend" || s.code === "ATST001",
         );
         if (checkinStatus) {
           setCheckinStatusId(checkinStatus.id);
+        } else if (statuses.length > 0) {
+          setCheckinStatusId(statuses[0].id);
         } else {
-          Alert.alert(
-            "Error",
-            "Attendance status tidak ditemukan. Hubungi admin untuk setup attendance status terlebih dahulu.",
-          );
+          setCheckinStatusId("ATST001");
         }
       } catch (error) {
-        console.error("Error fetching sites:", error);
-        setSiteData([]);
+        console.debug("Error fetching sites, loading cache:", error);
+        const cached = await getCachedSites();
+        setSiteData(cached || []);
       }
     };
     fetchSites();
@@ -151,6 +173,15 @@ export default function CheckinScreen() {
         accuracy: Location.Accuracy.High,
       });
 
+      if (loc.mocked) {
+        setLocation(null);
+        Alert.alert(
+          "Peringatan Keamanan",
+          "Terdeteksi Penggunaan Fake GPS / Mock Location. Harap matikan aplikasi Fake GPS dan nonaktifkan fitur Mock Location di Pengaturan Pengembang (Developer Options) perangkat Anda untuk melanjutkan absensi."
+        );
+        return;
+      }
+
       setLocation(loc);
     } catch (e) {
       console.debug("Location error:", e);
@@ -175,6 +206,14 @@ export default function CheckinScreen() {
       return;
     }
 
+    if (location.mocked) {
+      Alert.alert(
+        "Peringatan Keamanan",
+        "Terdeteksi Penggunaan Fake GPS / Mock Location. Harap matikan aplikasi Fake GPS untuk melanjutkan."
+      );
+      return;
+    }
+
     if (!selectedLocation) {
       showToast("Pilih lokasi terlebih dahulu!", "error");
       return;
@@ -196,7 +235,45 @@ export default function CheckinScreen() {
     // Lolos validasi → kunci submit
     submittingRef.current = true;
     setLoadingSubmit(true);
+
+    const formattedNotes = notes.trim()
+      ? `[Check In]: ${notes.trim()}`
+      : "[Check In]: -";
+    const checkinTimeStr = new Date().toLocaleString("sv-SE", {
+      timeZone: TIMEZONE,
+    });
+
     try {
+      const netState = await NetInfo.fetch();
+      const isOffline = !netState.isConnected || !netState.isInternetReachable;
+
+      if (isOffline) {
+        await queueOfflineCheckIn({
+          user_id: user?.id ?? "",
+          user_name: user?.name || "User",
+          company_id: user?.company_id || null,
+          site_id: selectedLocation || (user?.site_id ? String(user.site_id) : ""),
+          checkin: checkinTimeStr,
+          checkin_latitude: location.coords.latitude,
+          checkin_longitude: location.coords.longitude,
+          attendance_status_id: checkinStatusId || "ATST001",
+          description: formattedNotes,
+          localImages: images.map((img) => ({
+            uri: img.uri,
+            name: img.path || `checkin_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          })),
+          tolerance: selectedSite?.tolerance || 50,
+        });
+
+        Alert.alert(
+          "Check In Tersimpan Offline",
+          "Koneksi internet tidak terdeteksi. Data absensi dan foto bukti telah disimpan di perangkat Anda dan akan otomatis disinkronkan ke server saat sinyal kembali aktif.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+        return;
+      }
+
       const group = await createGroupId({
         name: `Attendance ${user?.name}`,
         description: "Attendance evidence",
@@ -220,10 +297,6 @@ export default function CheckinScreen() {
         });
       }
 
-      const formattedNotes = notes.trim()
-        ? `[Check In]: ${notes.trim()}`
-        : "[Check In]: -";
-
       // Build payload — filter out empty UUID strings
       const payload: Record<string, any> = {
         user_id: user?.id ?? "",
@@ -232,9 +305,7 @@ export default function CheckinScreen() {
         name: "attendance",
         description: formattedNotes,
         code: `CHK-${Date.now()}`,
-        checkin: new Date().toLocaleString("sv-SE", {
-          timeZone: TIMEZONE,
-        }),
+        checkin: checkinTimeStr,
         attendance_status_id: checkinStatusId,
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
@@ -244,8 +315,7 @@ export default function CheckinScreen() {
       const res = await createAttendance(payload as any);
       console.debug("Attendance created");
 
-      // Simpan check-in id hanya jika server mengembalikannya (offline queue
-      // mengembalikan payload palsu tanpa id — jangan simpan string kosong)
+      // Simpan check-in id hanya jika server mengembalikannya
       if (res.data?.id) await saveCheckInId(res.data.id);
 
       showToast("Berhasil Check In!", "success");
@@ -254,6 +324,35 @@ export default function CheckinScreen() {
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(JSON.stringify(err, null, 2));
+
+      // Jika gagal karena kendala koneksi saat request berlangsung, simpan ke antrean offline
+      try {
+        await queueOfflineCheckIn({
+          user_id: user?.id ?? "",
+          user_name: user?.name || "User",
+          company_id: user?.company_id || null,
+          site_id: selectedLocation || (user?.site_id ? String(user.site_id) : ""),
+          checkin: checkinTimeStr,
+          checkin_latitude: location.coords.latitude,
+          checkin_longitude: location.coords.longitude,
+          attendance_status_id: checkinStatusId || "ATST001",
+          description: formattedNotes,
+          localImages: images.map((img) => ({
+            uri: img.uri,
+            name: img.path || `checkin_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          })),
+          tolerance: selectedSite?.tolerance || 50,
+        });
+
+        Alert.alert(
+          "Check In Tersimpan Offline",
+          "Koneksi jaringan terputus saat pengiriman. Data absensi dan foto bukti telah diamankan di perangkat dan akan otomatis disinkronkan saat terhubung kembali.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+        return;
+      } catch {}
+
       Alert.alert(
         "Gagal Check In",
         err?.message || "Terjadi kesalahan, coba lagi.",

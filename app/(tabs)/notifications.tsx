@@ -16,6 +16,9 @@ import {
   markAllAsRead,
 } from "@/services/notification";
 import { parseUTCDate } from "@/utils/utils";
+import EmptyState from "@/components/ui/EmptyState";
+import ListSkeleton from "@/components/ui/ListSkeleton";
+import { Bell } from "@/components/icon";
 
 interface Notification {
   id: string;
@@ -159,14 +162,6 @@ export default function NotificationsScreen() {
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#1e90ff" />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
       <View
@@ -188,22 +183,32 @@ export default function NotificationsScreen() {
           </TouchableOpacity>
         )}
       </View>
-      <FlatList
-        data={notifications}
-        renderItem={renderNotification}
-        keyExtractor={(item) => item.id}
-        getItemLayout={(_data, index) => ({ length: 76, offset: 76 * index, index })}
-        windowSize={5}
-        removeClippedSubviews
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ListEmptyComponent={
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 80 }}>
-            <Text style={{ color: "#999", fontSize: 14 }}>Belum ada notifikasi</Text>
-          </View>
-        }
-      />
+      {loading && !notifications.length ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <ListSkeleton count={5} />
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={(item) => item.id}
+          getItemLayout={(_data, index) => ({ length: 76, offset: 76 * index, index })}
+          windowSize={5}
+          removeClippedSubviews
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#1e90ff"]} tintColor="#1e90ff" />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              title="Tidak Ada Notifikasi"
+              description="Semua pemberitahuan dan pembaruan tiket atau absensi akan muncul di sini."
+              actionLabel="Periksa Notifikasi"
+              onAction={onRefresh}
+              icon={<Bell color="#1e90ff" width={36} height={36} />}
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

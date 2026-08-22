@@ -12,6 +12,8 @@ import { getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
 import { IAttendance, IAttendanceEvidGroupId } from "@/types";
+import { DocumentCheck } from "@/components/icon";
+import EmptyState from "@/components/ui/EmptyState";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
@@ -19,6 +21,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -61,6 +64,7 @@ export default function IzinScreen() {
   const { showToast } = useToast();
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Detail modal state
   const [detailItem, setDetailItem] = useState<MergedItem | null>(null);
@@ -232,6 +236,7 @@ export default function IzinScreen() {
       console.error("Failed to fetch izin data:", error);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   }, [user?.id]);
 
@@ -244,10 +249,18 @@ export default function IzinScreen() {
 
   let content: React.ReactNode;
 
-  if (isLoading) {
+  if (isLoading && !refreshing) {
     content = <IzinSkeleton />;
   } else if (mergedData.length === 0) {
-    content = <EmptyState />;
+    content = (
+      <EmptyState
+        title="Belum Ada Pengajuan"
+        description="Anda belum memiliki riwayat pengajuan izin atau cuti kerja."
+        actionLabel="Ajukan Izin/Cuti"
+        onAction={() => router.push("/(no-tabs)/leave/create")}
+        icon={<DocumentCheck color="#1e90ff" width={36} height={36} />}
+      />
+    );
   } else {
     content = mergedData.map((item) => (
       <TouchableOpacity
@@ -292,7 +305,21 @@ export default function IzinScreen() {
         <Text style={styles.headerSubtitle}>Kelola pengajuan izin Anda</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              fetchAll();
+            }}
+            colors={["#1e90ff"]}
+            tintColor="#1e90ff"
+          />
+        }
+      >
         {/* Apply Button */}
         <TouchableOpacity
           style={styles.applyButton}
@@ -474,18 +501,6 @@ const IzinSkeleton = () => {
         </View>
       ))}
     </>
-  );
-};
-
-const EmptyState = () => {
-  return (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📭</Text>
-      <Text style={styles.emptyTitle}>Belum ada pengajuan</Text>
-      <Text style={styles.emptySubtitle}>
-        Anda belum memiliki riwayat izin atau cuti
-      </Text>
-    </View>
   );
 };
 

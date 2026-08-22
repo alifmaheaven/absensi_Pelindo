@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import EmptyState from "@/components/ui/EmptyState";
 
 export default function DailyRoutineListScreen() {
   const router = useRouter();
@@ -133,16 +134,13 @@ export default function DailyRoutineListScreen() {
         }
       >
         {!data?.routine ? (
-          // Empty state: no routine for today
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconContainer}>
-              <CheckRounded width={48} height={48} color="#94a3b8" />
-            </View>
-            <Text style={styles.emptyTitle}>Tidak Ada Daily Routine</Text>
-            <Text style={styles.emptyDescription}>
-              Tidak ada daily routine untuk site Anda hari ini
-            </Text>
-          </View>
+          <EmptyState
+            title="Tidak Ada Daily Routine"
+            description="Tidak ada penugasan checklist daily routine untuk site Anda hari ini."
+            actionLabel="Muat Ulang"
+            onAction={() => fetchData(true)}
+            icon={<CheckRounded color="#1e90ff" width={36} height={36} />}
+          />
         ) : (
           // Routine exists
           <View>

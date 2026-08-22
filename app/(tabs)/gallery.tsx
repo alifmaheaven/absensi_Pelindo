@@ -15,6 +15,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { getFolders, createFolder, deleteFolder } from "@/services/gallery";
 import { IGalleryFolder } from "@/types/gallery";
+import EmptyState from "@/components/ui/EmptyState";
+import { GalleryIcon } from "@/components/icon";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_COLS = 2;
@@ -177,13 +179,14 @@ export default function GalleryScreen() {
           data={folders}
           renderItem={renderFolder}
           keyExtractor={(item) => item.id}
-          numColumns={GRID_COLS}
-          contentContainerStyle={{ paddingTop: GRID_GAP, paddingRight: GRID_GAP, paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingTop: 80, width: SCREEN_WIDTH - GRID_GAP }}>
-              <Text style={{ color: "#999", fontSize: 14 }}>Belum ada folder</Text>
-            </View>
+            <EmptyState
+              title="Belum Ada Folder Galeri"
+              description="Buat folder baru untuk menyimpan foto dokumentasi operasional dan file dokumen pendukung."
+              actionLabel="+ Buat Folder Baru"
+              onAction={() => setShowCreate(true)}
+              icon={<GalleryIcon color="#1e90ff" width={36} height={36} />}
+            />
           }
         />
       )}

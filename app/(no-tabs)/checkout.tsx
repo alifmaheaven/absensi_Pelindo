@@ -18,12 +18,15 @@ import {
 import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
+import NetInfo from "@react-native-community/netinfo";
+import { queueOfflineCheckOut } from "@/lib/offlineQueue";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -98,6 +101,14 @@ export default function CheckoutScreen() {
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (loc.mocked) {
+        setLocation(null);
+        Alert.alert(
+          "Peringatan Keamanan",
+          "Terdeteksi Penggunaan Fake GPS / Mock Location. Harap matikan aplikasi Fake GPS dan nonaktifkan fitur Mock Location di Pengaturan Pengembang (Developer Options) perangkat Anda untuk melanjutkan absensi."
+        );
+        return;
+      }
       setLocation(loc);
     } catch (e) {
       console.debug("Location error:", e);
@@ -171,6 +182,14 @@ export default function CheckoutScreen() {
       return;
     }
 
+    if (location.mocked) {
+      Alert.alert(
+        "Peringatan Keamanan",
+        "Terdeteksi Penggunaan Fake GPS / Mock Location. Harap matikan aplikasi Fake GPS untuk melanjutkan."
+      );
+      return;
+    }
+
     // Wajib melampirkan minimal 1 gambar kedua (evidence checkout baru)
     if (newCheckoutImages.length === 0) {
       showToast("Wajib melampirkan foto bukti check out baru melalui kamera!", "error");
@@ -185,7 +204,43 @@ export default function CheckoutScreen() {
     // Lolos validasi → kunci submit
     submittingRef.current = true;
     setLoadingSubmit(true);
+
+    const checkoutTimeStr = new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE });
+    let finalDescription = activeCheckin?.description || "";
+    if (checkoutNotes.trim()) {
+      finalDescription = finalDescription
+        ? `${finalDescription}\n[Check Out]: ${checkoutNotes.trim()}`
+        : `[Check Out]: ${checkoutNotes.trim()}`;
+    }
+
     try {
+      const netState = await NetInfo.fetch();
+      const isOffline = !netState.isConnected || !netState.isInternetReachable;
+
+      if (isOffline) {
+        await queueOfflineCheckOut({
+          attendance_id: activeCheckin.id,
+          user_name: user?.name || "User",
+          evidence_group_id: activeCheckin.evidence_group_id,
+          checkout: checkoutTimeStr,
+          checkout_latitude: location.coords.latitude,
+          checkout_longitude: location.coords.longitude,
+          description: finalDescription,
+          localImages: newCheckoutImages.map((img) => ({
+            uri: img.uri,
+            name: img.path || `checkout_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          })),
+        });
+
+        Alert.alert(
+          "Check Out Tersimpan Offline",
+          "Koneksi internet tidak terdeteksi. Data kepulangan dan foto bukti Anda telah disimpan di perangkat dan akan disinkronkan saat terhubung kembali ke internet.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+        return;
+      }
+
       const groupId = activeCheckin?.evidence_group_id ?? "";
 
       // Upload ONLY new checkout evidence to group
@@ -202,18 +257,10 @@ export default function CheckoutScreen() {
         }
       }
 
-      // Build updated description without removing check-in notes
-      let finalDescription = activeCheckin?.description || "";
-      if (checkoutNotes.trim()) {
-        finalDescription = finalDescription
-          ? `${finalDescription}\n[Check Out]: ${checkoutNotes.trim()}`
-          : `[Check Out]: ${checkoutNotes.trim()}`;
-      }
-
       // Update attendance checkout with GPS location + notes
       await updateAttendance({
         id: activeCheckin.id,
-        checkout: new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE }),
+        checkout: checkoutTimeStr,
         ...(finalDescription ? { description: finalDescription } : {}),
         ...(location ? {
           checkout_longitude: location.coords.longitude,
@@ -226,6 +273,32 @@ export default function CheckoutScreen() {
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(err);
+
+      // Fallback offline queue
+      try {
+        await queueOfflineCheckOut({
+          attendance_id: activeCheckin.id,
+          user_name: user?.name || "User",
+          evidence_group_id: activeCheckin.evidence_group_id,
+          checkout: checkoutTimeStr,
+          checkout_latitude: location.coords.latitude,
+          checkout_longitude: location.coords.longitude,
+          description: finalDescription,
+          localImages: newCheckoutImages.map((img) => ({
+            uri: img.uri,
+            name: img.path || `checkout_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          })),
+        });
+
+        Alert.alert(
+          "Check Out Tersimpan Offline",
+          "Koneksi jaringan terputus saat pengiriman. Data check out telah disimpan secara aman di perangkat dan akan dikirim saat koneksi online kembali.",
+          [{ text: "OK", onPress: () => router.replace("/") }]
+        );
+        return;
+      } catch {}
+
       showToast("Gagal Check Out!", "error");
     } finally {
       setLoadingSubmit(false);

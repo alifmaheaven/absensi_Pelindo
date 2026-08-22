@@ -1,27 +1,38 @@
 import { getWeekSchedule } from "@/services/schedule";
+import { syncShiftNotifications } from "@/services/notification-scheduler";
 import type { IWeekScheduleItem } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState, useCallback } from "react";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import ScheduleSkeleton from "@/components/ui/ScheduleSkeleton";
+import EmptyState from "@/components/ui/EmptyState";
+import { Calender } from "@/components/icon";
 
 export default function JadwalScreen() {
   const [schedules, setSchedules] = useState<IWeekScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchSchedule = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setIsLoading(true);
+
+      const res = await getWeekSchedule();
+      const list = res.data?.schedules || [];
+      setSchedules(list);
+      syncShiftNotifications(list);
+    } catch (e) {
+      console.error("Failed to fetch schedule:", e);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    async function fetchSchedule() {
-      try {
-        setIsLoading(true);
-        const res = await getWeekSchedule();
-        setSchedules(res.data?.schedules || []);
-      } catch (e) {
-        console.error("Failed to fetch schedule:", e);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     fetchSchedule();
-  }, []);
+  }, [fetchSchedule]);
 
   const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
 
@@ -37,13 +48,28 @@ export default function JadwalScreen() {
         <Text style={styles.headerSubtitle}>{monthYear}</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchSchedule(true)}
+            colors={["#1e90ff"]}
+            tintColor="#1e90ff"
+          />
+        }
+      >
         {isLoading ? (
-          <Text style={styles.loadingText}>Memuat...</Text>
+          <ScheduleSkeleton count={7} />
         ) : schedules.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Belum ada jadwal</Text>
-          </View>
+          <EmptyState
+            title="Belum Ada Jadwal"
+            description="Jadwal shift kerja Anda belum ditetapkan oleh administrator. Hubungi supervisor untuk penugasan shift."
+            actionLabel="Muat Ulang"
+            onAction={() => fetchSchedule(true)}
+            icon={<Calender color="#1e90ff" width={36} height={36} />}
+          />
         ) : (
           schedules.map((item, index) => {
             // item.date format "YYYY-MM-DD" — ambil tanggal langsung (hindari

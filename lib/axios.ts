@@ -12,9 +12,13 @@ const API = axios.create({
   },
 });
 
-// Request interceptor — attach token
+// Request interceptor — attach token & route /api/v2/ requests to v2 baseURL
 API.interceptors.request.use(
   async (config) => {
+    if (config.url?.startsWith('/api/v2/')) {
+      const rootUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/api\/v1\/?$/, '');
+      config.baseURL = rootUrl;
+    }
     const token = await getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;

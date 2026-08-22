@@ -164,7 +164,7 @@ async function uploadLocalImage(
     } as any);
 
     // 1. Upload temp
-    const tempRes = await apiClient.post("/attendance/upload", formData, {
+    const tempRes = await apiClient.post("/api/v2/attendance/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
@@ -172,7 +172,7 @@ async function uploadLocalImage(
     if (!tempLink) return null;
 
     // 2. Upload permanent
-    const permRes = await apiClient.post("/attendance/upload-permanent", {
+    const permRes = await apiClient.post("/api/v2/attendance/upload-permanent", {
       links: [tempLink],
     });
     const permFile = permRes.data?.data?.links?.[0] || permRes.data?.links?.[0];
@@ -242,7 +242,7 @@ export async function syncQueuedRequests(): Promise<number> {
             ...(groupId ? { evidence_group_id: groupId } : {}),
           };
 
-          const createRes = await apiClient.post("/attendance/", attendancePayload, {
+          const createRes = await apiClient.post("/api/v2/attendance/", attendancePayload, {
             timeout: 20000,
           });
           const createdId = createRes.data?.data?.id || createRes.data?.id;
@@ -262,7 +262,7 @@ export async function syncQueuedRequests(): Promise<number> {
 
           // 2. Update Attendance
           await apiClient.put(
-            "/attendance/",
+            "/api/v2/attendance/",
             {
               id: payload.attendance_id,
               checkout: payload.checkout,

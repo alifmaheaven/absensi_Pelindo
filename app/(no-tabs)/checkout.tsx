@@ -161,7 +161,7 @@ export default function CheckoutScreen() {
         name: file.name,
         type: file.type,
       } as any);
-      const response = await axios.post("/attendance/upload", formData, {
+      const response = await axios.post("/api/v2/attendance/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       return response.data;

@@ -291,7 +291,7 @@ export async function getActiveCheckins(): Promise<
   Response<{ data: IAttendanceOptions[] }> | IAttendanceOptions[]
 > {
   try {
-    const response = await axios.get("/attendance/active-checkins");
+    const response = await axios.get("/api/v2/attendance/active-checkins");
     // Backend wraps in { code, message, data: [...] } via response.ok()
     const payload = response.data;
     return payload?.data ?? payload;
@@ -309,7 +309,7 @@ export async function getAttendanceOption(
   },
 ): Promise<Response<{ data: IAttendanceOptions[] }>> {
   try {
-    const response = await axios.get("/attendance/", { params });
+    const response = await axios.get("/api/v2/attendance/", { params });
     return response.data;
   } catch (error) {
     console.error(error);

@@ -22,7 +22,7 @@ export async function getAttendanceList(
   },
 ): Promise<Response<{ data: IAttendance[]; meta?: IMeta }>> {
   try {
-    const response = await axios.get("/attendance/", { params });
+    const response = await axios.get("/api/v2/attendance/", { params });
     return response.data;
   } catch (error) {
     console.error(error);
@@ -35,7 +35,7 @@ export async function uploadEvid(file: File): Promise<Response<IUpload[]>> {
     const formData = new FormData();
     formData.append("files", file);
 
-    const response = await axios.post("/attendance/upload", formData, {
+    const response = await axios.post("/api/v2/attendance/upload", formData, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -52,7 +52,7 @@ export async function deleteEvidtmp(payload: {
   links: string[];
 }): Promise<Response<{ links: string[] }>> {
   try {
-    const response = await axios.delete("/attendance/upload", {
+    const response = await axios.delete("/api/v2/attendance/upload", {
       data: payload,
     });
 
@@ -80,7 +80,7 @@ export async function getAttendanceStatus(
   params: TParams,
 ): Promise<Response<{ data: IAttendanceStatus[] }>> {
   try {
-    const response = await axios.get("/attendance-status/", { params });
+    const response = await axios.get("/api/v2/attendance-status/", { params });
 
     return response.data;
   } catch (error) {
@@ -109,10 +109,10 @@ export async function createAttendance(
   try {
     const state = await NetInfo.fetch();
     if (!state.isConnected || !state.isInternetReachable) {
-      await queueRequest("/attendance/", "POST", payload);
+      await queueRequest("/api/v2/attendance/", "POST", payload);
       return { data: payload as any } as Response<IAttendance>;
     }
-    const response = await axios.post("/attendance/", payload);
+    const response = await axios.post("/api/v2/attendance/", payload);
     return response.data;
   } catch (error) {
     console.error(error);
@@ -130,10 +130,10 @@ export async function updateAttendance(payload: {
   try {
     const state = await NetInfo.fetch();
     if (!state.isConnected || !state.isInternetReachable) {
-      await queueRequest("/attendance/", "PUT", payload);
+      await queueRequest("/api/v2/attendance/", "PUT", payload);
       return { data: payload } as any;
     }
-    const response = await axios.put("/attendance/", payload);
+    const response = await axios.put("/api/v2/attendance/", payload);
     return response.data;
   } catch (error) {
     console.error(error);
@@ -191,7 +191,7 @@ export async function uploadEvidPermanent(payload: {
   }>
 > {
   try {
-    const response = await axios.post("/attendance/upload-permanent", payload);
+    const response = await axios.post("/api/v2/attendance/upload-permanent", payload);
 
     return response.data;
   } catch (error) {

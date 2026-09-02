@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import AttendanceCard from "@/components/home/AttendanceCard";
 import {
   Bell,
@@ -93,6 +94,8 @@ export function getWorkStatus(
 }
 
 export default function HomeScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { user } = useAuthStore();
   const { showToast } = useToast();
@@ -277,8 +280,8 @@ export default function HomeScreen() {
     {
       icon: Ticket,
       label: "Ticket",
-      color: "#FF8D28",
-      containerColor: "#ffc999",
+      color: colors.warning,
+      containerColor: colors.warningSoft,
       onPress: () => {
         if (!activeCheckin?.checkin) {
           showToast("Anda belum check in", "info");
@@ -290,8 +293,8 @@ export default function HomeScreen() {
     {
       icon: CheckRounded,
       label: "Daily",
-      color: "#22C55E",
-      containerColor: "#a7f3d0",
+      color: colors.success,
+      containerColor: colors.successSoft,
       onPress: () => {
         if (!activeCheckin?.checkin) {
           showToast("Anda belum check in", "info");
@@ -313,7 +316,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#1e90ff", "#ffffff"]}
+        colors={[colors.primary, colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.gradient}
@@ -389,7 +392,7 @@ export default function HomeScreen() {
               </Text>
               <View style={styles.dayBadge}>
                 <Text style={styles.dayIcon}>
-                  <Calender width={20} height={20} color="#000" />
+                  <Calender width={20} height={20} color={colors.text} />
                 </Text>
                 <Text style={styles.dayText}>{getDayName(currentTime)}</Text>
               </View>
@@ -399,7 +402,7 @@ export default function HomeScreen() {
             <View style={styles.clockSection}>
               <View style={styles.clockIconRow}>
                 <Text style={styles.clockEmoji}>
-                  <ClockOutline width={20} height={20} color="#2F73FF" />
+                  <ClockOutline width={20} height={20} color={colors.primary} />
                 </Text>
                 <Text style={styles.clockSmall}>{formatTime(currentTime)}</Text>
               </View>
@@ -487,10 +490,10 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.background,
   },
   gradient: {
     flex: 1,
@@ -509,7 +512,7 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
     marginBottom: 2,
   },
   userName: {
@@ -532,7 +535,7 @@ const styles = StyleSheet.create({
   },
   // Tips Card
   tipsCard: {
-    backgroundColor: "#2196F3", // Biru seperti di gambar
+    backgroundColor: c.primary, // Biru seperti di gambar
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
@@ -555,17 +558,17 @@ const styles = StyleSheet.create({
   tipsTitle: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
   },
   tipsText: {
     fontSize: 12,
-    color: "#fff",
+    color: c.onGradient,
     lineHeight: 18,
     opacity: 0.9,
   },
   // Ringkasan Card
   ringkasanCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 20,
     padding: 20,
     shadowColor: "#000",
@@ -588,12 +591,12 @@ const styles = StyleSheet.create({
   ringkasanLabel: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     marginRight: 12,
   },
   ringkasanDate: {
     fontSize: 12,
-    color: "#666",
+    color: c.textSecondary,
     flex: 1,
     textAlign: "right",
     marginRight: 10,
@@ -601,7 +604,7 @@ const styles = StyleSheet.create({
   dayBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -613,13 +616,13 @@ const styles = StyleSheet.create({
   dayText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   // Clock Section
   clockSection: {
     alignItems: "center",
     marginBottom: 24,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingVertical: 20,
     paddingHorizontal: 10,
@@ -632,17 +635,17 @@ const styles = StyleSheet.create({
   clockEmoji: {
     fontSize: 14,
     marginRight: 6,
-    color: "#1e90ff",
+    color: c.primary,
   },
   clockSmall: {
     fontSize: 14,
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
   },
   digitalClock: {
     fontSize: 40,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     letterSpacing: 2,
   },
   // Attendance Cards
@@ -654,7 +657,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     marginBottom: 12,
   },
   aksesGrid: {
@@ -684,10 +687,10 @@ const styles = StyleSheet.create({
   aksesLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   aksesCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
@@ -717,7 +720,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 2,
     right: 2,
-    backgroundColor: "#FF3B30",
+    backgroundColor: c.danger,
     borderRadius: 9,
     minWidth: 16,
     height: 16,
@@ -727,7 +730,7 @@ const styles = StyleSheet.create({
   },
 
   notificationBadgeText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },

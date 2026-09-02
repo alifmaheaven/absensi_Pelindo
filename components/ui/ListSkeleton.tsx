@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useEffect, useRef , useMemo } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 
 export default function ListSkeleton({ count = 4 }: { count?: number }) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const animatedValue = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -39,17 +42,17 @@ export default function ListSkeleton({ count = 4 }: { count?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     paddingVertical: 12,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
+    borderColor: c.border,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -66,25 +69,25 @@ const styles = StyleSheet.create({
     width: 80,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#e2e8f0",
+    backgroundColor: c.borderStrong,
   },
   time: {
     width: 60,
     height: 12,
     borderRadius: 4,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: c.surface,
   },
   title: {
     width: "70%",
     height: 16,
     borderRadius: 6,
-    backgroundColor: "#e2e8f0",
+    backgroundColor: c.borderStrong,
     marginBottom: 8,
   },
   description: {
     width: "90%",
     height: 12,
     borderRadius: 4,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: c.surface,
   },
 });

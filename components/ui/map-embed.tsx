@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import * as Location from "expo-location";
 import React, { useRef } from "react";
 import { View } from "react-native";

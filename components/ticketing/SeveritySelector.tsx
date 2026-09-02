@@ -1,4 +1,5 @@
-import React from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useMemo } from "react";
 import { Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { ITicketSeverity } from "@/types";
 
@@ -8,14 +9,15 @@ interface Props {
   options: ITicketSeverity[];
 }
 
-const DEFAULT_SEVERITY_COLOR = {
+// Netral mengikuti tema (fallback bila severity tanpa warna).
+const defaultSeverityColor = (c: ThemeColors) => ({
   bg: "rgba(150,150,150,0.15)",
-  border: "#999",
-  text: "#555",
-};
+  border: c.textMuted,
+  text: c.textSecondary,
+});
 
-function parseSeverityColor(hex: string | undefined) {
-  if (!hex) return DEFAULT_SEVERITY_COLOR;
+function parseSeverityColor(hex: string | undefined, c: ThemeColors) {
+  if (!hex) return defaultSeverityColor(c);
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
@@ -27,12 +29,15 @@ function parseSeverityColor(hex: string | undefined) {
 }
 
 export function SeveritySelector({ value, onChange, options }: Props) {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.severityContainer}>
       {options?.length > 0 ? (
         options?.map((item) => {
           const isActive = value === item.id;
-          const color = parseSeverityColor(item.color);
+          const color = parseSeverityColor(item.color, colors);
 
           return (
             <TouchableOpacity
@@ -65,7 +70,7 @@ export function SeveritySelector({ value, onChange, options }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   severityContainer: {
     flexDirection: "row",
     gap: 10,
@@ -76,16 +81,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     alignItems: "center",
   },
   severityText: {
     fontSize: 13,
-    color: "#555",
+    color: c.textSecondary,
   },
   emptyText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
     flex: 1,
   },

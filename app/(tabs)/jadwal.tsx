@@ -1,14 +1,17 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
 import type { IWeekScheduleItem } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback , useMemo } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScheduleSkeleton from "@/components/ui/ScheduleSkeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import { Calender } from "@/components/icon";
 
 export default function JadwalScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [schedules, setSchedules] = useState<IWeekScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,8 +58,8 @@ export default function JadwalScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchSchedule(true)}
-            colors={["#1e90ff"]}
-            tintColor="#1e90ff"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
@@ -68,15 +71,15 @@ export default function JadwalScreen() {
             description="Jadwal shift kerja Anda belum ditetapkan oleh administrator. Hubungi supervisor untuk penugasan shift."
             actionLabel="Muat Ulang"
             onAction={() => fetchSchedule(true)}
-            icon={<Calender color="#1e90ff" width={36} height={36} />}
+            icon={<Calender color={colors.primary} width={36} height={36} />}
           />
         ) : (
           schedules.map((item, index) => {
             // item.date format "YYYY-MM-DD" — ambil tanggal langsung (hindari
             // new Date(spasi/zone) yang bisa off-by-one lintas timezone device).
             const dateNum = item.date ? item.date.split("-")[2] : "--";
-            const bg = item.is_today ? "#1e90ff" : item.has_schedule ? item.shift!.color : "#e3f2fd";
-            const textColor = item.is_today || item.has_schedule ? "#fff" : "#999";
+            const bg = item.is_today ? colors.primary : item.has_schedule ? item.shift!.color : colors.primarySoft;
+            const textColor = item.is_today || item.has_schedule ? colors.onGradient : colors.textMuted;
 
             return (
               <View
@@ -121,10 +124,10 @@ export default function JadwalScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#e8f4fc",
+    backgroundColor: c.primarySoft,
   },
   header: {
     paddingTop: 60,
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
     marginBottom: 5,
   },
   headerSubtitle: {
@@ -147,7 +150,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     textAlign: "center",
-    color: "#666",
+    color: c.textSecondary,
     marginTop: 40,
     fontSize: 14,
   },
@@ -156,11 +159,11 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
-    color: "#666",
+    color: c.textSecondary,
     fontSize: 14,
   },
   scheduleCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -174,7 +177,7 @@ const styles = StyleSheet.create({
   },
   todayCard: {
     borderWidth: 2,
-    borderColor: "#1e90ff",
+    borderColor: c.primary,
   },
   dateBox: {
     width: 55,
@@ -198,22 +201,22 @@ const styles = StyleSheet.create({
   shiftLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
     marginBottom: 4,
   },
   timeText: {
     fontSize: 13,
-    color: "#666",
+    color: c.textSecondary,
   },
   todayBadge: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   todayText: {
     fontSize: 11,
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "600",
   },
 });

@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
@@ -59,6 +60,8 @@ const imageUploadService = {
 };
 
 export default function CheckinScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const [location, setLocation] = useState<Location.LocationObject | null>(
@@ -370,7 +373,7 @@ export default function CheckinScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -429,7 +432,7 @@ export default function CheckinScreen() {
                   </View>
                 ) : (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#1e90ff" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
                   </View>
                 )
@@ -513,7 +516,7 @@ export default function CheckinScreen() {
               <TextInput
                 style={styles.notesInput}
                 placeholder="Add any notes here"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}
                 value={notes}
@@ -565,11 +568,11 @@ export default function CheckinScreen() {
               {loadingImage ? (
                 <ActivityIndicator
                   size="small"
-                  color="#666"
+                  color={colors.textSecondary}
                   style={{ marginRight: 8 }}
                 />
               ) : (
-                <ImageIcon color="#999" style={styles.uploadButtonIcon} />
+                <ImageIcon color={colors.textMuted} style={styles.uploadButtonIcon} />
               )}
               <Text style={styles.uploadButtonText}>
                 {loadingImage ? "Memproses..." : "Tambah Gambar"}
@@ -648,7 +651,7 @@ export default function CheckinScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   headerGradient: {
     height: 150, // Tinggi gradient
     paddingBottom: 30,
@@ -670,7 +673,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
   },
   notificationButtonPlaceholder: {
     width: 40,
@@ -680,7 +683,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     marginTop: -40, // Overlap dengan header
-    backgroundColor: "#ffffff",
+    backgroundColor: c.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -696,7 +699,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: "hidden",
     marginBottom: 24,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
     // Shadow for map container
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -711,7 +714,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    color: "#666",
+    color: c.textSecondary,
   },
   locationDeniedEmoji: {
     fontSize: 40,
@@ -720,25 +723,25 @@ const styles = StyleSheet.create({
   locationDeniedTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     marginBottom: 4,
   },
   locationDeniedText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
     marginBottom: 16,
     paddingHorizontal: 20,
   },
   retryButton: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
     marginBottom: 10,
   },
   retryButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 14,
   },
@@ -747,7 +750,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   settingsButtonText: {
-    color: "#3B82F6",
+    color: c.primary,
     fontWeight: "600",
     fontSize: 14,
   },
@@ -768,7 +771,7 @@ const styles = StyleSheet.create({
   },
   locationOverlayText: {
     fontSize: 10,
-    color: "#333",
+    color: c.text,
     textAlign: "center",
     fontWeight: "600",
   },
@@ -777,7 +780,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
 
@@ -786,14 +789,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: 16,
     borderWidth: 1.5,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     borderRadius: 16,
     marginBottom: 12,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
   },
   locationOptionSelected: {
-    borderColor: "#1e90ff",
-    backgroundColor: "#f8fbff",
+    borderColor: c.primary,
+    backgroundColor: c.primarySoft,
   },
   locationOptionOutOfRange: {
     opacity: 0.6,
@@ -807,18 +810,18 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: "#d1d5db",
+    borderColor: c.borderStrong,
     justifyContent: "center",
     alignItems: "center",
   },
   radioOuterSelected: {
-    borderColor: "#1e90ff",
+    borderColor: c.primary,
   },
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
   },
   locationTextContainer: {
     flex: 1,
@@ -832,13 +835,13 @@ const styles = StyleSheet.create({
   locationTitle: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     flex: 1,
   },
   outOfRangeBadge: {
     fontSize: 10,
-    color: "#e67e22",
-    backgroundColor: "#fef3e2",
+    color: c.warning,
+    backgroundColor: c.warningSoft,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -847,24 +850,24 @@ const styles = StyleSheet.create({
   },
   locationAddress: {
     fontSize: 12,
-    color: "#666",
+    color: c.textSecondary,
     marginBottom: 6,
     lineHeight: 18,
   },
   locationCoords: {
     fontSize: 10,
-    color: "#999",
+    color: c.textMuted,
   },
 
   // Info Card
   infoCard: {
-    backgroundColor: "#F0F7FF", // Hijau muda/Biru muda yang lembut
+    backgroundColor: c.primarySoft, // Hijau muda/Biru muda yang lembut
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "#E3F2FD",
+    borderColor: c.border,
   },
   infoRow: {
     flexDirection: "row",
@@ -878,7 +881,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 15,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   infoDivider: {
     height: 1,
@@ -892,27 +895,27 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
   },
   infoValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
 
   // Notes
   notesContainer: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
   },
   notesInput: {
     padding: 16,
     height: 100,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
 
   // Image Upload
@@ -928,7 +931,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
   },
   imagePreview: {
     width: "100%",
@@ -938,17 +941,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#fff",
+    borderColor: c.onGradient,
   },
   removeImageText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },
@@ -957,12 +960,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 16,
     padding: 16,
     marginBottom: 30,
     borderStyle: "dashed",
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
   },
   uploadButtonIcon: {
     marginRight: 8,
@@ -970,7 +973,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
   },
 
@@ -979,7 +982,7 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: "#3B82F6", // Modern blue
+    backgroundColor: c.primary, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -990,7 +993,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   submitButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "bold",
     textTransform: "capitalize",
@@ -1001,7 +1004,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
   },
   imageLoadingOverlay: {
     position: "absolute",
@@ -1017,11 +1020,11 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -1030,7 +1033,7 @@ const styles = StyleSheet.create({
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -1040,42 +1043,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 24,
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
   },
   modalButtonTextPrimary: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   modalButtonSecondary: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#eee",
+    borderColor: c.border,
   },
   modalButtonTextSecondary: {
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
   },
   modalButtonTextCancel: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },
@@ -1084,10 +1087,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 30,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
     borderStyle: "dashed",
   },
@@ -1098,13 +1101,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     textAlign: "center",
     marginBottom: 4,
   },
   emptyStateSubText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
   },
 });

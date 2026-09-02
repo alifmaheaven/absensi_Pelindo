@@ -1,7 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useEffect, useRef , useMemo } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 
 const SkeletonBlock = ({ width, height, style }: { width?: number | string; height?: number | string; style?: any }) => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -27,6 +30,8 @@ const SkeletonBlock = ({ width, height, style }: { width?: number | string; heig
 };
 
 export function FormSkeleton() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       {/* Map placeholder */}
@@ -59,13 +64,13 @@ export function FormSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 8,
   },
   block: {
-    backgroundColor: "#e2e8f0",
+    backgroundColor: c.borderStrong,
   },
   mapPlaceholder: {
     height: 200,

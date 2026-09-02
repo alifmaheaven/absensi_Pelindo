@@ -1,7 +1,8 @@
 import { Tabs } from "expo-router";
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { HapticTab } from "@/components/haptic-tab";
 import { Calender, DocumentCheck, GalleryIcon, Home, Person, CheckRounded } from "@/components/icon";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
@@ -18,6 +19,8 @@ function TabIcon({
   icon: (props: SvgProps) => React.JSX.Element;
   focused: boolean;
 }) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const Icon = icon;
   return (
     <View
@@ -29,6 +32,7 @@ function TabIcon({
 }
 
 export default function TabLayout() {
+  const colors = useThemeColors();
   const { checking } = useAuthGuard("auth");
 
   // Must be before any early returns (React Rules of Hooks)
@@ -45,6 +49,8 @@ export default function TabLayout() {
     initAuth();
   }, []);
 
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   if (checking) {
     return (
       <View style={{ flex: 1, justifyContent: "center" }}>
@@ -56,8 +62,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#1e90ff",
-        tabBarInactiveTintColor: "#999",
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: styles.tabBar,
@@ -128,9 +134,9 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   tabBar: {
-    backgroundColor: "#fff",
+    backgroundColor: c.tabBar,
     borderTopWidth: 0,
     elevation: 15,
     shadowColor: "#000",
@@ -159,10 +165,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 12,
-    backgroundColor: "#999",
+    backgroundColor: c.textMuted,
   },
   iconContainerFocused: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
   },
   icon: {
     fontSize: 22,

@@ -1,6 +1,7 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * SINGLE SOURCE OF TRUTH untuk warna aplikasi (light & dark).
+ * Bagian dari sistem tema resmi Expo: data di sini, hook di `hooks/use-theme-color.ts`.
+ * Jangan hardcode warna di screen/komponen — pakai `useThemeColors()` / `useThemeColor()`.
  */
 
 import { Platform } from 'react-native';
@@ -10,22 +11,70 @@ const tintColorDark = '#fff';
 
 export const Colors = {
   light: {
-    text: '#11181C',
+    // — Kunci bawaan template Expo (dipakai ThemedText/ThemedView/modal) —
+    text: '#333333',
     background: '#fff',
     tint: tintColorLight,
     icon: '#687076',
     tabIconDefault: '#687076',
     tabIconSelected: tintColorLight,
+    // — Palet aplikasi (light = nilai literal yang sudah berjalan) —
+    textStrong: '#1a1a1a',
+    textSecondary: '#666666',
+    textMuted: '#999999',
+    textFaint: '#cccccc',
+    /** Teks di atas gradient/permukaan berwarna — selalu putih di kedua mode */
+    onGradient: '#ffffff',
+    surface: '#f8f9fa',
+    card: '#ffffff',
+    inputBg: '#fafafa',
+    border: '#f0f0f0',
+    borderStrong: '#e0e0e0',
+    primary: '#1e90ff',
+    primarySoft: '#eff6ff',
+    success: '#22c55e',
+    successSoft: '#E8F5E9',
+    warningSoft: '#FFF4E5',
+    dangerSoft: '#FFE9E9',
+    warning: '#f59e0b',
+    danger: '#ef4444',
+    overlay: 'rgba(0,0,0,0.5)',
+    tabBar: '#ffffff',
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    // — Kunci bawaan template Expo —
+    text: '#e0e0e0',
+    background: '#121212',
     tint: tintColorDark,
     icon: '#9BA1A6',
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
+    // — Palet aplikasi (dark) —
+    textStrong: '#ffffff',
+    textSecondary: '#b3b3b3',
+    textMuted: '#8f8f8f',
+    textFaint: '#666666',
+    onGradient: '#ffffff',
+    surface: '#1e1e1e',
+    card: '#2a2a2a',
+    inputBg: '#2a2a2a',
+    border: '#333333',
+    borderStrong: '#444444',
+    /** Keluarga hue #1e90ff dipertahankan (keputusan brand final menunggu user) */
+    primary: '#4da6ff',
+    primarySoft: '#152a42',
+    success: '#4ade80',
+    successSoft: '#12321f',
+    warningSoft: '#3a2a10',
+    dangerSoft: '#3a1515',
+    warning: '#fbbf24',
+    danger: '#f87171',
+    overlay: 'rgba(0,0,0,0.7)',
+    tabBar: '#1e1e1e',
   },
 };
+
+export type ThemeColors = typeof Colors.light;
 
 export const Fonts = Platform.select({
   ios: {

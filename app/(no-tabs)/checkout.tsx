@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
@@ -23,7 +24,7 @@ import { queueOfflineCheckOut } from "@/lib/offlineQueue";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState , useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -45,6 +46,8 @@ import ImageViewerModal from "@/components/ImageViewerModal";
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function CheckoutScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const { user } = useAuthStore();
@@ -313,7 +316,7 @@ export default function CheckoutScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -371,7 +374,7 @@ export default function CheckoutScreen() {
                   </View>
                 ) : (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#1e90ff" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                     <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
                   </View>
                 )
@@ -422,7 +425,7 @@ export default function CheckoutScreen() {
               <TextInput
                 style={styles.notesInput}
                 placeholder="Tambahkan catatan check out di sini"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={3}
                 value={checkoutNotes}
@@ -507,11 +510,11 @@ export default function CheckoutScreen() {
               {loadingImage ? (
                 <ActivityIndicator
                   size="small"
-                  color="#666"
+                  color={colors.textSecondary}
                   style={{ marginRight: 8 }}
                 />
               ) : (
-                <ImageIcon color="#999" style={styles.uploadButtonIcon} />
+                <ImageIcon color={colors.textMuted} style={styles.uploadButtonIcon} />
               )}
               <Text style={styles.uploadButtonText}>
                 {loadingImage ? "Memproses..." : "Tambah Foto Check Out"}
@@ -590,67 +593,67 @@ export default function CheckoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   headerGradient: { height: 150, paddingBottom: 30 },
   headerSafeArea: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10 },
   backButton: { padding: 8, borderRadius: 20 },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: "#fff" },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: c.onGradient },
   notificationButtonPlaceholder: { width: 40, height: 40 },
-  contentContainer: { flex: 1, marginTop: -40, backgroundColor: "#ffffff", borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
+  contentContainer: { flex: 1, marginTop: -40, backgroundColor: c.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
   scrollContent: { padding: 20, paddingTop: 25 },
-  mapContainer: { height: 180, borderRadius: 20, overflow: "hidden", marginBottom: 24, backgroundColor: "#f5f5f5", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  mapContainer: { height: 180, borderRadius: 20, overflow: "hidden", marginBottom: 24, backgroundColor: c.surface, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
   map: { width: "100%", height: "100%" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 10, color: "#666" },
+  loadingText: { marginTop: 10, color: c.textSecondary },
   locationDeniedEmoji: { fontSize: 40, marginBottom: 10 },
-  locationDeniedTitle: { fontSize: 16, fontWeight: "bold", color: "#333", marginBottom: 4 },
-  locationDeniedText: { fontSize: 13, color: "#999", textAlign: "center", marginBottom: 16, paddingHorizontal: 20 },
-  retryButton: { backgroundColor: "#3B82F6", paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10 },
-  retryButtonText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
+  locationDeniedTitle: { fontSize: 16, fontWeight: "bold", color: c.text, marginBottom: 4 },
+  locationDeniedText: { fontSize: 13, color: c.textMuted, textAlign: "center", marginBottom: 16, paddingHorizontal: 20 },
+  retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10 },
+  retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24 },
-  settingsButtonText: { color: "#3B82F6", fontWeight: "600", fontSize: 14 },
+  settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
   locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: "rgba(255, 255, 255, 0.95)", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  locationOverlayText: { fontSize: 10, color: "#333", textAlign: "center", fontWeight: "600" },
-  sectionTitle: { fontSize: 15, fontWeight: "bold", color: "#1a1a1a", marginBottom: 10 },
+  locationOverlayText: { fontSize: 10, color: c.text, textAlign: "center", fontWeight: "600" },
+  sectionTitle: { fontSize: 15, fontWeight: "bold", color: c.textStrong, marginBottom: 10 },
   requiredSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  requiredBadge: { fontSize: 12, fontWeight: "700", color: "#E53935" },
-  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: "#f0f0f0", borderRadius: 16, marginBottom: 20, backgroundColor: "#fff" },
-  locationOptionSelected: { borderColor: "#1e90ff", backgroundColor: "#f8fbff" },
-  locationIconContainer: { marginRight: 14, marginTop: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: "#e9f0ff", justifyContent: "center", alignItems: "center" },
+  requiredBadge: { fontSize: 12, fontWeight: "700", color: c.danger },
+  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: c.border, borderRadius: 16, marginBottom: 20, backgroundColor: c.card },
+  locationOptionSelected: { borderColor: c.primary, backgroundColor: c.primarySoft },
+  locationIconContainer: { marginRight: 14, marginTop: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: c.primarySoft, justifyContent: "center", alignItems: "center" },
   locationTextContainer: { flex: 1 },
-  locationTitle: { fontSize: 14, fontWeight: "bold", color: "#333", marginBottom: 4 },
-  locationCoords: { fontSize: 10, color: "#999" },
-  readOnlyCard: { backgroundColor: "#f8f9fa", borderRadius: 14, borderWidth: 1, borderColor: "#e9ecef", padding: 14, marginBottom: 20 },
-  readOnlyText: { fontSize: 13, color: "#495057", lineHeight: 18 },
-  notesContainer: { backgroundColor: "#fafafa", borderRadius: 16, borderWidth: 1, borderColor: "#f0f0f0", marginBottom: 20 },
-  notesInput: { padding: 14, height: 80, fontSize: 14, color: "#333" },
+  locationTitle: { fontSize: 14, fontWeight: "bold", color: c.text, marginBottom: 4 },
+  locationCoords: { fontSize: 10, color: c.textMuted },
+  readOnlyCard: { backgroundColor: c.surface, borderRadius: 14, borderWidth: 1, borderColor: c.borderStrong, padding: 14, marginBottom: 20 },
+  readOnlyText: { fontSize: 13, color: c.textSecondary, lineHeight: 18 },
+  notesContainer: { backgroundColor: c.inputBg, borderRadius: 16, borderWidth: 1, borderColor: c.border, marginBottom: 20 },
+  notesInput: { padding: 14, height: 80, fontSize: 14, color: c.text },
   imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
-  imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: "#f0f0f0" },
+  imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: c.border },
   imagePreview: { width: "100%", height: "100%" },
   imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(30, 144, 255, 0.88)", paddingVertical: 4, alignItems: "center", justifyContent: "center" },
-  imageLockedText: { color: "#fff", fontSize: 9, fontWeight: "700" },
-  emptyEvidenceCard: { backgroundColor: "#fafafa", borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: "#f0f0f0" },
-  emptyEvidenceText: { fontSize: 12, color: "#999" },
-  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.55)", width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#fff" },
-  removeImageText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
-  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#1e90ff", borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: "#f8fbff" },
+  imageLockedText: { color: c.onGradient, fontSize: 9, fontWeight: "700" },
+  emptyEvidenceCard: { backgroundColor: c.inputBg, borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: c.border },
+  emptyEvidenceText: { fontSize: 12, color: c.textMuted },
+  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: c.overlay, width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: c.onGradient },
+  removeImageText: { color: c.onGradient, fontSize: 10, fontWeight: "bold" },
+  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: c.primary, borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: c.primarySoft },
   uploadButtonIcon: { marginRight: 8, fontSize: 18 },
-  uploadButtonText: { fontSize: 14, color: "#1e90ff", fontWeight: "700" },
-  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: "#3B82F6", borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
-  submitButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
+  uploadButtonText: { fontSize: 14, color: c.primary, fontWeight: "700" },
+  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: c.primary, borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+  submitButtonText: { color: c.onGradient, fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
   submitButtonDisabled: { opacity: 0.7 },
-  uploadButtonDisabled: { opacity: 0.7, backgroundColor: "#f5f5f5" },
+  uploadButtonDisabled: { opacity: 0.7, backgroundColor: c.surface },
   imageLoadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  modalContent: { backgroundColor: "#fff", borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
-  modalIndicator: { width: 40, height: 4, backgroundColor: "#e0e0e0", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: "#1a1a1a" },
-  modalButtonPrimary: { backgroundColor: "#3B82F6", padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
-  modalButtonTextPrimary: { color: "#fff", fontWeight: "bold", fontSize: 15 },
-  modalButtonCancel: { backgroundColor: "#f8f9fa", padding: 18, borderRadius: 16, alignItems: "center" },
-  modalButtonTextCancel: { color: "#666", fontWeight: "600", fontSize: 15 },
-  emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: "#f0f0f0", marginBottom: 24, borderStyle: "dashed" },
+  modalOverlay: { flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end" },
+  modalContent: { backgroundColor: c.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
+  modalIndicator: { width: 40, height: 4, backgroundColor: c.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: c.textStrong },
+  modalButtonPrimary: { backgroundColor: c.primary, padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
+  modalButtonTextPrimary: { color: c.onGradient, fontWeight: "bold", fontSize: 15 },
+  modalButtonCancel: { backgroundColor: c.surface, padding: 18, borderRadius: 16, alignItems: "center" },
+  modalButtonTextCancel: { color: c.textSecondary, fontWeight: "600", fontSize: 15 },
+  emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: c.card, borderRadius: 16, borderWidth: 1.5, borderColor: c.border, marginBottom: 24, borderStyle: "dashed" },
   emptyStateEmoji: { fontSize: 40, marginBottom: 10 },
-  emptyStateText: { fontSize: 16, fontWeight: "bold", color: "#333", textAlign: "center", marginBottom: 4 },
+  emptyStateText: { fontSize: 16, fontWeight: "bold", color: c.text, textAlign: "center", marginBottom: 4 },
 });

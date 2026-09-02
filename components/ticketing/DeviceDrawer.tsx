@@ -1,7 +1,8 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { useToast } from "@/components/ui/toast";
 import { ITicketDevice, THttpErrorResult } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState , useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -34,6 +35,9 @@ export default function DeviceDrawer({
   companyId,
   contractId,
 }: DeviceDrawerProps) {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { showToast } = useToast();
   const [devices, setDevices] = useState<ITicketDevice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -249,7 +253,7 @@ export default function DeviceDrawer({
               <View style={styles.header}>
                 <Text style={styles.title}>Daftar Device{siteName ? ` ${siteName}` : ''}</Text>
                 <TouchableOpacity onPress={openAddForm} style={styles.addButton}>
-                  <Ionicons name="add-circle" size={22} color="#1e90ff" />
+                  <Ionicons name="add-circle" size={22} color={colors.primary} />
                   <Text style={styles.addButtonText}>Tambah Baru</Text>
                 </TouchableOpacity>
               </View>
@@ -258,12 +262,12 @@ export default function DeviceDrawer({
               {loading ? (
                 <ActivityIndicator
                   size="large"
-                  color="#1e90ff"
+                  color={colors.primary}
                   style={{ marginTop: 30 }}
                 />
               ) : devices.length === 0 ? (
                 <View style={styles.emptyContainer}>
-                  <Ionicons name="hardware-chip-outline" size={48} color="#ccc" />
+                  <Ionicons name="hardware-chip-outline" size={48} color={colors.textFaint} />
                   <Text style={styles.emptyText}>Belum ada device</Text>
                   <Text style={styles.emptySubtext}>
                     Tambah device baru untuk site ini
@@ -287,7 +291,7 @@ export default function DeviceDrawer({
                           <Ionicons
                             name="hardware-chip-outline"
                             size={22}
-                            color="#1e90ff"
+                            color={colors.primary}
                           />
                         </View>
                         <View style={styles.deviceText}>
@@ -302,13 +306,13 @@ export default function DeviceDrawer({
                           style={styles.actionBtn}
                           onPress={() => openEditForm(device)}
                         >
-                          <Ionicons name="create-outline" size={18} color="#666" />
+                          <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.actionBtn}
                           onPress={() => handleDelete(device)}
                         >
-                          <Ionicons name="trash-outline" size={18} color="#F44336" />
+                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -333,90 +337,90 @@ export default function DeviceDrawer({
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Nama Device <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Nama Device <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formName}
                     onChangeText={setFormName}
                     placeholder="Masukkan nama device"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Kode <Text style={{ color: '#999' }}>(opsional)</Text></Text>
+                  <Text style={styles.fieldLabel}>Kode <Text style={{ color: colors.textMuted }}>(opsional)</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formCode}
                     onChangeText={setFormCode}
                     placeholder="Kode device"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Brand/Merk <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Brand/Merk <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formBrand}
                     onChangeText={setFormBrand}
                     placeholder="Brand device"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Serial Number <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Serial Number <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formSerial}
                     onChangeText={setFormSerial}
                     placeholder="Serial number"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Product Number <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Product Number <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formProductNumber}
                     onChangeText={setFormProductNumber}
                     placeholder="Product number"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>IP Address <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>IP Address <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={styles.input}
                     value={formIp}
                     onChangeText={setFormIp}
                     placeholder="192.168.1.1"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                     keyboardType="decimal-pad"
                   />
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Service <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Service <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TouchableOpacity
                     style={styles.input}
                     onPress={() => setServiceDropdownOpen(p => !p)}
                   >
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={formServiceId ? { color: "#333" } : { color: "#999" }}>
+                      <Text style={formServiceId ? { color: colors.text } : { color: colors.textMuted }}>
                         {serviceOptions?.find(s => s.id === formServiceId)?.name || "Pilih service"}
                       </Text>
-                      <Ionicons name={serviceDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#999" />
+                      <Ionicons name={serviceDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
                     </View>
                   </TouchableOpacity>
                   {serviceDropdownOpen && (
-                    <View style={{ backgroundColor: "#fff", borderWidth: 1, borderColor: "#e0e0e0", borderRadius: 8, marginTop: 4 }}>
+                    <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 8, marginTop: 4 }}>
                       {serviceOptions?.map(svc => (
-                        <TouchableOpacity key={svc.id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#f0f0f0" }} onPress={() => { setFormServiceId(svc.id); setServiceDropdownOpen(false); }}>
-                          <Text style={{ fontSize: 14, color: "#333" }}>{svc.name}</Text>
+                        <TouchableOpacity key={svc.id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }} onPress={() => { setFormServiceId(svc.id); setServiceDropdownOpen(false); }}>
+                          <Text style={{ fontSize: 14, color: colors.text }}>{svc.name}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -424,13 +428,13 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Deskripsi <Text style={{ color: '#F44336' }}>*</Text></Text>
+                  <Text style={styles.fieldLabel}>Deskripsi <Text style={{ color: colors.danger }}>*</Text></Text>
                   <TextInput
                     style={[styles.input, styles.textArea]}
                     value={formDesc}
                     onChangeText={setFormDesc}
                     placeholder="Deskripsi device"
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                     multiline
                     numberOfLines={3}
                     textAlignVertical="top"
@@ -462,17 +466,17 @@ export default function DeviceDrawer({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   overlayTop: {
     flex: 1,
   },
   container: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 20,
@@ -483,7 +487,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#ddd",
+    backgroundColor: c.border,
     alignSelf: "center",
     marginTop: 12,
     marginBottom: 8,
@@ -498,7 +502,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   addButton: {
     flexDirection: "row",
@@ -508,11 +512,11 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1e90ff",
+    color: c.primary,
   },
   cancelText: {
     fontSize: 14,
-    color: "#1e90ff",
+    color: c.primary,
     fontWeight: "500",
   },
   listContainer: {
@@ -523,7 +527,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: c.border,
   },
   deviceInfo: {
     flexDirection: "row",
@@ -534,7 +538,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: "#e9f0ff",
+    backgroundColor: c.primarySoft,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -545,11 +549,11 @@ const styles = StyleSheet.create({
   deviceName: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   deviceSub: {
     fontSize: 12,
-    color: "#999",
+    color: c.textMuted,
     marginTop: 2,
   },
   deviceActions: {
@@ -566,12 +570,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#999",
+    color: c.textMuted,
     marginTop: 12,
   },
   emptySubtext: {
     fontSize: 13,
-    color: "#ccc",
+    color: c.textFaint,
     marginTop: 4,
   },
   formContainer: {
@@ -583,24 +587,24 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
   textArea: {
     minHeight: 80,
   },
   submitFormButton: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
@@ -608,7 +612,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   submitFormText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 15,
     fontWeight: "600",
   },

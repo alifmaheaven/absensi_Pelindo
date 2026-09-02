@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getAttendanceList } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { parseWIBDate, parseUTCDate } from "@/utils/utils";
@@ -10,7 +11,7 @@ import ListSkeleton from "@/components/ui/ListSkeleton";
 import { ClockOutline } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState , useMemo } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -28,6 +29,8 @@ const initialMeta: IMeta = {
 };
 
 export default function AttendanceTabScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();
   const [attendanceData, setAttendanceData] = useState<IAttendance[]>([]);
   const [meta, setMeta] = useState<IMeta>(initialMeta);
@@ -124,13 +127,13 @@ export default function AttendanceTabScreen() {
       <View style={styles.cardBody}>
         <View style={styles.timeRow}>
           <View style={styles.timeBlock}>
-            <Ionicons name="log-in-outline" size={14} color="#22C55E" />
+            <Ionicons name="log-in-outline" size={14} color={colors.success} />
             <Text style={styles.timeLabel}>Check In</Text>
             <Text style={styles.timeValue}>{formatWIB(item.checkin) || "-"}</Text>
           </View>
           <View style={styles.timeDivider} />
           <View style={styles.timeBlock}>
-            <Ionicons name="log-out-outline" size={14} color="#EF4444" />
+            <Ionicons name="log-out-outline" size={14} color={colors.danger} />
             <Text style={styles.timeLabel}>Check Out</Text>
             <Text style={styles.timeValue}>{formatWIB(item.checkout) || "-"}</Text>
           </View>
@@ -140,7 +143,7 @@ export default function AttendanceTabScreen() {
         ) : null}
       </View>
       <View style={styles.cardFooter}>
-        <Ionicons name="time-outline" size={12} color="#999" />
+        <Ionicons name="time-outline" size={12} color={colors.textMuted} />
         <Text style={styles.footerText}>{formatUTC(item.created_at)}</Text>
       </View>
     </View>
@@ -148,7 +151,7 @@ export default function AttendanceTabScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient colors={["#1e90ff", "#8fd5f5ff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+      <LinearGradient colors={[colors.primary, colors.background]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
         <SafeAreaView style={{ flex: 1 }}>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Riwayat Absensi</Text>
@@ -172,7 +175,7 @@ export default function AttendanceTabScreen() {
             onRefresh={handleRefresh}
             ListFooterComponent={loading && attendanceData.length ? (
               <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color="#1e90ff" />
+                <ActivityIndicator size="small" color={colors.primary} />
               </View>
             ) : null}
             ListEmptyComponent={!loading ? (
@@ -181,7 +184,7 @@ export default function AttendanceTabScreen() {
                 description="Lakukan check in untuk memulai pencatatan kehadiran kerja Anda."
                 actionLabel="Muat Ulang"
                 onAction={handleRefresh}
-                icon={<ClockOutline color="#1e90ff" width={36} height={36} />}
+                icon={<ClockOutline color={colors.primary} width={36} height={36} />}
               />
             ) : null}
           />
@@ -191,33 +194,33 @@ export default function AttendanceTabScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: { flex: 1 },
   headerGradient: { height: 140, paddingBottom: 30 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 20, paddingTop: 10 },
-  headerTitle: { fontSize: 18, fontWeight: "600", color: "#fff" },
-  content: { flex: 1, backgroundColor: "#F8FBFF", marginTop: -20, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
-  card: { backgroundColor: "#FFF", borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#F0F0F0" },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: c.onGradient },
+  content: { flex: 1, backgroundColor: c.primarySoft, marginTop: -20, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  card: { backgroundColor: c.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: c.border },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  cardCode: { fontSize: 14, fontWeight: "700", color: "#1a1a1a" },
+  cardCode: { fontSize: 14, fontWeight: "700", color: c.textStrong },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
-  statusActive: { backgroundColor: "#E9F0FF" },
-  statusDone: { backgroundColor: "#E8F5E9" },
+  statusActive: { backgroundColor: c.primarySoft },
+  statusDone: { backgroundColor: c.successSoft },
   statusText: { fontSize: 11, fontWeight: "600" },
-  statusTextActive: { color: "#4F7CFE" },
-  statusTextDone: { color: "#43A047" },
+  statusTextActive: { color: c.primary },
+  statusTextDone: { color: c.success },
   cardBody: { marginBottom: 8 },
   timeRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
   timeBlock: { flex: 1, gap: 2 },
-  timeLabel: { fontSize: 11, color: "#999", marginTop: 2 },
-  timeValue: { fontSize: 13, color: "#333", fontWeight: "500" },
-  timeDivider: { width: 1, height: "100%", backgroundColor: "#EEE", marginHorizontal: 12 },
-  desc: { fontSize: 12, color: "#777", marginTop: 4 },
-  cardFooter: { flexDirection: "row", alignItems: "center", gap: 4, borderTopWidth: 1, borderTopColor: "#F5F5F5", paddingTop: 8 },
-  footerText: { fontSize: 11, color: "#999" },
+  timeLabel: { fontSize: 11, color: c.textMuted, marginTop: 2 },
+  timeValue: { fontSize: 13, color: c.text, fontWeight: "500" },
+  timeDivider: { width: 1, height: "100%", backgroundColor: c.border, marginHorizontal: 12 },
+  desc: { fontSize: 12, color: c.textSecondary, marginTop: 4 },
+  cardFooter: { flexDirection: "row", alignItems: "center", gap: 4, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8 },
+  footerText: { fontSize: 11, color: c.textMuted },
   loadingFooter: { paddingVertical: 20, alignItems: "center" },
   emptyState: { alignItems: "center", justifyContent: "center", padding: 40, marginTop: 40 },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyText: { fontSize: 16, fontWeight: "bold", color: "#333", textAlign: "center", marginBottom: 4 },
-  emptySubText: { fontSize: 13, color: "#999", textAlign: "center" },
+  emptyText: { fontSize: 16, fontWeight: "bold", color: c.text, textAlign: "center", marginBottom: 4 },
+  emptySubText: { fontSize: 13, color: c.textMuted, textAlign: "center" },
 });

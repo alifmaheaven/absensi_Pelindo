@@ -1,5 +1,6 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { useState , useMemo } from "react";
 import {
   Modal,
   StyleSheet,
@@ -25,6 +26,9 @@ interface Props {
 }
 
 export default function DatePicker({ visible, value, onConfirm, onClose, disabledDates = [] }: Props) {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   // value = "YYYY-MM-DD" (tanggal WIB). new Date("YYYY-MM-DD") = UTC midnight
   // → getDate() local bisa beda hari di device non-WIB. Parse sebagai WIB.
   const parseWIB = (s: string) => new Date(`${s}T00:00:00+07:00`);
@@ -84,20 +88,20 @@ export default function DatePicker({ visible, value, onConfirm, onClose, disable
           <View style={styles.header}>
             <Text style={styles.title}>Pilih Tanggal</Text>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="#666" />
+              <Ionicons name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Month/Year navigation */}
           <View style={styles.monthNav}>
             <TouchableOpacity onPress={goToPrevMonth} style={styles.navButton}>
-              <Ionicons name="chevron-back" size={20} color="#1e90ff" />
+              <Ionicons name="chevron-back" size={20} color={colors.primary} />
             </TouchableOpacity>
             <Text style={styles.monthLabel}>
               {MONTHS[month]} {year}
             </Text>
             <TouchableOpacity onPress={goToNextMonth} style={styles.navButton}>
-              <Ionicons name="chevron-forward" size={20} color="#1e90ff" />
+              <Ionicons name="chevron-forward" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -156,16 +160,16 @@ export default function DatePicker({ visible, value, onConfirm, onClose, disable
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
   content: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 20,
     padding: 20,
     width: "100%",
@@ -180,7 +184,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   monthNav: {
     flexDirection: "row",
@@ -194,7 +198,7 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   dayHeaderRow: {
     flexDirection: "row",
@@ -205,7 +209,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     fontWeight: "600",
-    color: "#999",
+    color: c.textMuted,
   },
   grid: {
     flexDirection: "row",
@@ -219,40 +223,40 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   dayCellSelected: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
   },
   dayText: {
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
   dayTextSelected: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "600",
   },
   confirmButton: {
     marginTop: 16,
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
   },
   confirmText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 15,
     fontWeight: "600",
   },
   dayCellDisabled: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
     opacity: 0.5,
   },
   dayTextDisabled: {
-    color: "#ccc",
+    color: c.textFaint,
   },
   disabledDot: {
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#F44336",
+    backgroundColor: c.danger,
     marginTop: 2,
   },
   disabledHint: {
@@ -262,12 +266,12 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 10,
     paddingVertical: 8,
-    backgroundColor: "#FFF3E0",
+    backgroundColor: c.warningSoft,
     borderRadius: 8,
   },
   disabledHintText: {
     fontSize: 11,
-    color: "#E65100",
+    color: c.warning,
     fontWeight: "500",
   },
 });

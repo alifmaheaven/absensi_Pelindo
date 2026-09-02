@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { useToast } from "@/components/ui/toast";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
@@ -10,7 +11,7 @@ import { THttpErrorResult } from "@/types";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect , useMemo } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -30,6 +31,8 @@ const isValidEmail = (email: string) => {
 const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 
 export default function LoginScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -134,7 +137,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       {/* Header Gradient */}
       <LinearGradient
-        colors={["#1e90ff", "#ffffff"]}
+        colors={[colors.primary, colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.headerGradient}
@@ -161,7 +164,7 @@ export default function LoginScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Masukkan email"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -178,7 +181,7 @@ export default function LoginScreen() {
                 <TextInput
                   style={[styles.input, { paddingRight: 50 }]}
                   placeholder="Masukkan password"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -191,7 +194,7 @@ export default function LoginScreen() {
                   <Ionicons
                     name={showPassword ? "eye" : "eye-off"}
                     size={22}
-                    color="#999"
+                    color={colors.textMuted}
                   />
                 </TouchableOpacity>
               </View>
@@ -203,22 +206,22 @@ export default function LoginScreen() {
               <View style={styles.svgRow}>
                 <View style={styles.svgBox}>
                   {loadingCaptcha ? (
-                    <ActivityIndicator color="#1e90ff" />
+                    <ActivityIndicator color={colors.primary} />
                   ) : captchaSvg ? (
                     <SvgXml xml={captchaSvg} width="100%" height="100%" />
                   ) : (
-                    <Text style={{ color: "#999" }}>Gagal memuat</Text>
+                    <Text style={{ color: colors.textMuted }}>Gagal memuat</Text>
                   )}
                 </View>
                 <TouchableOpacity onPress={fetchCaptcha} style={styles.refreshBtn}>
-                  <Ionicons name="refresh" size={24} color="#1e90ff" />
+                  <Ionicons name="refresh" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               <View style={{ justifyContent: "center", marginTop: 10 }}>
                 <TextInput
                   style={[styles.input, { paddingLeft: 40 }]}
                   placeholder="Masukkan teks captcha"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   value={captchaAnswer}
                   onChangeText={setCaptchaAnswer}
                   autoCapitalize="none"
@@ -227,7 +230,7 @@ export default function LoginScreen() {
                 <Ionicons
                   name="shield-checkmark-outline"
                   size={20}
-                  color="#999"
+                  color={colors.textMuted}
                   style={{ position: "absolute", left: 12 }}
                 />
               </View>
@@ -282,10 +285,10 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.background,
   },
 
   headerGradient: {
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
@@ -314,13 +317,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     textAlign: "center",
     marginBottom: 32,
   },
@@ -329,19 +332,19 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    color: "#333",
+    color: c.text,
     marginBottom: 8,
     fontWeight: "500",
   },
   input: {
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: "#333",
-    backgroundColor: "#fafafa",
+    color: c.text,
+    backgroundColor: c.inputBg,
   },
   captchaContainer: {
     marginBottom: 20,
@@ -354,10 +357,10 @@ const styles = StyleSheet.create({
   svgBox: {
     flex: 1,
     height: 60,
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
@@ -368,8 +371,8 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fafafa",
+    borderColor: c.borderStrong,
+    backgroundColor: c.inputBg,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -387,32 +390,32 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: c.borderStrong,
     borderRadius: 4,
     marginRight: 8,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
   },
   checkboxChecked: {
-    backgroundColor: "#1e90ff",
-    borderColor: "#1e90ff",
+    backgroundColor: c.primary,
+    borderColor: c.primary,
   },
   checkmark: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 12,
     fontWeight: "bold",
   },
   checkboxLabel: {
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
   forgotPassword: {
     fontSize: 14,
-    color: "#1e90ff",
+    color: c.primary,
   },
   loginButton: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
@@ -422,7 +425,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   loginButtonText: {
-    color: "#ffffff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -433,16 +436,16 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
   },
   registerLink: {
     fontSize: 14,
-    color: "#1e90ff",
+    color: c.primary,
     fontWeight: "500",
   },
   versionText: {
     textAlign: "center",
-    color: "#999",
+    color: c.textMuted,
     marginBottom: 12,
   },
 });

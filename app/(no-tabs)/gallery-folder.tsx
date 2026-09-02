@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useEffect, useState, useCallback , useMemo } from "react";
 import {
   View,
   Text,
@@ -56,6 +57,8 @@ const GAP = 2;
 const CELL_SIZE = (SCREEN_WIDTH - GAP * (GRID_COLS + 1)) / GRID_COLS;
 
 export default function GalleryFolderScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const [photos, setPhotos] = useState<IGalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,17 +197,17 @@ export default function GalleryFolderScreen() {
         margin: GAP,
         borderRadius: 4,
         overflow: "hidden",
-        backgroundColor: "#f0f0f0",
+        backgroundColor: colors.border,
       }}
     >
       {isImageItem(item) ? (
         <Image source={{ uri: item.url }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
       ) : (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 6 }}>
-          <Ionicons name="document-text-outline" size={34} color="#1e90ff" />
+          <Ionicons name="document-text-outline" size={34} color={colors.primary} />
           <Text
             numberOfLines={2}
-            style={{ fontSize: 9, color: "#555", textAlign: "center", marginTop: 4 }}
+            style={{ fontSize: 9, color: colors.textSecondary, textAlign: "center", marginTop: 4 }}
           >
             {item.original_name}
           </Text>
@@ -214,30 +217,30 @@ export default function GalleryFolderScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View
         style={{
           flexDirection: "row",
           alignItems: "center",
           padding: 16,
           borderBottomWidth: 1,
-          borderBottomColor: "#f0f0f0",
+          borderBottomColor: colors.border,
         }}
       >
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
-          <Text style={{ fontSize: 18, color: "#1e90ff" }}>{"< Back"}</Text>
+          <Text style={{ fontSize: 18, color: colors.primary }}>{"< Back"}</Text>
         </TouchableOpacity>
         <Text style={{ fontSize: 18, fontWeight: "700", flex: 1 }} numberOfLines={1}>
           {name}
         </Text>
         <TouchableOpacity onPress={handleShare} style={{ marginRight: 12 }}>
-          <Text style={{ color: "#1e90ff", fontSize: 14 }}>Share</Text>
+          <Text style={{ color: colors.primary, fontSize: 14 }}>Share</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={showUploadOptions}
           disabled={uploading}
           style={{
-            backgroundColor: "#1e90ff",
+            backgroundColor: colors.primary,
             paddingHorizontal: 12,
             paddingVertical: 8,
             borderRadius: 8,
@@ -250,7 +253,7 @@ export default function GalleryFolderScreen() {
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#1e90ff" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={photos}
@@ -261,7 +264,7 @@ export default function GalleryFolderScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
             <View style={{ alignItems: "center", paddingTop: 80 }}>
-              <Text style={{ color: "#999", fontSize: 14 }}>Belum ada file</Text>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Belum ada file</Text>
             </View>
           }
         />
@@ -321,14 +324,14 @@ export default function GalleryFolderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -337,7 +340,7 @@ const styles = StyleSheet.create({
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -347,42 +350,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 24,
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
   },
   modalButtonTextPrimary: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   modalButtonSecondary: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#eee",
+    borderColor: c.border,
   },
   modalButtonTextSecondary: {
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
   },
   modalButtonTextCancel: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },

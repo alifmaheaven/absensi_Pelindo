@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
@@ -8,7 +9,7 @@ import { getLatestVersion } from "@/services/version";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useState , useMemo } from "react";
 import {
   Alert,
   Linking,
@@ -24,6 +25,8 @@ const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 const BUILD_NUMBER = Constants.expoConfig?.extra?.eas?.buildNumber ?? "-";
 
 export default function ProfileScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { showToast } = useToast();
@@ -191,10 +194,10 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
+    backgroundColor: c.surface,
   },
   header: {
     paddingTop: 60,
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 22,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
     marginBottom: 5,
   },
   userEmail: {
@@ -230,7 +233,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   menuCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     overflow: "hidden",
     shadowColor: "#000",
@@ -244,7 +247,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
+    borderBottomColor: c.border,
   },
   menuIcon: {
     fontSize: 24,
@@ -256,27 +259,27 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontSize: 16,
     fontWeight: "500",
-    color: "#333",
+    color: c.text,
   },
   menuSubtitle: {
     fontSize: 12,
-    color: "#999",
+    color: c.textMuted,
     marginTop: 2,
   },
   menuArrow: {
     fontSize: 24,
-    color: "#ccc",
+    color: c.textFaint,
   },
   logoutButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     marginTop: 20,
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F44336",
+    borderColor: c.danger,
   },
   logoutIcon: {
     fontSize: 20,
@@ -285,17 +288,17 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#F44336",
+    color: c.danger,
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingHorizontal: 24,
@@ -307,14 +310,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#ddd",
+    backgroundColor: c.border,
     marginBottom: 20,
   },
   modalAppIcon: {
     width: 60,
     height: 60,
     borderRadius: 16,
-    backgroundColor: "#e9f0ff",
+    backgroundColor: c.primarySoft,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -325,19 +328,19 @@ const styles = StyleSheet.create({
   modalAppName: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 4,
   },
   modalAppDesc: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
     marginBottom: 16,
   },
   modalDivider: {
     width: "100%",
     height: 1,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
     marginBottom: 16,
   },
   modalInfoRow: {
@@ -347,22 +350,22 @@ const styles = StyleSheet.create({
     width: "100%",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
+    borderBottomColor: c.border,
   },
   modalInfoLabel: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
   },
   modalInfoValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   modalUpdateButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     width: "100%",
     padding: 14,
     borderRadius: 12,
@@ -375,7 +378,7 @@ const styles = StyleSheet.create({
   modalUpdateText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   modalCloseButton: {
     marginTop: 12,
@@ -383,7 +386,7 @@ const styles = StyleSheet.create({
   },
   modalCloseText: {
     fontSize: 14,
-    color: "#999",
+    color: c.textMuted,
     fontWeight: "500",
   },
 });

@@ -1,4 +1,5 @@
-import React from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useMemo } from "react";
 import {
   Modal,
   View,
@@ -26,6 +27,8 @@ interface Props {
  *   <ImageViewerModal visible={!!previewImage} uri={previewImage} onClose={() => setPreviewImage(null)} />
  */
 export default function ImageViewerModal({ visible, uri, onClose }: Props) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <Modal
       visible={visible}
@@ -56,7 +59,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.95)",

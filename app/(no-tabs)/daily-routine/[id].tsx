@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded, CloseRounded, ImageIcon } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { IMAGE_BASE_PATH, IMAGE_MAX_WIDTH, IMAGE_QUALITY } from "@/constants";
@@ -17,7 +18,7 @@ import { compressImage } from "@/utils/utils";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useState , useMemo } from "react";
 import ImageViewerModal from "@/components/ImageViewerModal";
 import {
   ActivityIndicator,
@@ -53,6 +54,8 @@ interface IDeviceGroup {
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function DailyRoutineDetailScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -335,7 +338,7 @@ export default function DailyRoutineDetailScreen() {
     return (
       <View style={{ flex: 1 }}>
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -354,7 +357,7 @@ export default function DailyRoutineDetailScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={styles.contentContainer}>
-          <ActivityIndicator size="large" color="#1e90ff" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         </View>
       </View>
     );
@@ -367,7 +370,7 @@ export default function DailyRoutineDetailScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -468,7 +471,7 @@ export default function DailyRoutineDetailScreen() {
                                 </View>
                               ) : (
                                 <TouchableOpacity style={[styles.uploadPhotoButton, loadingImageKey === stateKey && { opacity: 0.6 }]} onPress={() => handlePickImage(stateKey)} disabled={loadingImageKey === stateKey}>
-                                  {loadingImageKey === stateKey ? <ActivityIndicator size="small" color="#666" /> : <ImageIcon color="#999" />}
+                                  {loadingImageKey === stateKey ? <ActivityIndicator size="small" color={colors.textSecondary} /> : <ImageIcon color={colors.textMuted} />}
                                   <Text style={styles.uploadPhotoText}>Upload Foto</Text>
                                 </TouchableOpacity>
                               )}
@@ -562,10 +565,10 @@ export default function DailyRoutineDetailScreen() {
                           disabled={loadingImageKey === stateKey}
                         >
                           {loadingImageKey === stateKey ? (
-                            <ActivityIndicator size="small" color="#666" />
+                            <ActivityIndicator size="small" color={colors.textSecondary} />
                           ) : (
                             <>
-                              <ImageIcon color="#999" style={{ marginRight: 8 }} />
+                              <ImageIcon color={colors.textMuted} style={{ marginRight: 8 }} />
                               <Text style={styles.uploadPhotoText}>
                                 Ambil Foto
                               </Text>
@@ -581,7 +584,7 @@ export default function DailyRoutineDetailScreen() {
                     <TextInput
                       style={styles.notesInput}
                       placeholder="Catatan (opsional)"
-                      placeholderTextColor="#999"
+                      placeholderTextColor={colors.textMuted}
                       value={state.notes}
                       onChangeText={(text) => updateItemState(stateKey, { notes: text })}
                       multiline
@@ -625,7 +628,7 @@ export default function DailyRoutineDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   headerGradient: {
     height: 140,
     paddingBottom: 30,
@@ -644,12 +647,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   contentContainer: {
     flex: 1,
     marginTop: -20,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -661,19 +664,19 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 8,
   },
   sectionDescription: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     marginBottom: 8,
     lineHeight: 20,
   },
   divider: {
     width: "100%",
     height: 1,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     marginVertical: 16,
   },
 
@@ -682,7 +685,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#E3F2FD",
+    backgroundColor: c.primarySoft,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
@@ -693,7 +696,7 @@ const styles = StyleSheet.create({
   deviceHeaderText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#1565C0",
+    color: c.primary,
     flex: 1,
   },
   deviceProgressLabel: {
@@ -705,12 +708,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   deviceProgressDone: {
-    backgroundColor: "#E8F5E9",
-    color: "#2E7D32",
+    backgroundColor: c.successSoft,
+    color: c.success,
   },
   deviceProgressPending: {
-    backgroundColor: "#FFF3E0",
-    color: "#E65100",
+    backgroundColor: c.warningSoft,
+    color: c.warning,
   },
   deviceTabBar: {
     marginBottom: 12,
@@ -724,25 +727,25 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginRight: 8,
     borderRadius: 12,
-    backgroundColor: "#F5F5F5",
+    backgroundColor: c.border,
     borderWidth: 1.5,
-    borderColor: "#E0E0E0",
+    borderColor: c.borderStrong,
     minWidth: 80,
     gap: 2,
   },
   deviceTabActive: {
-    backgroundColor: "#E3F2FD",
-    borderColor: "#1E90FF",
+    backgroundColor: c.primarySoft,
+    borderColor: c.primary,
   },
   deviceTabIcon: { fontSize: 14 },
   deviceTabText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#666",
+    color: c.textSecondary,
     maxWidth: 90,
   },
   deviceTabTextActive: {
-    color: "#1565C0",
+    color: c.primary,
   },
   deviceTabProgress: {
     fontSize: 10,
@@ -753,20 +756,20 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   deviceTabDone: {
-    backgroundColor: "#C8E6C9",
-    color: "#2E7D32",
+    backgroundColor: c.successSoft,
+    color: c.success,
   },
   deviceTabPending: {
-    backgroundColor: "#FFE0B2",
-    color: "#E65100",
+    backgroundColor: c.warningSoft,
+    color: c.warning,
   },
 
   // Checklist Item
   checklistItem: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     padding: 16,
     marginBottom: 12,
   },
@@ -780,14 +783,14 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#d1d5db",
+    borderColor: c.borderStrong,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 2,
   },
   checkboxChecked: {
-    backgroundColor: "#22C55E",
-    borderColor: "#22C55E",
+    backgroundColor: c.success,
+    borderColor: c.success,
   },
   checkboxTextContainer: {
     flex: 1,
@@ -795,20 +798,20 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   checkboxLabelChecked: {
-    color: "#22C55E",
+    color: c.success,
     textDecorationLine: "line-through",
   },
   checkboxDescription: {
     fontSize: 13,
-    color: "#666",
+    color: c.textSecondary,
     marginTop: 2,
     lineHeight: 18,
   },
   textMuted: {
-    color: "#aaa",
+    color: c.textSecondary,
   },
 
   // Photo
@@ -825,10 +828,10 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 12,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
   },
   retakeButton: {
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -836,22 +839,22 @@ const styles = StyleSheet.create({
   retakeButtonText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#666",
+    color: c.textSecondary,
   },
   uploadPhotoButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 12,
     padding: 12,
     borderStyle: "dashed",
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
   },
   uploadPhotoText: {
     fontSize: 13,
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
   },
 
@@ -861,13 +864,13 @@ const styles = StyleSheet.create({
     marginLeft: 36,
   },
   notesInput: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     padding: 10,
     fontSize: 13,
-    color: "#333",
+    color: c.text,
     minHeight: 40,
   },
 
@@ -876,11 +879,11 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: "#22C55E",
+    backgroundColor: c.success,
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
-    shadowColor: "#22C55E",
+    shadowColor: c.success,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
@@ -888,7 +891,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   submitButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "bold",
   },

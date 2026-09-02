@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, Device, Ticket } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
 import { getTicket, getDataStatus } from "@/services/ticket";
@@ -18,7 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState , useMemo } from "react";
 import {
   FlatList,
   TextInput,
@@ -67,40 +68,17 @@ interface TicketData extends ITicket {
   incident_owners?: IIncidentOwner[];
 }
 
-const BADGE_VARIANT: Record<BadgeVariant, { bg: string; color: string }> = {
-  high: {
-    bg: "#FFE9E9",
-    color: "#E53935",
-  },
-  medium: {
-    bg: "#FFF4E5",
-    color: "#FB8C00",
-  },
-  low: {
-    bg: "#E8F5E9",
-    color: "#43A047",
-  },
-  pending: {
-    bg: "#FFF4E5",
-    color: "#FB8C00",
-  },
-  "in progress": {
-    bg: "#E9F0FF",
-    color: "#4F7CFE",
-  },
-  open: {
-    bg: "#E9F0FF",
-    color: "#4F7CFE",
-  },
-  complete: {
-    bg: "#E8F5E9",
-    color: "#43A047",
-  },
-  closed: {
-    bg: "#E8F5E9",
-    color: "#43A047",
-  },
-};
+// Warna badge dari token tema (soft bg + strong text) — dark mode aware.
+const badgeVariant = (c: ThemeColors): Record<BadgeVariant, { bg: string; color: string }> => ({
+  high: { bg: c.dangerSoft, color: c.danger },
+  medium: { bg: c.warningSoft, color: c.warning },
+  low: { bg: c.successSoft, color: c.success },
+  pending: { bg: c.warningSoft, color: c.warning },
+  'in progress': { bg: c.primarySoft, color: c.primary },
+  open: { bg: c.primarySoft, color: c.primary },
+  complete: { bg: c.successSoft, color: c.success },
+  closed: { bg: c.successSoft, color: c.success },
+});
 
 const initialMeta: IMeta = {
   page: 1,
@@ -112,6 +90,8 @@ const initialMeta: IMeta = {
 /* ================= SCREEN ================= */
 
 const TicketingScreen = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const [ticketDatas, setTicketDatas] = useState<TicketData[]>([]);
   const [ticketMeta, setTicketMeta] = useState<IMeta>(initialMeta);
@@ -314,7 +294,7 @@ const TicketingScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={["#1e90ff", "#8fd5f5ff"]}
+        colors={[colors.primary, colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -354,18 +334,18 @@ const TicketingScreen = () => {
         {/* Filter Bar */}
         <View style={styles.filterContainer}>
           <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={18} color="#999" style={{ marginRight: 6 }} />
+            <Ionicons name="search" size={18} color={colors.textMuted} style={{ marginRight: 6 }} />
             <TextInput
               style={styles.searchInput}
               placeholder="Cari tiket..."
-              placeholderTextColor="#999"
+              placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
             />
             {searchQuery ? (
               <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={18} color="#999" />
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -380,7 +360,7 @@ const TicketingScreen = () => {
                   ? statusOptions.find((s) => s.id === statusFilter)?.name || "Status"
                   : "Status"}
               </Text>
-              <Ionicons name={statusDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#666" />
+              <Ionicons name={statusDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textSecondary} />
             </TouchableOpacity>
             {statusDropdownOpen && (
               <View style={styles.statusDropdown}>
@@ -437,7 +417,7 @@ const TicketingScreen = () => {
               description="Tidak ada laporan tiket kendala atau perbaikan saat ini."
               actionLabel="+ Buat Tiket Baru"
               onAction={() => router.push("/ticketing/create")}
-              icon={<Ticket color="#1e90ff" width={36} height={36} />}
+              icon={<Ticket color={colors.primary} width={36} height={36} />}
             />
           ) : null}
         />
@@ -460,7 +440,8 @@ const TicketItem = ({
   onPress,
   incidentOwners,
 }: TicketItemProps & { incidentOwners?: IIncidentOwner[] }) => {
-  const variantStatus = status.toLowerCase() as BadgeVariant;
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);  const variantStatus = status.toLowerCase() as BadgeVariant;
   const variantProgress = progress.toLowerCase() as BadgeVariant;
 
   return (
@@ -473,7 +454,7 @@ const TicketItem = ({
       <Text style={styles.ticketTitle}>{title}</Text>
 
       <View style={[styles.dateRow, { marginBottom: 6 }]}>
-        <Device width={14} height={14} color="#777" />
+        <Device width={14} height={14} color={colors.textSecondary} />
         <Text style={styles.deviceText}>{device}</Text>
       </View>
       <Text style={styles.description}>{description}</Text>
@@ -481,8 +462,8 @@ const TicketItem = ({
       {incidentOwners && incidentOwners.length > 0 && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
           {incidentOwners.map((owner) => (
-            <View key={owner.id} style={{ backgroundColor: "#DBEAFE", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, color: "#1e40af", fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
+            <View key={owner.id} style={{ backgroundColor: colors.primarySoft, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
             </View>
           ))}
         </View>
@@ -490,12 +471,12 @@ const TicketItem = ({
 
       <View style={styles.footerRow}>
         <View style={styles.dateRow}>
-          <Ionicons name="time-outline" size={14} color="#777" />
+          <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
           <Text style={styles.dateText}>{date}</Text>
         </View>
 
         <TouchableOpacity style={styles.detailButton} onPress={onPress}>
-          <Ionicons name="eye-outline" size={14} color="#4F7CFE" />
+          <Ionicons name="eye-outline" size={14} color={colors.primary} />
           <Text style={styles.detailText}>View Detail</Text>
         </TouchableOpacity>
       </View>
@@ -504,9 +485,11 @@ const TicketItem = ({
 };
 
 const Badge = ({ text, variant }: BadgeProps) => {
-  const style = BADGE_VARIANT[variant] ?? {
-    bg: "#F0F0F0",
-    color: "#777",
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const style = badgeVariant(colors)[variant] ?? {
+    bg: colors.border,
+    color: colors.textSecondary,
   };
 
   return (
@@ -517,7 +500,8 @@ const Badge = ({ text, variant }: BadgeProps) => {
 };
 
 export const TicketSkeleton = () => {
-  return (
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);  return (
     <View style={styles.cardSkeleton}>
       <View style={styles.badgeRowSkeleton}>
         <View style={styles.badgeSkeleton} />
@@ -548,7 +532,7 @@ const TicketSkeletonList = () => {
 
 /* ================= STYLES ================= */
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -569,7 +553,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
 
   backButton: {
@@ -579,7 +563,7 @@ const styles = StyleSheet.create({
 
   card: {
     flex: 1,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: c.primarySoft,
     marginTop: -20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -587,7 +571,7 @@ const styles = StyleSheet.create({
   },
 
   createButton: {
-    backgroundColor: "#4F7CFE",
+    backgroundColor: c.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
@@ -595,7 +579,7 @@ const styles = StyleSheet.create({
   },
 
   createButtonText: {
-    color: "#FFF",
+    color: c.onGradient,
     fontWeight: "600",
   },
 
@@ -610,11 +594,11 @@ const styles = StyleSheet.create({
   },
 
   ticketCount: {
-    color: "#777",
+    color: c.textSecondary,
   },
 
   ticketCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
@@ -644,12 +628,12 @@ const styles = StyleSheet.create({
 
   deviceText: {
     fontSize: 12,
-    color: "#555",
+    color: c.textSecondary,
   },
 
   description: {
     fontSize: 12,
-    color: "#777",
+    color: c.textSecondary,
   },
 
   footerRow: {
@@ -667,7 +651,7 @@ const styles = StyleSheet.create({
 
   dateText: {
     fontSize: 12,
-    color: "#777",
+    color: c.textSecondary,
   },
 
   detailButton: {
@@ -678,13 +662,13 @@ const styles = StyleSheet.create({
 
   detailText: {
     fontSize: 12,
-    color: "#4F7CFE",
+    color: c.primary,
     fontWeight: "500",
   },
 
   // skeleton
   cardSkeleton: {
-    backgroundColor: "#FFF",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
@@ -700,14 +684,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 18,
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
   },
 
   titleSkeleton: {
     height: 16,
     width: "70%",
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
     marginBottom: 8,
   },
 
@@ -715,7 +699,7 @@ const styles = StyleSheet.create({
     height: 12,
     width: "50%",
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
     marginBottom: 10,
   },
 
@@ -723,7 +707,7 @@ const styles = StyleSheet.create({
     height: 12,
     width: "100%",
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
     marginBottom: 12,
   },
 
@@ -736,14 +720,14 @@ const styles = StyleSheet.create({
     width: 80,
     height: 12,
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
   },
 
   buttonSkeleton: {
     width: 70,
     height: 12,
     borderRadius: 8,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: c.border,
   },
 
   // Filter
@@ -756,17 +740,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F7FA",
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 42,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
     paddingVertical: 0,
   },
   statusFilterWrapper: {
@@ -776,23 +760,23 @@ const styles = StyleSheet.create({
   statusFilterButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F7FA",
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     height: 42,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     gap: 6,
     minWidth: 100,
     justifyContent: "space-between",
   },
   statusFilterPlaceholder: {
     fontSize: 14,
-    color: "#999",
+    color: c.textMuted,
   },
   statusFilterText: {
     fontSize: 14,
-    color: "#333",
+    color: c.text,
     fontWeight: "500",
   },
   statusDropdown: {
@@ -800,10 +784,10 @@ const styles = StyleSheet.create({
     top: 48,
     right: 0,
     minWidth: 150,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -814,17 +798,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomColor: c.border,
   },
   statusOptionActive: {
-    backgroundColor: "#F0F7FF",
+    backgroundColor: c.primarySoft,
   },
   statusOptionText: {
     fontSize: 14,
-    color: "#555",
+    color: c.textSecondary,
   },
   statusOptionTextActive: {
-    color: "#1e90ff",
+    color: c.primary,
     fontWeight: "600",
   },
 
@@ -841,13 +825,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     textAlign: "center",
     marginBottom: 4,
   },
   emptyStateSubText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
   },
 });

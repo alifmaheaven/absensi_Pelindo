@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -24,6 +25,7 @@ const GRID_GAP = 12;
 const CARD_SIZE = (SCREEN_WIDTH - GRID_GAP * (GRID_COLS + 1)) / GRID_COLS;
 
 export default function GalleryScreen() {
+  const colors = useThemeColors();
   const [folders, setFolders] = useState<IGalleryFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,10 +99,10 @@ export default function GalleryScreen() {
         width: CARD_SIZE,
         marginLeft: GRID_GAP,
         marginBottom: GRID_GAP,
-        backgroundColor: "#fff",
+        backgroundColor: colors.card,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: "#f0f0f0",
+        borderColor: colors.border,
         padding: 14,
         shadowColor: "#000",
         shadowOpacity: 0.04,
@@ -115,7 +117,7 @@ export default function GalleryScreen() {
             width: 52,
             height: 52,
             borderRadius: 12,
-            backgroundColor: "#1e90ff15",
+            backgroundColor: `${colors.primary}15`,
             justifyContent: "center",
             alignItems: "center",
           }}
@@ -129,7 +131,7 @@ export default function GalleryScreen() {
             width: 30,
             height: 30,
             borderRadius: 15,
-            backgroundColor: "#ff3b3010",
+            backgroundColor: `${colors.danger}10`,
             justifyContent: "center",
             alignItems: "center",
           }}
@@ -140,14 +142,14 @@ export default function GalleryScreen() {
       <Text style={{ fontSize: 15, fontWeight: "600", marginTop: 12 }} numberOfLines={1}>
         {item.name}
       </Text>
-      <Text style={{ fontSize: 12, color: "#999", marginTop: 2 }}>
+      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
         {item.photo_count || 0} foto
       </Text>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View
         style={{
           flexDirection: "row",
@@ -155,25 +157,25 @@ export default function GalleryScreen() {
           alignItems: "center",
           padding: 16,
           borderBottomWidth: 1,
-          borderBottomColor: "#f0f0f0",
+          borderBottomColor: colors.border,
         }}
       >
         <Text style={{ fontSize: 18, fontWeight: "700" }}>Gallery</Text>
         <TouchableOpacity
           onPress={() => setShowCreate(true)}
           style={{
-            backgroundColor: "#1e90ff",
+            backgroundColor: colors.primary,
             paddingHorizontal: 16,
             paddingVertical: 8,
             borderRadius: 8,
           }}
         >
-          <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>+ Folder</Text>
+          <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 14 }}>+ Folder</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#1e90ff" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={folders}
@@ -185,7 +187,7 @@ export default function GalleryScreen() {
               description="Buat folder baru untuk menyimpan foto dokumentasi operasional dan file dokumen pendukung."
               actionLabel="+ Buat Folder Baru"
               onAction={() => setShowCreate(true)}
-              icon={<GalleryIcon color="#1e90ff" width={36} height={36} />}
+              icon={<GalleryIcon color={colors.primary} width={36} height={36} />}
             />
           }
         />
@@ -193,8 +195,8 @@ export default function GalleryScreen() {
 
       {/* Create Folder Modal */}
       <Modal visible={showCreate} transparent animationType="fade">
-        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 }}>
-          <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 20 }}>
+        <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 12, padding: 20 }}>
             <Text style={{ fontSize: 16, fontWeight: "700", marginBottom: 12 }}>Folder Baru</Text>
             <TextInput
               placeholder="Nama folder"
@@ -203,7 +205,7 @@ export default function GalleryScreen() {
               autoFocus
               style={{
                 borderWidth: 1,
-                borderColor: "#ddd",
+                borderColor: colors.borderStrong,
                 borderRadius: 8,
                 padding: 12,
                 fontSize: 14,
@@ -212,14 +214,14 @@ export default function GalleryScreen() {
             />
             <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 16, gap: 8 }}>
               <TouchableOpacity onPress={() => { setShowCreate(false); setNewName(""); }}>
-                <Text style={{ padding: 8, color: "#666" }}>Batal</Text>
+                <Text style={{ padding: 8, color: colors.textSecondary }}>Batal</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleCreate}
                 disabled={!newName.trim() || creating}
                 style={{ padding: 8 }}
               >
-                <Text style={{ color: newName.trim() ? "#1e90ff" : "#ccc", fontWeight: "600" }}>
+                <Text style={{ color: newName.trim() ? colors.primary : colors.textFaint, fontWeight: "600" }}>
                   {creating ? "Membuat..." : "Buat"}
                 </Text>
               </TouchableOpacity>

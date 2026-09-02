@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import {
   createContext,
   ReactNode,
@@ -5,6 +6,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
 } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { CheckRounded, CloseRounded, InfoOutlineRounded } from "../icon";
@@ -20,6 +22,8 @@ interface ToastProps {
 }
 
 export function Toast({ visible, message, type, onHide }: ToastProps) {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-100)).current;
 
@@ -62,15 +66,16 @@ export function Toast({ visible, message, type, onHide }: ToastProps) {
   };
 
   const getBackgroundColor = () => {
+    const c = colors;
     switch (type) {
       case "success":
-        return "#4CAF50";
+        return c.success;
       case "error":
-        return "#F44336";
+        return c.danger;
       case "info":
-        return "#2196F3";
+        return c.primary;
       default:
-        return "#333";
+        return c.text;
     }
   };
 
@@ -159,7 +164,7 @@ export function useToast() {
   return ctx;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // Toast Styles
   toastContainer: {
     position: "absolute",
@@ -179,12 +184,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   toastIcon: {
-    color: "#fff",
+    color: c.onGradient,
     height: 15,
     width: 15,
   },
   toastMessage: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 14,
     fontWeight: "500",
     flex: 1,

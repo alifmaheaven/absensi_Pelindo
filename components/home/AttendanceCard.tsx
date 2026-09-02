@@ -1,4 +1,5 @@
 import { DEFAULT_WORK_HOURS } from "@/constants";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ishift } from "@/types";
 import { parseWIBDate } from "@/utils/utils";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -14,32 +15,31 @@ export function getHourMinute(datetime?: string | null): string {
   return `${hour}:${minute}`;
 }
 
-type StatusColor =
-  | "#F7F9FC"
-  | "#1A1C1E"
-  | "#85e09c"
-  | "#00B383"
-  | "#ff9999"
-  | "#B30000"
-  | "#2F73FF";
+// Warna state (late/early) sengaja literal — kontras di light & dark.
+type StatusColor = "#85e09c" | "#00B383" | "#ff9999" | "#B30000";
 
 export function mapTimeToColor(
   datetime?: string | null,
   type: "checkin" | "checkout" = "checkin",
-  shift?: Ishift | null
+  shift?: Ishift | null,
+  theme?: ThemeColors
 ): {
-  text: StatusColor;
-  container: StatusColor;
-  button: StatusColor;
+  text: string;
+  container: string;
+  button: string;
 } {
+  // Netral mengikuti tema; state colors (late/early) tetap literal.
+  const neutral = theme
+    ? { text: theme.text, container: theme.surface, button: theme.primary }
+    : { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
   // 1. Jika kosong
   if (!datetime)
-    return { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
+    return neutral;
 
   // 2. Parse WIB (checkin/checkout = WIB wall-clock), bukan device-local
   const targetTime = parseWIBDate(datetime);
   if (!targetTime) {
-    return { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
+    return neutral;
   }
 
   // Scheduled hour: pakai shift real bila ada (sinkron dengan getWorkStatus),
@@ -101,14 +101,14 @@ export default function AttendanceCard({
   onPress,
   badgeText,
 }: AttendanceCardProps) {
-  const colors = mapTimeToColor(time, type, shift);
+  const theme = useThemeColors();
+  const colors = mapTimeToColor(time, type, shift, theme);
   const formattedTime = getHourMinute(time);
 
   // Default styles based on type (fallback if time is null/empty)
-  const defaultBg = "#F7F9FC";
-  const backgroundColor = time ? colors.container : defaultBg;
-  const textColor = time ? colors.text : "#1A1C1E";
-  const buttonColor = time ? colors.button : "#2F73FF";
+  const backgroundColor = time ? colors.container : theme.surface;
+  const textColor = time ? colors.text : theme.text;
+  const buttonColor = time ? colors.button : theme.primary;
 
   return (
     <View style={[styles.card, { backgroundColor }]}>

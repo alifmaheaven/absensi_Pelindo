@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import {
   getAttendanceList,
   getAttendanceStatus,
@@ -16,7 +17,7 @@ import { DocumentCheck } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useState , useMemo } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -34,16 +35,16 @@ import { IMAGE_BASE_PATH } from "@/constants";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string, c: ThemeColors) => {
   switch (status) {
     case "Disetujui":
-      return "#4CAF50";
-    case "Menunggu":
-      return "#FF9800";
+      return c.success;
+    case "Pending":
+      return c.warning;
     case "Ditolak":
-      return "#F44336";
+      return c.danger;
     default:
-      return "#666";
+      return c.textMuted;
   }
 };
 
@@ -60,6 +61,8 @@ interface MergedItem {
 }
 
 export default function IzinScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();
   const { showToast } = useToast();
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
@@ -194,7 +197,7 @@ export default function IzinScreen() {
             type: "attendance",
             title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
             date: item.checkin ?? "",
-            status: item.checkin ? "Disetujui" : "Menunggu",
+            status: item.checkin ? "Disetujui" : "Pending",
             reason: item.description,
           });
         });
@@ -215,7 +218,7 @@ export default function IzinScreen() {
             type: "leave_request",
             title: leaveTypeLabel,
             date: lr.leave_date,
-            status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Menunggu",
+            status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
             reason: lr.reason,
             leave_type: lr.leave_type,
             evidence_group_id: lr.evidence_group_id,
@@ -258,7 +261,7 @@ export default function IzinScreen() {
         description="Anda belum memiliki riwayat pengajuan izin atau cuti kerja."
         actionLabel="Ajukan Izin/Cuti"
         onAction={() => router.push("/(no-tabs)/leave/create")}
-        icon={<DocumentCheck color="#1e90ff" width={36} height={36} />}
+        icon={<DocumentCheck color={colors.primary} width={36} height={36} />}
       />
     );
   } else {
@@ -275,11 +278,11 @@ export default function IzinScreen() {
               {item.title}
               {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
             </Text>
-            {item.type === "leave_request" && item.status === "Menunggu" && (
+            {item.type === "leave_request" && item.status === "Pending" && (
               <Text style={styles.pendingDot}>⏳</Text>
             )}
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status, colors) }]}>
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
@@ -315,8 +318,8 @@ export default function IzinScreen() {
               setRefreshing(true);
               fetchAll();
             }}
-            colors={["#1e90ff"]}
-            tintColor="#1e90ff"
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
       >
@@ -365,7 +368,7 @@ export default function IzinScreen() {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Status</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailItem.status) }]}>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailItem.status, colors) }]}>
                     <Text style={styles.statusText}>{detailItem.status}</Text>
                   </View>
                 </View>
@@ -378,14 +381,14 @@ export default function IzinScreen() {
                 {detailItem.rejection_reason ? (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Alasan Ditolak</Text>
-                    <Text style={[styles.detailValue, { color: "#F44336" }]}>{detailItem.rejection_reason}</Text>
+                    <Text style={[styles.detailValue, { color: colors.danger }]}>{detailItem.rejection_reason}</Text>
                   </View>
                 ) : null}
 
                 {/* Evidence */}
                 <Text style={styles.sectionTitle}>Bukti</Text>
                 {detailLoading ? (
-                  <ActivityIndicator size="small" color="#1e90ff" />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : detailEvidence.length > 0 ? (
                   <View style={styles.evidenceGrid}>
                     {detailEvidence.map((ev) => (
@@ -489,6 +492,8 @@ export default function IzinScreen() {
 }
 
 const IzinSkeleton = () => {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <>
       {[1, 2, 3].map((_, i) => (
@@ -504,10 +509,10 @@ const IzinSkeleton = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#e8f4fc",
+    backgroundColor: c.primarySoft,
   },
   header: {
     paddingTop: 60,
@@ -517,7 +522,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
     marginBottom: 5,
   },
   headerSubtitle: {
@@ -529,7 +534,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   applyButton: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
@@ -538,16 +543,16 @@ const styles = StyleSheet.create({
   applyButtonText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     marginBottom: 12,
   },
   izinCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -566,13 +571,13 @@ const styles = StyleSheet.create({
   izinType: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: "#666",
+    backgroundColor: c.textMuted,
   },
   statusText: {
     fontSize: 11,
@@ -585,11 +590,11 @@ const styles = StyleSheet.create({
   },
   izinDate: {
     fontSize: 13,
-    color: "#666",
+    color: c.textSecondary,
   },
   reasonText: {
     fontSize: 12,
-    color: "#888",
+    color: c.textSecondary,
     marginTop: 8,
     lineHeight: 18,
   },
@@ -598,7 +603,7 @@ const styles = StyleSheet.create({
   },
 
   skeletonCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
@@ -615,21 +620,21 @@ const styles = StyleSheet.create({
     width: "50%",
     height: 14,
     borderRadius: 8,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
   },
 
   skeletonBadge: {
     width: 60,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
   },
 
   skeletonLine: {
     width: "40%",
     height: 12,
     borderRadius: 8,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
   },
 
   emptyContainer: {
@@ -645,24 +650,24 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
     marginBottom: 6,
   },
 
   emptySubtitle: {
     fontSize: 13,
-    color: "#666",
+    color: c.textSecondary,
     textAlign: "center",
   },
 
   // Detail modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -672,7 +677,7 @@ const styles = StyleSheet.create({
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -682,7 +687,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 20,
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   detailRow: {
     flexDirection: "row",
@@ -693,12 +698,12 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     width: 100,
   },
   detailValue: {
     fontSize: 13,
-    color: "#333",
+    color: c.text,
     fontWeight: "500",
     flex: 1,
     textAlign: "right",
@@ -713,22 +718,22 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 10,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
   },
   noEvidenceText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     marginBottom: 8,
   },
   resubmitSection: {
     marginTop: 8,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: c.border,
   },
   resubmitHint: {
     fontSize: 13,
-    color: "#F44336",
+    color: c.danger,
     marginBottom: 12,
   },
   newEvidenceWrap: {
@@ -738,7 +743,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     right: 4,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -746,83 +751,83 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   removeBtnText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },
   uploadBtn: {
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderStyle: "dashed",
     borderRadius: 12,
     padding: 14,
     alignItems: "center",
     marginBottom: 12,
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
   },
   uploadBtnText: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
   },
   resubmitBtn: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     marginBottom: 12,
   },
   resubmitBtnText: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   closeBtn: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     marginTop: 4,
   },
   closeBtnText: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },
   sourceBtnPrimary: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
   },
   sourceBtnTextPrimary: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   sourceBtnSecondary: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#eee",
+    borderColor: c.border,
   },
   sourceBtnTextSecondary: {
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
     fontSize: 15,
   },
   sourceBtnCancel: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
   },
   sourceBtnTextCancel: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },

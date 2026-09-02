@@ -1,10 +1,11 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { updateProfile } from "@/services/auth";
 import { useAuthStore } from "@/stores/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useState , useMemo } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,6 +20,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function EditProfileScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const { user, setUser } = useAuthStore();
@@ -110,7 +113,7 @@ export default function EditProfileScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Masukkan nama"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
               />
             </View>
 
@@ -122,7 +125,7 @@ export default function EditProfileScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="Masukkan email"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="email-address"
                 autoCapitalize="none"
               />
@@ -136,7 +139,7 @@ export default function EditProfileScreen() {
                 value={phone || ""}
                 onChangeText={setPhone}
                 placeholder="Masukkan nomor telepon"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
               />
             </View>
@@ -160,10 +163,10 @@ export default function EditProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
+    backgroundColor: c.surface,
   },
   headerGradient: {
     height: 140,
@@ -179,7 +182,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   backButton: {
     padding: 8,
@@ -188,7 +191,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     marginTop: -20,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: c.primarySoft,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
@@ -202,17 +205,17 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
   },
   avatarLabel: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
   },
   formCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 20,
     shadowColor: "#000",
@@ -227,33 +230,33 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
-    color: "#333",
+    color: c.text,
   },
   saveButton: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
     marginTop: 24,
-    shadowColor: "#1e90ff",
+    shadowColor: c.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
   saveButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "600",
   },

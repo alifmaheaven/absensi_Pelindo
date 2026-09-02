@@ -1,4 +1,5 @@
-import React from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { InfoOutlineRounded } from "../icon";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,17 +19,20 @@ export default function EmptyState({
   onAction,
   icon,
 }: EmptyStateProps) {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <View style={styles.iconWrapper}>
-        {icon || <InfoOutlineRounded color="#1e90ff" width={40} height={40} />}
+        {icon || <InfoOutlineRounded color={colors.primary} width={40} height={40} />}
       </View>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.description}>{description}</Text>
       {actionLabel && onAction ? (
         <TouchableOpacity style={styles.actionButton} activeOpacity={0.8} onPress={onAction}>
           <LinearGradient
-            colors={["#1e90ff", "#0052cc"]}
+            colors={[colors.primary, "#0052cc"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.gradientBtn}
@@ -41,7 +45,7 @@ export default function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
@@ -52,7 +56,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#eff6ff",
+    backgroundColor: c.primarySoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
@@ -60,13 +64,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1e293b",
+    color: c.text,
     textAlign: "center",
     marginBottom: 8,
   },
   description: {
     fontSize: 13,
-    color: "#64748b",
+    color: c.textSecondary,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 20,
@@ -81,7 +85,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   actionText: {
-    color: "#ffffff",
+    color: c.onGradient,
     fontSize: 13,
     fontWeight: "600",
   },

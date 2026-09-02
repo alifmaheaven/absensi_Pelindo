@@ -1,9 +1,11 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState } from "react";
 import { View, Text } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { getPendingCount, startOfflineSync } from "@/lib/offlineQueue";
 
 export default function OfflineBanner() {
+  const colors = useThemeColors();
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -35,12 +37,12 @@ export default function OfflineBanner() {
   return (
     <View
       style={{
-        backgroundColor: isOffline ? "#f59e0b" : "#22c55e",
+        backgroundColor: isOffline ? colors.warning : colors.success,
         paddingHorizontal: 16,
         paddingVertical: 8,
       }}
     >
-      <Text style={{ color: "#fff", fontSize: 12, textAlign: "center", fontWeight: "600" }}>
+      <Text style={{ color: colors.onGradient, fontSize: 12, textAlign: "center", fontWeight: "600" }}>
         {isOffline
           ? `Offline Mode${pendingCount > 0 ? ` (${pendingCount} data menunggu sync)` : " — data akan dikirim saat online"}`
           : `Syncing ${pendingCount} queued requests...`}

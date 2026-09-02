@@ -1,7 +1,11 @@
-import React from "react";
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import React, { useMemo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 export default function TicketSkeleton() {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.contentContainer}>
       <ScrollView
@@ -73,6 +77,7 @@ function SkeletonBox({
   borderRadius?: number;
   style?: any;
 }) {
+  const colors = useThemeColors();
   return (
     <View
       style={[
@@ -80,7 +85,7 @@ function SkeletonBox({
           height,
           width,
           borderRadius,
-          backgroundColor: "#e0e0e0",
+          backgroundColor: colors.border,
         },
         style,
       ]}
@@ -97,11 +102,12 @@ function SkeletonInput({ height = 48 }: { height?: number }) {
 }
 
 function SkeletonDivider() {
+  const colors = useThemeColors();
   return (
     <View
       style={{
         height: 1,
-        backgroundColor: "#e0e0e0",
+        backgroundColor: colors.border,
         marginVertical: 12,
       }}
     />
@@ -118,11 +124,11 @@ function SkeletonButton({ height = 44 }: { height?: number }) {
    Styles
 ======================= */
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   contentContainer: {
     flex: 1,
     marginTop: -40, // Overlap dengan header
-    backgroundColor: "#ffffff",
+    backgroundColor: c.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",

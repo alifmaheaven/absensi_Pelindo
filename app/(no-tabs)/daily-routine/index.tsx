@@ -1,10 +1,11 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { getTodayRoutine } from "@/services/dailyRoutine";
 import { ITodayRoutineResponse, IDailyRoutine, IDailyRoutineLog } from "@/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useState } from "react";
+import { useCallback, useState , useMemo } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -18,6 +19,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import EmptyState from "@/components/ui/EmptyState";
 
 export default function DailyRoutineListScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -70,7 +73,7 @@ export default function DailyRoutineListScreen() {
     return (
       <View style={styles.container}>
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -93,7 +96,7 @@ export default function DailyRoutineListScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={styles.card}>
-          <ActivityIndicator size="large" color="#1e90ff" style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         </View>
       </View>
     );
@@ -102,7 +105,7 @@ export default function DailyRoutineListScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#1e90ff", "#8fd5f5ff"]}
+        colors={[colors.primary, colors.background]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -139,7 +142,7 @@ export default function DailyRoutineListScreen() {
             description="Tidak ada penugasan checklist daily routine untuk site Anda hari ini."
             actionLabel="Muat Ulang"
             onAction={() => fetchData(true)}
-            icon={<CheckRounded color="#1e90ff" width={36} height={36} />}
+            icon={<CheckRounded color={colors.primary} width={36} height={36} />}
           />
         ) : (
           // Routine exists
@@ -211,7 +214,7 @@ export default function DailyRoutineListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -229,7 +232,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   backButton: {
     padding: 8,
@@ -237,7 +240,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: c.primarySoft,
     marginTop: -20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -252,7 +255,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: c.surface,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
@@ -260,17 +263,17 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
     marginBottom: 8,
   },
   emptyDescription: {
     fontSize: 14,
-    color: "#94a3b8",
+    color: c.textSecondary,
     textAlign: "center",
     lineHeight: 20,
   },
   routineCard: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
@@ -289,13 +292,13 @@ const styles = StyleSheet.create({
   routineName: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1a1a1a",
+    color: c.textStrong,
     flex: 1,
     marginRight: 8,
   },
   routineDescription: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     marginBottom: 16,
     lineHeight: 20,
   },
@@ -305,16 +308,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: c.border,
   },
   itemCountLabel: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
   },
   itemCountValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#333",
+    color: c.text,
   },
   progressRow: {
     flexDirection: "row",
@@ -322,19 +325,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: c.border,
   },
   progressLabel: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
   },
   progressValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#22C55E",
+    color: c.success,
   },
   completedBadge: {
-    backgroundColor: "#dcfce7",
+    backgroundColor: c.successSoft,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -342,10 +345,10 @@ const styles = StyleSheet.create({
   completedBadgeText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#22C55E",
+    color: c.success,
   },
   inProgressBadge: {
-    backgroundColor: "#e9f0ff",
+    backgroundColor: c.primarySoft,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -353,27 +356,27 @@ const styles = StyleSheet.create({
   inProgressBadgeText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#4F7CFE",
+    color: c.primary,
   },
   startButton: {
-    backgroundColor: "#22C55E",
+    backgroundColor: c.success,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
   },
   startButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "600",
   },
   viewButton: {
-    backgroundColor: "#4F7CFE",
+    backgroundColor: c.primary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
   },
   viewButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "600",
   },

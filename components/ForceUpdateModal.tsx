@@ -1,5 +1,6 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect } from "react";
+import React, { useEffect , useMemo } from "react";
 import {
   BackHandler,
   Linking,
@@ -26,6 +27,9 @@ export default function ForceUpdateModal({
   updateUrl,
   description,
 }: ForceUpdateModalProps) {
+
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   useEffect(() => {
     if (!visible) return;
 
@@ -60,11 +64,11 @@ export default function ForceUpdateModal({
     >
       <View style={styles.container}>
         <LinearGradient
-          colors={["#0052cc", "#1e90ff", "#4fc3f7"]}
+          colors={["#0052cc", colors.primary, "#4fc3f7"]}
           style={styles.headerGradient}
         >
           <View style={styles.iconCircle}>
-            <InfoOutlineRounded color="#1e90ff" width={48} height={48} />
+            <InfoOutlineRounded color={colors.primary} width={48} height={48} />
           </View>
         </LinearGradient>
 
@@ -99,7 +103,7 @@ export default function ForceUpdateModal({
             onPress={handleUpdate}
           >
             <LinearGradient
-              colors={["#1e90ff", "#0052cc"]}
+              colors={[colors.primary, "#0052cc"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.updateButton}
@@ -113,10 +117,10 @@ export default function ForceUpdateModal({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
   },
   headerGradient: {
     height: 240,
@@ -129,7 +133,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -147,25 +151,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#1e293b",
+    color: c.text,
     textAlign: "center",
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 14,
-    color: "#64748b",
+    color: c.textSecondary,
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 24,
   },
   versionBox: {
     flexDirection: "row",
-    backgroundColor: "#f8fafc",
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: c.borderStrong,
     width: "100%",
     justifyContent: "space-around",
     alignItems: "center",
@@ -176,43 +180,43 @@ const styles = StyleSheet.create({
   },
   versionLabel: {
     fontSize: 12,
-    color: "#94a3b8",
+    color: c.textSecondary,
     marginBottom: 4,
     fontWeight: "500",
   },
   versionValueCurrent: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#ef4444",
+    color: c.danger,
   },
   versionValueLatest: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#10b981",
+    color: c.success,
   },
   divider: {
     width: 1,
     height: 32,
-    backgroundColor: "#cbd5e1",
+    backgroundColor: c.borderStrong,
   },
   notesBox: {
     width: "100%",
-    backgroundColor: "#eff6ff",
+    backgroundColor: c.primarySoft,
     borderRadius: 12,
     padding: 14,
     marginBottom: 24,
     borderLeftWidth: 4,
-    borderLeftColor: "#1e90ff",
+    borderLeftColor: c.primary,
   },
   notesTitle: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1e40af",
+    color: c.primary,
     marginBottom: 4,
   },
   notesContent: {
     fontSize: 13,
-    color: "#334155",
+    color: c.text,
     lineHeight: 18,
   },
   updateButtonWrapper: {
@@ -224,14 +228,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
-    shadowColor: "#1e90ff",
+    shadowColor: c.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   updateButtonText: {
-    color: "#ffffff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.3,

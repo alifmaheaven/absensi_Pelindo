@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
@@ -62,6 +63,8 @@ const getNowJakarta = () =>
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function TicketingEditScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -483,7 +486,7 @@ useFocusEffect(
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -523,7 +526,7 @@ useFocusEffect(
                 style={{
                   width: "100%",
                   height: 1,
-                  backgroundColor: "#e0e0e0",
+                  backgroundColor: colors.border,
                   marginVertical: 12,
                 }}
               />
@@ -534,7 +537,7 @@ useFocusEffect(
                 <TextInput
                   style={styles.titleInput}
                   placeholder="Enter Problem Title"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   value={title}
                   onChangeText={setTitle}
                   textAlignVertical="top"
@@ -553,7 +556,7 @@ useFocusEffect(
                   <View style={styles.dropdown}>
                     {siteData?.map(site => (
                       <TouchableOpacity key={site.id} style={styles.option} onPress={() => { setSiteSelected(site.id); setDeviceDrawerSiteId(site.id); setDeviceDrawerSiteName(site.name); setSiteDropdownOpen(false); }}>
-                        <View style={{ width: 20 }}>{siteSelected === site.id && <Ionicons name="checkmark" size={18} color="#1e90ff" />}</View>
+                        <View style={{ width: 20 }}>{siteSelected === site.id && <Ionicons name="checkmark" size={18} color={colors.primary} />}</View>
                         <Text style={styles.optionText}>{site.name}</Text>
                       </TouchableOpacity>
                     ))}
@@ -599,7 +602,7 @@ useFocusEffect(
                               <Ionicons
                                 name={"checkmark"}
                                 size={18}
-                                color="#1e90ff"
+                                color={colors.primary}
                               />
                             )}
                           </View>
@@ -613,7 +616,7 @@ useFocusEffect(
                   style={styles.addDeviceButton}
                   onPress={() => setDeviceDrawerVisible(true)}
                 >
-                  <Ionicons name="add" size={24} color="#1e90ff" />
+                  <Ionicons name="add" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               </>
@@ -654,7 +657,7 @@ useFocusEffect(
                             <Ionicons
                               name={"checkmark"}
                               size={18}
-                              color="#1e90ff"
+                              color={colors.primary}
                             />
                           )}
                         </View>
@@ -703,7 +706,7 @@ useFocusEffect(
                             }}
                           >
                             <View style={{ width: 24 }}>
-                              {isSelected && <Ionicons name="checkmark" size={18} color="#1e90ff" />}
+                              {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                             </View>
                             <Text style={styles.optionText}>
                               {owner.name}{owner.phone ? ` - ${owner.phone}` : ''}{owner.company_name ? ` (${owner.company_name})` : ''}
@@ -715,7 +718,7 @@ useFocusEffect(
                   )}
                 </View>
                 <TouchableOpacity style={styles.addDeviceButton} onPress={() => { setCreateOwnerVisible(true); setIncidentOwnerDropdownOpen(false); }}>
-                  <Ionicons name="add" size={24} color="#1e90ff" />
+                  <Ionicons name="add" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
 
@@ -726,10 +729,10 @@ useFocusEffect(
                     const owner = allIncidentOwners.find((o) => o.id === oid);
                     if (!owner) return null;
                     return (
-                      <View key={oid} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#DBEAFE", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
-                        <Text style={{ fontSize: 12, color: "#1e40af", fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
+                      <View key={oid} style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primarySoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, gap: 4 }}>
+                        <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
                         <TouchableOpacity onPress={() => setSelectedIncidentOwners(prev => prev.filter(id => id !== oid))}>
-                          <Ionicons name="close-circle" size={16} color="#1e40af" />
+                          <Ionicons name="close-circle" size={16} color={colors.primary} />
                         </TouchableOpacity>
                       </View>
                     );
@@ -743,7 +746,7 @@ useFocusEffect(
                 <TextInput
                   style={styles.notesInput}
                   placeholder="Explain the problem in detail"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   multiline
                   numberOfLines={4}
                   value={notes}
@@ -796,11 +799,11 @@ useFocusEffect(
                 {loadingImage ? (
                   <ActivityIndicator
                     size="small"
-                    color="#666"
+                    color={colors.textSecondary}
                     style={{ marginRight: 8 }}
                   />
                 ) : (
-                  <ImageIcon color="#999" style={styles.uploadButtonIcon} />
+                  <ImageIcon color={colors.textMuted} style={styles.uploadButtonIcon} />
                 )}
                 <Text style={styles.uploadButtonText}>
                   {loadingImage ? "Memproses..." : "Tambah Gambar"}
@@ -956,7 +959,7 @@ useFocusEffect(
                                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                                       <Text style={styles.commentUserName}>{c.user?.name || "System"}</Text>
                                       <TouchableOpacity onPress={() => setReplyTo({ logId: log.id, commentId: c.id, userName: c.user?.name })}>
-                                        <Text style={{ fontSize: 11, color: "#3B82F6" }}>Reply</Text>
+                                        <Text style={{ fontSize: 11, color: colors.primary }}>Reply</Text>
                                       </TouchableOpacity>
                                     </View>
                                     <Text style={styles.commentText}>{c.comment}</Text>
@@ -967,8 +970,8 @@ useFocusEffect(
                                   <View style={styles.repliesContainer}>
                                     {c.replies.map((r: any) => (
                                       <View key={r.id} style={styles.commentItem}>
-                                        <View style={[styles.commentAvatar, { backgroundColor: "#DBEAFE" }]}>
-                                          <Text style={[styles.commentAvatarText, { color: "#2563EB" }]}>{(r.user?.name || "?")[0]}</Text>
+                                        <View style={[styles.commentAvatar, { backgroundColor: colors.primarySoft }]}>
+                                          <Text style={[styles.commentAvatarText, { color: colors.primary }]}>{(r.user?.name || "?")[0]}</Text>
                                         </View>
                                         <View style={{ flex: 1 }}>
                                           <Text style={styles.commentUserName}>{r.user?.name || "System"}</Text>
@@ -990,18 +993,18 @@ useFocusEffect(
                             <View style={styles.commentInputRow}>
                               {isReply ? (
                                 <View style={{ flexDirection: "row", alignItems: "center", marginRight: 8 }}>
-                                  <Text style={{ fontSize: 11, color: "#3B82F6" }}>
+                                  <Text style={{ fontSize: 11, color: colors.primary }}>
                                     Balas <Text style={{ fontWeight: "700" }}>{replyTo!.userName}</Text>
                                   </Text>
                                   <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 4 }}>
-                                    <Text style={{ fontSize: 14, color: "#999" }}>✕</Text>
+                                    <Text style={{ fontSize: 14, color: colors.textMuted }}>✕</Text>
                                   </TouchableOpacity>
                                 </View>
                               ) : null}
                               <TextInput
                                 style={[styles.commentInput, { flex: 1 }]}
                                 placeholder={isReply ? "Ketik balasan..." : "Tambah komentar..."}
-                                placeholderTextColor="#999"
+                                placeholderTextColor={colors.textMuted}
                                 value={commentInputs[log.id] || ""}
                                 onChangeText={(t) => setCommentInputs((p) => ({ ...p, [log.id]: t }))}
                               />
@@ -1087,31 +1090,31 @@ useFocusEffect(
               <View style={styles.modalIndicator} />
               <Text style={styles.modalTitle}>Tambah Incident Owner</Text>
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Nama *"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormName}
                 onChangeText={setOwnerFormName}
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Email"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormEmail}
                 onChangeText={setOwnerFormEmail}
                 keyboardType="email-address"
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Phone"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormPhone}
                 onChangeText={setOwnerFormPhone}
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Position"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormPosition}
                 onChangeText={setOwnerFormPosition}
               />
@@ -1141,7 +1144,7 @@ useFocusEffect(
    STYLES
 ============================= */
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   headerGradient: {
     height: 150, // Tinggi gradient
     paddingBottom: 30,
@@ -1163,7 +1166,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
   },
   notificationButtonPlaceholder: {
     width: 40,
@@ -1173,7 +1176,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     marginTop: -40, // Overlap dengan header
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -1187,43 +1190,43 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
   sectionDescription: {
     fontSize: 14,
     fontWeight: "normal",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
 
   // Notes
   notesContainer: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
   },
   notesInput: {
     padding: 16,
     height: 100,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
 
   // Title
   titleContainer: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
   },
   titleInput: {
     padding: 16,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
 
   // Image Upload
@@ -1239,7 +1242,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
   },
   imagePreview: {
     width: "100%",
@@ -1249,17 +1252,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#fff",
+    borderColor: c.onGradient,
   },
   removeImageText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },
@@ -1268,12 +1271,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 16,
     padding: 16,
     marginBottom: 30,
     borderStyle: "dashed",
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
   },
   uploadButtonIcon: {
     marginRight: 8,
@@ -1281,7 +1284,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
   },
 
@@ -1290,7 +1293,7 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: "#3B82F6", // Modern blue
+    backgroundColor: c.primary, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -1301,7 +1304,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   submitButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "bold",
     textTransform: "capitalize",
@@ -1312,7 +1315,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
   },
   imageLoadingOverlay: {
     position: "absolute",
@@ -1328,11 +1331,11 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -1341,7 +1344,7 @@ const styles = StyleSheet.create({
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -1351,42 +1354,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 24,
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
   },
   modalButtonTextPrimary: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   modalButtonSecondary: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#eee",
+    borderColor: c.border,
   },
   modalButtonTextSecondary: {
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
   },
   modalButtonTextCancel: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },
@@ -1396,10 +1399,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 30,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
     borderStyle: "dashed",
   },
@@ -1410,13 +1413,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     textAlign: "center",
     marginBottom: 4,
   },
   emptyStateSubText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
   },
 
@@ -1433,7 +1436,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#1e90ff",
+    borderColor: c.primary,
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
@@ -1441,7 +1444,7 @@ const styles = StyleSheet.create({
   },
   selectInputDropdown: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     borderRadius: 10,
     padding: 12,
     flexDirection: "row",
@@ -1452,14 +1455,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 50,
     width: "100%",
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     zIndex: 10,
   },
-  placeholder: { color: "#999" },
-  value: { color: "#111" },
+  placeholder: { color: c.textMuted },
+  value: { color: c.textStrong },
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
 
@@ -1467,27 +1470,27 @@ const styles = StyleSheet.create({
   // History
   historySection: {
     marginTop: 24,
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     padding: 16,
   },
   historySectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
   historyEmpty: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
     paddingVertical: 12,
   },
   historyItem: {
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: c.border,
     paddingVertical: 10,
   },
   historyHeader: {
@@ -1499,22 +1502,22 @@ const styles = StyleSheet.create({
   historyAction: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 4,
   },
   historyStatus: {
     fontSize: 13,
-    color: "#3B82F6",
+    color: c.primary,
     marginBottom: 4,
   },
   historyUserName: {
     fontSize: 12,
-    color: "#666",
+    color: c.textSecondary,
     marginBottom: 2,
   },
   historyTime: {
     fontSize: 11,
-    color: "#999",
+    color: c.textMuted,
   },
   historyStatusRow: {
     flexDirection: "row",
@@ -1523,13 +1526,13 @@ const styles = StyleSheet.create({
   },
   historyStatusArrow: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     marginHorizontal: 4,
   },
   historyStatusBadge: {
     fontSize: 12,
     fontWeight: "600",
-    backgroundColor: "#e5e7eb",
+    backgroundColor: c.border,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1537,11 +1540,11 @@ const styles = StyleSheet.create({
   },
   historyStatusBadgeNew: {
     backgroundColor: "rgba(30,144,255,0.15)",
-    color: "#1e90ff",
+    color: c.primary,
   },
   fieldChangesContainer: {
     marginTop: 8,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
     borderRadius: 8,
     padding: 8,
   },
@@ -1554,24 +1557,24 @@ const styles = StyleSheet.create({
   fieldChangeLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#555",
+    color: c.textSecondary,
     marginRight: 4,
     width: 80,
   },
   fieldChangeOld: {
     fontSize: 12,
-    color: "#999",
+    color: c.textMuted,
     textDecorationLine: "line-through",
   },
   fieldChangeArrow: {
     fontSize: 12,
-    color: "#aaa",
+    color: c.textSecondary,
     marginHorizontal: 3,
   },
   fieldChangeNew: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#1e90ff",
+    color: c.primary,
   },
   noteContainer: {
     marginTop: 6,
@@ -1579,11 +1582,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 8,
     borderLeftWidth: 3,
-    borderLeftColor: "#1e90ff",
+    borderLeftColor: c.primary,
   },
   noteText: {
     fontSize: 12,
-    color: "#555",
+    color: c.textSecondary,
     fontStyle: "italic",
   },
   // Comments
@@ -1591,7 +1594,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: c.borderStrong,
   },
   commentItem: {
     flexDirection: "row",
@@ -1610,16 +1613,16 @@ const styles = StyleSheet.create({
   commentAvatarText: {
     fontSize: 11,
     fontWeight: "bold",
-    color: "#1e90ff",
+    color: c.primary,
   },
   commentUserName: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#555",
+    color: c.textSecondary,
   },
   commentText: {
     fontSize: 13,
-    color: "#333",
+    color: c.text,
     marginTop: 1,
   },
   commentInputRow: {
@@ -1629,21 +1632,21 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#f0f0f0",
+    borderTopColor: c.border,
   },
   commentInput: {
     flex: 1,
     fontSize: 13,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: c.borderStrong,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    color: "#333",
+    color: c.text,
   },
   commentSendBtn: {
-    backgroundColor: "#1e90ff",
+    backgroundColor: c.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -1651,13 +1654,13 @@ const styles = StyleSheet.create({
   commentSendText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#fff",
+    color: c.onGradient,
   },
   repliesContainer: {
     marginLeft: 20,
     paddingLeft: 12,
     borderLeftWidth: 2,
-    borderLeftColor: "#DBEAFE",
+    borderLeftColor: c.primarySoft,
     marginTop: 4,
   },
   // Image changes
@@ -1672,11 +1675,11 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: c.borderStrong,
   },
   fileRemoveText: {
     fontSize: 12,
-    color: "#999",
+    color: c.textMuted,
     textDecorationLine: "line-through",
     marginTop: 4,
   },

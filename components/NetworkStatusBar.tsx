@@ -1,8 +1,11 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
-import { useEffect, useState } from "react";
+import { useEffect, useState , useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function NetworkStatusBar() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
@@ -28,9 +31,9 @@ export default function NetworkStatusBar() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   banner: {
-    backgroundColor: "#DC2626",
+    backgroundColor: c.danger,
     paddingVertical: 6,
     paddingHorizontal: 16,
     alignItems: "center",

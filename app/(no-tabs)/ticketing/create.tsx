@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
@@ -60,6 +61,8 @@ const getNowJakarta = () =>
   new Date().toLocaleString("sv-SE", { timeZone: TIMEZONE });
 
 export default function TicketingCreateScreen() {
+  const colors = useThemeColors();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -372,7 +375,7 @@ export default function TicketingCreateScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={["#1e90ff", "#8fd5f5ff"]}
+          colors={[colors.primary, colors.background]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -412,7 +415,7 @@ export default function TicketingCreateScreen() {
                 style={{
                   width: "100%",
                   height: 1,
-                  backgroundColor: "#e0e0e0",
+                  backgroundColor: colors.border,
                   marginVertical: 12,
                 }}
               />
@@ -423,7 +426,7 @@ export default function TicketingCreateScreen() {
                 <TextInput
                   style={styles.titleInput}
                   placeholder="Enter Problem Title"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   value={title}
                   onChangeText={setTitle}
                   textAlignVertical="top"
@@ -468,7 +471,7 @@ export default function TicketingCreateScreen() {
                             <Ionicons
                               name={"checkmark"}
                               size={18}
-                              color="#1e90ff"
+                              color={colors.primary}
                             />
                           )}
                         </View>
@@ -517,7 +520,7 @@ export default function TicketingCreateScreen() {
                               <Ionicons
                                 name={"checkmark"}
                                 size={18}
-                                color="#1e90ff"
+                                color={colors.primary}
                               />
                             )}
                           </View>
@@ -531,7 +534,7 @@ export default function TicketingCreateScreen() {
                   style={styles.addDeviceButton}
                   onPress={() => setDeviceDrawerVisible(true)}
                 >
-                  <Ionicons name="add" size={24} color="#1e90ff" />
+                  <Ionicons name="add" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
               </>
@@ -575,7 +578,7 @@ export default function TicketingCreateScreen() {
                             }}
                           >
                             <View style={{ width: 24 }}>
-                              {isSelected && <Ionicons name="checkmark" size={18} color="#1e90ff" />}
+                              {isSelected && <Ionicons name="checkmark" size={18} color={colors.primary} />}
                             </View>
                             <Text style={styles.optionText}>
                               {owner.name}{owner.phone ? ` - ${owner.phone}` : ''}{owner.company_name ? ` (${owner.company_name})` : ''}
@@ -587,7 +590,7 @@ export default function TicketingCreateScreen() {
                   )}
                 </View>
                 <TouchableOpacity style={styles.addDeviceButton} onPress={() => { setCreateOwnerVisible(true); setIncidentOwnerDropdownOpen(false); }}>
-                  <Ionicons name="add" size={24} color="#1e90ff" />
+                  <Ionicons name="add" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
 
@@ -597,7 +600,7 @@ export default function TicketingCreateScreen() {
                 <TextInput
                   style={styles.notesInput}
                   placeholder="Explain the problem in detail"
-                  placeholderTextColor="#999"
+                  placeholderTextColor={colors.textMuted}
                   multiline
                   numberOfLines={4}
                   value={notes}
@@ -654,11 +657,11 @@ export default function TicketingCreateScreen() {
                 {loadingImage ? (
                   <ActivityIndicator
                     size="small"
-                    color="#666"
+                    color={colors.textSecondary}
                     style={{ marginRight: 8 }}
                   />
                 ) : (
-                  <ImageIcon color="#999" style={styles.uploadButtonIcon} />
+                  <ImageIcon color={colors.textMuted} style={styles.uploadButtonIcon} />
                 )}
                 <Text style={styles.uploadButtonText}>
                   {loadingImage ? "Memproses..." : "Tambah Gambar"}
@@ -775,31 +778,31 @@ export default function TicketingCreateScreen() {
               <View style={styles.modalIndicator} />
               <Text style={styles.modalTitle}>Tambah Incident Owner</Text>
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Nama *"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormName}
                 onChangeText={setOwnerFormName}
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Email"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormEmail}
                 onChangeText={setOwnerFormEmail}
                 keyboardType="email-address"
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Phone"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormPhone}
                 onChangeText={setOwnerFormPhone}
               />
               <TextInput
-                style={{ backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#333', width: '100%', marginBottom: 12 }}
+                style={{ backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: colors.text, width: '100%', marginBottom: 12 }}
                 placeholder="Position"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.textMuted}
                 value={ownerFormPosition}
                 onChangeText={setOwnerFormPosition}
               />
@@ -829,7 +832,7 @@ export default function TicketingCreateScreen() {
    STYLES
 ============================= */
 
-const styles = StyleSheet.create({
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   headerGradient: {
     height: 150, // Tinggi gradient
     paddingBottom: 30,
@@ -851,7 +854,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
+    color: c.onGradient,
   },
   notificationButtonPlaceholder: {
     width: 40,
@@ -861,7 +864,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     marginTop: -40, // Overlap dengan header
-    backgroundColor: "#ffffff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     overflow: "hidden",
@@ -875,43 +878,43 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
   sectionDescription: {
     fontSize: 14,
     fontWeight: "normal",
-    color: "#1a1a1a",
+    color: c.textStrong,
     marginBottom: 12,
   },
 
   // Notes
   notesContainer: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
   },
   notesInput: {
     padding: 16,
     height: 100,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
 
   // Title
   titleContainer: {
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
   },
   titleInput: {
     padding: 16,
     fontSize: 14,
-    color: "#333",
+    color: c.text,
   },
 
   // Image Upload
@@ -927,7 +930,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: c.border,
   },
   imagePreview: {
     width: "100%",
@@ -937,17 +940,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: c.overlay,
     width: 24,
     height: 24,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#fff",
+    borderColor: c.onGradient,
   },
   removeImageText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },
@@ -956,12 +959,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: c.borderStrong,
     borderRadius: 16,
     padding: 16,
     marginBottom: 30,
     borderStyle: "dashed",
-    backgroundColor: "#fafafa",
+    backgroundColor: c.inputBg,
   },
   uploadButtonIcon: {
     marginRight: 8,
@@ -969,7 +972,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 14,
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
   },
 
@@ -978,7 +981,7 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: "#3B82F6", // Modern blue
+    backgroundColor: c.primary, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -989,7 +992,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   submitButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 16,
     fontWeight: "bold",
     textTransform: "capitalize",
@@ -1000,7 +1003,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: c.surface,
   },
   imageLoadingOverlay: {
     position: "absolute",
@@ -1016,11 +1019,11 @@ const styles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: c.overlay,
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 24,
@@ -1029,7 +1032,7 @@ const styles = StyleSheet.create({
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: c.border,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
@@ -1039,42 +1042,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 24,
-    color: "#1a1a1a",
+    color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: c.primary,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
   },
   modalButtonTextPrimary: {
-    color: "#fff",
+    color: c.onGradient,
     fontWeight: "bold",
     fontSize: 15,
   },
   modalButtonSecondary: {
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: "#eee",
+    borderColor: c.border,
   },
   modalButtonTextSecondary: {
-    color: "#333",
+    color: c.text,
     fontWeight: "600",
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: "#f8f9fa",
+    backgroundColor: c.surface,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
   },
   modalButtonTextCancel: {
-    color: "#666",
+    color: c.textSecondary,
     fontWeight: "600",
     fontSize: 15,
   },
@@ -1084,10 +1087,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 30,
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#f0f0f0",
+    borderColor: c.border,
     marginBottom: 24,
     borderStyle: "dashed",
   },
@@ -1098,13 +1101,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: c.text,
     textAlign: "center",
     marginBottom: 4,
   },
   emptyStateSubText: {
     fontSize: 13,
-    color: "#999",
+    color: c.textMuted,
     textAlign: "center",
   },
 
@@ -1121,7 +1124,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#1e90ff",
+    borderColor: c.primary,
     borderStyle: "dashed",
     justifyContent: "center",
     alignItems: "center",
@@ -1129,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   selectInputDropdown: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     borderRadius: 10,
     padding: 12,
     flexDirection: "row",
@@ -1140,14 +1143,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 50,
     width: "100%",
-    backgroundColor: "#fff",
+    backgroundColor: c.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: c.borderStrong,
     zIndex: 10,
   },
-  placeholder: { color: "#999" },
-  value: { color: "#111" },
+  placeholder: { color: c.textMuted },
+  value: { color: c.textStrong },
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
 

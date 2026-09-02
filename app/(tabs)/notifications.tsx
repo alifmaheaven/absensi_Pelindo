@@ -1,3 +1,4 @@
+import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -42,16 +43,17 @@ function formatTime(dateStr: string): string {
   return `${Math.floor(hrs / 24)}h lalu`;
 }
 
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    ticket_status_change: "#1e90ff",
-    attendance_reminder: "#22c55e",
-    leave_update: "#f59e0b",
+function getTypeColor(type: string, c: ThemeColors): string {
+  const map: Record<string, string> = {
+    ticket_status_change: c.primary,
+    attendance_reminder: c.success,
+    leave_update: c.warning,
   };
-  return colors[type] || "#999";
+  return map[type] || c.textMuted;
 }
 
 export default function NotificationsScreen() {
+  const colors = useThemeColors();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,8 +115,8 @@ export default function NotificationsScreen() {
         flexDirection: "row",
         padding: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#f0f0f0",
-        backgroundColor: item.is_read ? "#fff" : "#f0f8ff",
+        borderBottomColor: colors.border,
+        backgroundColor: item.is_read ? colors.card : colors.primarySoft,
       }}
     >
       <View
@@ -122,7 +124,7 @@ export default function NotificationsScreen() {
           width: 44,
           height: 44,
           borderRadius: 22,
-          backgroundColor: getTypeColor(item.type) + "20",
+          backgroundColor: getTypeColor(item.type, colors) + "20",
           justifyContent: "center",
           alignItems: "center",
           marginRight: 12,
@@ -133,7 +135,7 @@ export default function NotificationsScreen() {
             width: 20,
             height: 20,
             borderRadius: 10,
-            backgroundColor: getTypeColor(item.type),
+            backgroundColor: getTypeColor(item.type, colors),
           }}
         />
       </View>
@@ -148,12 +150,12 @@ export default function NotificationsScreen() {
           >
             {item.title}
           </Text>
-          <Text style={{ fontSize: 11, color: "#999", marginLeft: 8 }}>
+          <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8 }}>
             {formatTime(item.created_at)}
           </Text>
         </View>
         <Text
-          style={{ fontSize: 13, color: "#666", marginTop: 4 }}
+          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
           numberOfLines={2}
         >
           {item.message}
@@ -163,7 +165,7 @@ export default function NotificationsScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <View
         style={{
           flexDirection: "row",
@@ -171,13 +173,13 @@ export default function NotificationsScreen() {
           alignItems: "center",
           padding: 16,
           borderBottomWidth: 1,
-          borderBottomColor: "#f0f0f0",
+          borderBottomColor: colors.border,
         }}
       >
         <Text style={{ fontSize: 18, fontWeight: "700" }}>Notifikasi</Text>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={handleMarkAllRead}>
-            <Text style={{ color: "#1e90ff", fontSize: 14 }}>
+            <Text style={{ color: colors.primary, fontSize: 14 }}>
               Tandai semua sudah dibaca
             </Text>
           </TouchableOpacity>
@@ -196,7 +198,7 @@ export default function NotificationsScreen() {
           windowSize={5}
           removeClippedSubviews
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#1e90ff"]} tintColor="#1e90ff" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} tintColor={colors.primary} />
           }
           ListEmptyComponent={
             <EmptyState
@@ -204,7 +206,7 @@ export default function NotificationsScreen() {
               description="Semua pemberitahuan dan pembaruan tiket atau absensi akan muncul di sini."
               actionLabel="Periksa Notifikasi"
               onAction={onRefresh}
-              icon={<Bell color="#1e90ff" width={36} height={36} />}
+              icon={<Bell color={colors.primary} width={36} height={36} />}
             />
           }
         />

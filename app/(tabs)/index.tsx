@@ -280,6 +280,7 @@ export default function HomeScreen() {
     {
       icon: Ticket,
       label: "Ticket",
+      subtext: "Bantuan & Lapor",
       color: colors.warning,
       containerColor: colors.warningSoft,
       onPress: () => {
@@ -292,7 +293,8 @@ export default function HomeScreen() {
     },
     {
       icon: CheckRounded,
-      label: "Daily",
+      label: "Daily Routine",
+      subtext: "Checklist Harian",
       color: colors.success,
       containerColor: colors.successSoft,
       onPress: () => {
@@ -476,7 +478,12 @@ export default function HomeScreen() {
                       <Icon color="#fff" />
                     </View>
 
-                    <Text style={styles.aksesLabel}>{item.label}</Text>
+                    <View style={styles.aksesTextContainer}>
+                      <Text style={styles.aksesLabel} numberOfLines={1}>{item.label}</Text>
+                      {item.subtext ? (
+                        <Text style={styles.aksesSubtext} numberOfLines={1}>{item.subtext}</Text>
+                      ) : null}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -684,10 +691,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  aksesTextContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
   aksesLabel: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: c.text,
+    fontSize: 14,
+    fontWeight: "700",
+    color: c.textStrong,
+  },
+  aksesSubtext: {
+    fontSize: 11,
+    color: c.textSecondary,
+    marginTop: 2,
   },
   aksesCard: {
     backgroundColor: c.card,

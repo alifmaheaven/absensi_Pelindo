@@ -54,3 +54,16 @@ export interface ITodayRoutineResponse {
   log: IDailyRoutineLog | null;
   log_items: IDailyRoutineLogItem[];
 }
+
+export interface ITodayRoutinesAllResponse {
+  site_id: string;
+  routines: ITodayRoutineResponse[];
+}
+
+export interface IDailyRoutineSubmitItem {
+  daily_routine_item_id: string;
+  device_id?: string | null;
+  is_checked: boolean;
+  evidence_file?: string;
+  notes?: string;
+}

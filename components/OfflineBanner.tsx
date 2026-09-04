@@ -2,12 +2,13 @@ import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState } from "react";
 import { View, Text } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
-import { getPendingCount, startOfflineSync } from "@/lib/offlineQueue";
+import { getPendingCount, getFailedAttendanceCount, startOfflineSync } from "@/lib/offlineQueue";
 
 export default function OfflineBanner() {
   const colors = useThemeColors();
   const [isOffline, setIsOffline] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
 
   useEffect(() => {
     startOfflineSync();
@@ -24,13 +25,35 @@ export default function OfflineBanner() {
   }, []);
 
   useEffect(() => {
-    if (!isOffline) return;
-    const interval = setInterval(async () => {
-      const count = await getPendingCount();
-      setPendingCount(count);
-    }, 3000);
+    const checkCounts = async () => {
+      if (isOffline) {
+        const count = await getPendingCount();
+        setPendingCount(count);
+      }
+      const failed = await getFailedAttendanceCount();
+      setFailedCount(failed);
+    };
+
+    checkCounts();
+    const interval = setInterval(checkCounts, 3000);
     return () => clearInterval(interval);
   }, [isOffline]);
+
+  if (failedCount > 0) {
+    return (
+      <View
+        style={{
+          backgroundColor: colors.danger,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+        }}
+      >
+        <Text style={{ color: colors.onGradient, fontSize: 12, textAlign: "center", fontWeight: "600" }}>
+          {`⚠️ ${failedCount} data absensi offline gagal kirim. Bukti tersimpan, harap lapor atasan.`}
+        </Text>
+      </View>
+    );
+  }
 
   if (!isOffline && pendingCount === 0) return null;
 

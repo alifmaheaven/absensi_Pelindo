@@ -32,13 +32,20 @@ export default function GalleryScreen() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
+  const [deniedMessage, setDeniedMessage] = useState<string | null>(null);
 
   const fetchFolders = useCallback(async () => {
     try {
       const res = await getFolders(1, 100);
       setFolders(res?.data?.data || []);
-    } catch {
-      // silently fail
+      setIsAccessDenied(false);
+      setDeniedMessage(null);
+    } catch (err: any) {
+      if (err?.code === 403 || err?.status === 403 || err?.response?.status === 403) {
+        setIsAccessDenied(true);
+        setDeniedMessage(err?.message || "Anda tidak memiliki izin untuk mengakses Galeri.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,8 +71,8 @@ export default function GalleryScreen() {
       setFolders((prev) => [newFolder, ...prev]);
       setNewName("");
       setShowCreate(false);
-    } catch {
-      Alert.alert("Error", "Gagal membuat folder");
+    } catch (err: any) {
+      Alert.alert(err?.title || "Error", err?.message || "Gagal membuat folder");
     } finally {
       setCreating(false);
     }
@@ -81,8 +88,8 @@ export default function GalleryScreen() {
           try {
             await deleteFolder(folder.id);
             setFolders((prev) => prev.filter((f) => f.id !== folder.id));
-          } catch {
-            Alert.alert("Error", "Gagal menghapus folder");
+          } catch (err: any) {
+            Alert.alert(err?.title || "Error", err?.message || "Gagal menghapus folder");
           }
         },
       },
@@ -161,17 +168,19 @@ export default function GalleryScreen() {
         }}
       >
         <Text style={{ fontSize: 18, fontWeight: "700" }}>Gallery</Text>
-        <TouchableOpacity
-          onPress={() => setShowCreate(true)}
-          style={{
-            backgroundColor: colors.primary,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 14 }}>+ Folder</Text>
-        </TouchableOpacity>
+        {!isAccessDenied && (
+          <TouchableOpacity
+            onPress={() => setShowCreate(true)}
+            style={{
+              backgroundColor: colors.primary,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 14 }}>+ Folder</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -181,14 +190,28 @@ export default function GalleryScreen() {
           data={folders}
           renderItem={renderFolder}
           keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
+          }
           ListEmptyComponent={
-            <EmptyState
-              title="Belum Ada Folder Galeri"
-              description="Buat folder baru untuk menyimpan foto dokumentasi operasional dan file dokumen pendukung."
-              actionLabel="+ Buat Folder Baru"
-              onAction={() => setShowCreate(true)}
-              icon={<GalleryIcon color={colors.primary} width={36} height={36} />}
-            />
+            isAccessDenied ? (
+              <EmptyState
+                title="Akses Ditolak"
+                description={
+                  deniedMessage ||
+                  "Akun Anda tidak memiliki izin untuk mengakses fitur Galeri. Hubungi administrator untuk meminta hak akses."
+                }
+                icon={<GalleryIcon color={colors.danger} width={36} height={36} />}
+              />
+            ) : (
+              <EmptyState
+                title="Belum Ada Folder Galeri"
+                description="Buat folder baru untuk menyimpan foto dokumentasi operasional dan file dokumen pendukung."
+                actionLabel="+ Buat Folder Baru"
+                onAction={() => setShowCreate(true)}
+                icon={<GalleryIcon color={colors.primary} width={36} height={36} />}
+              />
+            )
           }
         />
       )}

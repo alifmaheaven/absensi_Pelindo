@@ -1,11 +1,53 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import { Alert } from "react-native";
 import apiClient from "./axios";
 import { saveCheckInId } from "./storage";
 
 const OFFLINE_QUEUE_KEY = "@offline_queue";
+const FAILED_ATTENDANCE_KEY = "@failed_attendance_queue";
 const CACHED_SITES_KEY = "@cached_attendance_sites";
 const CACHED_STATUS_KEY = "@cached_attendance_statuses";
+
+export interface FailedAttendanceItem {
+  id: string;
+  type: "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT";
+  data: OfflineCheckInPayload | OfflineCheckOutPayload;
+  timestamp: number;
+  failedAt: number;
+  errorCode: number;
+  errorMessage: string;
+}
+
+export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(FAILED_ATTENDANCE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<void> {
+  try {
+    const list = await getFailedAttendance();
+    list.push(item);
+    await AsyncStorage.setItem(FAILED_ATTENDANCE_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error("[OfflineQueue] Gagal menyimpan absensi gagal:", e);
+  }
+}
+
+export async function clearFailedAttendance(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(FAILED_ATTENDANCE_KEY);
+  } catch {}
+}
+
+export async function getFailedAttendanceCount(): Promise<number> {
+  const failed = await getFailedAttendance();
+  return failed.length;
+}
 
 export interface OfflineCheckInPayload {
   user_id: string;
@@ -206,6 +248,7 @@ export async function syncQueuedRequests(): Promise<number> {
 
     let synced = 0;
     const remaining: OfflineAction[] = [];
+    const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
     for (const action of queue) {
       try {
@@ -283,16 +326,76 @@ export async function syncQueuedRequests(): Promise<number> {
           });
           synced++;
         }
-      } catch (err) {
-        // Keep failed items for retry (drop if older than 48h)
-        const age = Date.now() - action.timestamp;
-        if (age < 48 * 60 * 60 * 1000) {
-          remaining.push(action);
+      } catch (err: any) {
+        // Drop non-retryable 4xx errors (403 Forbidden, 401 Unauthorized, 422 Unprocessable)
+        // Request ini tidak akan pernah berhasil bila diulang tanpa perubahan izin di server / relogin.
+        // Mencegah perulangan retry tak terbatas (infinite retry storm) yang membanjiri server dan menghabiskan baterai/kuota.
+        const statusCode =
+          err?.code ||
+          err?.status ||
+          err?.response?.status;
+
+        const isNonRetryable =
+          statusCode === 403 ||
+          statusCode === 401 ||
+          statusCode === 422;
+
+        if (isNonRetryable) {
+          if (action.type === "ATTENDANCE_CHECKIN" || action.type === "ATTENDANCE_CHECKOUT") {
+            // JANGAN HAPUS BUKTI KERJA DIAM-DIAM!
+            // Pindahkan ke penampung absensi gagal permanen agar data kehadiran lapangan tidak hilang
+            // dan tidak di-retry berulang (mencegah retry storm).
+            const failedItem: FailedAttendanceItem = {
+              id: action.id,
+              type: action.type,
+              data: action.data,
+              timestamp: action.timestamp,
+              failedAt: Date.now(),
+              errorCode: statusCode,
+              errorMessage: err?.message || "Non-retryable 4xx error",
+            };
+            await saveFailedAttendance(failedItem);
+            newlyFailedAttendance.push(failedItem);
+            console.error(
+              `[OfflineQueue] Absensi offline gagal permanen (status ${statusCode}):`,
+              action.type,
+              failedItem.errorMessage
+            );
+          } else {
+            // STANDARD_REQUEST: Request umum non-kritis dibuang dengan peringatan log
+            // karena tidak menyangkut rekaman bukti kerja / payroll pekerja lapangan.
+            console.warn(
+              `[OfflineQueue] Menghapus aksi non-retryable dari antrean (status ${statusCode}):`,
+              action.type,
+              (action as any).url || ""
+            );
+          }
+        } else {
+          // Simpan item gagal untuk di-retry nanti (buang jika lebih tua dari 48 jam)
+          const age = Date.now() - action.timestamp;
+          if (age < 48 * 60 * 60 * 1000) {
+            remaining.push(action);
+          }
         }
       }
     }
 
     await saveQueue(remaining);
+
+    if (newlyFailedAttendance.length > 0) {
+      const count = newlyFailedAttendance.length;
+      const first = newlyFailedAttendance[0];
+      const jenis = first.type === "ATTENDANCE_CHECKIN" ? "Check-in" : "Check-out";
+      const message =
+        count === 1
+          ? `Data absensi offline (${jenis}) gagal disinkronkan ke server (Error ${first.errorCode}: ${first.errorMessage}). Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`
+          : `${count} data absensi offline gagal disinkronkan ke server. Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`;
+
+      Alert.alert("Perhatian: Sinkronisasi Absensi Gagal", message, [
+        { text: "Mengerti" },
+      ]);
+    }
+
     return synced;
   } finally {
     isSyncing = false;

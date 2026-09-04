@@ -15,9 +15,7 @@ export function getHourMinute(datetime?: string | null): string {
   return `${hour}:${minute}`;
 }
 
-// Warna state (late/early) sengaja literal — kontras di light & dark.
-type StatusColor = "#85e09c" | "#00B383" | "#ff9999" | "#B30000";
-
+// Warna status memenuhi WCAG AA/AAA di light & dark.
 export function mapTimeToColor(
   datetime?: string | null,
   type: "checkin" | "checkout" = "checkin",
@@ -28,10 +26,13 @@ export function mapTimeToColor(
   container: string;
   button: string;
 } {
-  // Netral mengikuti tema; state colors (late/early) tetap literal.
+  const isDark = theme ? (theme.background === "#121212" || theme.surface === "#1e1e1e") : false;
+
+  // Netral mengikuti tema
   const neutral = theme
     ? { text: theme.text, container: theme.surface, button: theme.primary }
     : { text: "#1A1C1E", container: "#F7F9FC", button: "#2F73FF" };
+
   // 1. Jika kosong
   if (!datetime)
     return neutral;
@@ -61,25 +62,23 @@ export function mapTimeToColor(
 
   const graceMs = (type === "checkin" ? shift?.grace_late : shift?.grace_early) ? (type === "checkin" ? shift!.grace_late : shift!.grace_early) * 60 * 1000 : 0;
   const diffMs = targetTime.getTime() - scheduledTime.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000); // Minutes
 
   // 3. Bandingkan waktu
-  if (type === "checkin") {
-    // Check In: Late (diff > grace) -> Bad (Red-ish), else Good (Green-ish)
-    const isLate = diffMs > graceMs;
-    if (isLate) {
-      return { text: "#F7F9FC", container: "#ff9999", button: "#B30000" };
-    } else {
-      return { text: "#F7F9FC", container: "#85e09c", button: "#00B383" };
-    }
+  // Late / Early (Peringatan/Bahaya) -> dangerSoft, teks kontras tinggi (Light: 7.16:1, Dark: 16.18:1)
+  // On-time (Baik) -> successSoft, teks kontras tinggi (Light: 6.34:1, Dark: 13.98:1)
+  const isLate = type === "checkin" ? diffMs > graceMs : diffMs < -graceMs;
+  if (isLate) {
+    return {
+      text: isDark ? "#FFFFFF" : "#991B1B",
+      container: theme ? theme.dangerSoft : "#FFE9E9",
+      button: isDark ? "#DC2626" : "#B30000",
+    };
   } else {
-    // Check Out: Early (diff < -grace) -> Bad, else Good
-    const isEarly = diffMs < -graceMs;
-    if (isEarly) {
-      return { text: "#F7F9FC", container: "#ff9999", button: "#B30000" };
-    } else {
-      return { text: "#F7F9FC", container: "#85e09c", button: "#00B383" };
-    }
+    return {
+      text: isDark ? "#FFFFFF" : "#166534",
+      container: theme ? theme.successSoft : "#E8F5E9",
+      button: "#0D7A53",
+    };
   }
 }
 
@@ -110,10 +109,17 @@ export default function AttendanceCard({
   const textColor = time ? colors.text : theme.text;
   const buttonColor = time ? colors.button : theme.primary;
 
+  const cardTitle = type === "checkin" ? "Check in" : "Check out";
+
   return (
-    <View style={[styles.card, { backgroundColor }]}>
+    <View
+      style={[styles.card, { backgroundColor }]}
+      accessible={true}
+      accessibilityRole="summary"
+      accessibilityLabel={`${cardTitle} jam ${formattedTime}, ${subtitle}`}
+    >
       <Text style={[styles.label, { color: textColor }]}>
-        {type === "checkin" ? "Check in" : "Check out"}
+        {cardTitle}
       </Text>
       <Text style={[styles.time, { color: textColor }]}>{formattedTime}</Text>
       <Text style={[styles.subtitle, { color: textColor }]}>{subtitle}</Text>
@@ -122,8 +128,11 @@ export default function AttendanceCard({
         style={[styles.badge, { backgroundColor: buttonColor }]}
         onPress={onPress}
         activeOpacity={0.8}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`${badgeText}, tombol untuk aksi ${cardTitle}`}
       >
-        <Text style={[styles.badgeText, { color: "#F7F9FC" }]}>
+        <Text style={[styles.badgeText, { color: "#FFFFFF" }]}>
           {badgeText}
         </Text>
       </TouchableOpacity>
@@ -156,9 +165,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   badge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    minHeight: 48,
+    justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
   },

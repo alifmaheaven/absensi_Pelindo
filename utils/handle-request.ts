@@ -68,7 +68,9 @@ export async function handleHttpError(
 
   const status = axiosError.response?.status ?? 0;
 
-  // Logout jika unauthorized karena token expired
+  // PENTING: 403 (Forbidden) BUKAN 401 (Unauthorized).
+  // Jangan sekali-kali memanggil clearAuthStorage() atau me-redirect ke /auth pada 403,
+  // karena itu akan menyebabkan seluruh pengguna mobile ter-logout berulang saat mengakses fitur yang belum di-grant.
   if (status === 401) {
     const responseData = axiosError.response.data;
     const isExpired = isTokenExpiredMessage(responseData);
@@ -83,13 +85,33 @@ export async function handleHttpError(
 
   console.error("HTTP Error:", axiosError.response?.status);
 
-  const responseMessage =
+  let responseMessage =
     axiosError.response?.data?.message ||
     DEFAULT_MESSAGES[status] ||
     "Terjadi kesalahan tidak terduga";
 
+  // Normalisasi pesan 403 agar informatif bagi pengguna lapangan
+  if (status === 403) {
+    if (typeof responseMessage === "string" && responseMessage.toLowerCase().includes("missing permission")) {
+      const match = responseMessage.match(/missing permission:\s*([a-zA-Z0-9_-]+)/i);
+      const perm = match ? match[1] : "";
+      responseMessage = perm
+        ? `Anda tidak memiliki izin akses (${perm}). Silakan hubungi administrator untuk meminta hak akses.`
+        : "Anda tidak memiliki izin akses untuk fitur ini. Silakan hubungi administrator.";
+    } else if (responseMessage === DEFAULT_MESSAGES[403]) {
+      responseMessage = "Anda tidak memiliki izin akses untuk fitur ini. Silakan hubungi administrator.";
+    }
+  }
+
+  const title =
+    status >= 500
+      ? "Server Error"
+      : status === 403
+      ? "Akses Ditolak"
+      : "Request Error";
+
   return {
-    title: status >= 500 ? "Server Error" : "Request Error",
+    title,
     code: status,
     message: responseMessage,
   };

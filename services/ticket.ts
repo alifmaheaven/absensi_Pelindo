@@ -88,8 +88,14 @@ export async function getDataUser(
     const response = await axios.get("/users/", { params });
 
     return response.data;
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    // Role 'user' tidak memiliki izin 'user_read' di backend staging (403 Forbidden).
+    // Kembalikan fallback list kosong agar layar pemanggil tidak crash / spinner abadi.
+    if (error?.code === 403 || error?.response?.status === 403) {
+      console.warn("[getDataUser] Akses user dibatasi (403), fallback ke list kosong:", error?.message);
+      return { data: { data: [] } } as any;
+    }
+    console.error("getDataUser failed:", error);
     throw error;
   }
 }

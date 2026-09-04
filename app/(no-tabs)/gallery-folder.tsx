@@ -66,14 +66,21 @@ export default function GalleryFolderScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showSourceModal, setShowSourceModal] = useState(false);
+  const [isAccessDenied, setIsAccessDenied] = useState(false);
+  const [deniedMessage, setDeniedMessage] = useState<string | null>(null);
 
   const fetchPhotos = useCallback(async () => {
     if (!id) return;
     try {
       const res = await getPhotos(id, 1, 1000);
       setPhotos(res?.data?.data || []);
-    } catch {
-      // silently fail
+      setIsAccessDenied(false);
+      setDeniedMessage(null);
+    } catch (err: any) {
+      if (err?.code === 403 || err?.status === 403 || err?.response?.status === 403) {
+        setIsAccessDenied(true);
+        setDeniedMessage(err?.message || "Anda tidak memiliki izin untuk melihat foto dalam folder ini.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -145,8 +152,8 @@ export default function GalleryFolderScreen() {
       const res = await uploadPhotos(id!, formData);
       const newPhotos = res?.data || [];
       setPhotos((prev) => [...newPhotos, ...prev]);
-    } catch {
-      Alert.alert("Error", "Gagal upload");
+    } catch (err: any) {
+      Alert.alert(err?.title || "Error", err?.message || "Gagal upload");
     } finally {
       setUploading(false);
     }
@@ -162,8 +169,8 @@ export default function GalleryFolderScreen() {
           try {
             await deletePhoto(photo.id);
             setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
-          } catch {
-            Alert.alert("Error", "Gagal menghapus foto");
+          } catch (err: any) {
+            Alert.alert(err?.title || "Error", err?.message || "Gagal menghapus foto");
           }
         },
       },
@@ -180,8 +187,8 @@ export default function GalleryFolderScreen() {
           message: `Lihat galeri "${name}": https://ticketing.vps.prakhya.id/gallery/share/${token}`,
         });
       }
-    } catch {
-      Alert.alert("Error", "Gagal generate link share");
+    } catch (err: any) {
+      Alert.alert(err?.title || "Error", err?.message || "Gagal generate link share");
     }
   };
 
@@ -233,23 +240,27 @@ export default function GalleryFolderScreen() {
         <Text style={{ fontSize: 18, fontWeight: "700", flex: 1 }} numberOfLines={1}>
           {name}
         </Text>
-        <TouchableOpacity onPress={handleShare} style={{ marginRight: 12 }}>
-          <Text style={{ color: colors.primary, fontSize: 14 }}>Share</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={showUploadOptions}
-          disabled={uploading}
-          style={{
-            backgroundColor: colors.primary,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
-            {uploading ? "Upload..." : "+ Tambah"}
-          </Text>
-        </TouchableOpacity>
+        {!isAccessDenied && (
+          <TouchableOpacity onPress={handleShare} style={{ marginRight: 12 }}>
+            <Text style={{ color: colors.primary, fontSize: 14 }}>Share</Text>
+          </TouchableOpacity>
+        )}
+        {!isAccessDenied && (
+          <TouchableOpacity
+            onPress={showUploadOptions}
+            disabled={uploading}
+            style={{
+              backgroundColor: colors.primary,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600", fontSize: 14 }}>
+              {uploading ? "Upload..." : "+ Tambah"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {loading ? (
@@ -263,9 +274,21 @@ export default function GalleryFolderScreen() {
           contentContainerStyle={{ padding: GAP }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={{ alignItems: "center", paddingTop: 80 }}>
-              <Text style={{ color: colors.textMuted, fontSize: 14 }}>Belum ada file</Text>
-            </View>
+            isAccessDenied ? (
+              <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 24 }}>
+                <Ionicons name="lock-closed-outline" size={48} color={colors.danger} />
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>
+                  Akses Ditolak
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: 6 }}>
+                  {deniedMessage || "Akun Anda tidak memiliki izin untuk melihat foto dalam folder ini. Hubungi administrator."}
+                </Text>
+              </View>
+            ) : (
+              <View style={{ alignItems: "center", paddingTop: 80 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 14 }}>Belum ada file</Text>
+              </View>
+            )
           }
         />
       )}

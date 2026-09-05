@@ -19,7 +19,7 @@ import {
 import { parseUTCDate } from "@/utils/utils";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
-import { Bell } from "@/components/icon";
+import { Bell, ClockOutline, Ticket, Calender } from "@/components/icon";
 
 interface Notification {
   id: string;
@@ -50,6 +50,20 @@ function getTypeColor(type: string, c: ThemeColors): string {
     leave_update: c.warning,
   };
   return map[type] || c.textMuted;
+}
+
+function renderTypeIcon(type: string, c: ThemeColors) {
+  const color = getTypeColor(type, c);
+  switch (type) {
+    case "attendance_reminder":
+      return <ClockOutline color={color} width={22} height={22} />;
+    case "ticket_status_change":
+      return <Ticket color={color} width={22} height={22} />;
+    case "leave_update":
+      return <Calender color={color} width={22} height={22} />;
+    default:
+      return <Bell color={color} width={22} height={22} />;
+  }
 }
 
 export default function NotificationsScreen() {
@@ -130,14 +144,7 @@ export default function NotificationsScreen() {
           marginRight: 12,
         }}
       >
-        <View
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 10,
-            backgroundColor: getTypeColor(item.type, colors),
-          }}
-        />
+        {renderTypeIcon(item.type, colors)}
       </View>
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

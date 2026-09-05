@@ -475,12 +475,30 @@ export default function DailyRoutineDetailScreen() {
       ...(item.notes && { notes: item.notes }),
     }));
 
-    // Konfirmasi submit parsial (Ruling Observer #11)
-    const uncheckedCount = states.filter((s) => !s.is_checked).length;
+    // Konfirmasi submit parsial (Ruling Observer #11 / D124)
+    const uncheckedStates = states.filter((s) => !s.is_checked);
+    const uncheckedCount = uncheckedStates.length;
     if (uncheckedCount > 0) {
+      const itemLines = uncheckedStates.map((s) => {
+        const routineItem = routine?.items?.find(
+          (ri) => ri.id === s.daily_routine_item_id
+        );
+        const itemName = routineItem?.name || "Item";
+        const deviceName = s.device_id
+          ? deviceGroups.find((g) => g.device_id === s.device_id)?.device_name ||
+            routine?.device_items?.find((di) => di.device_id === s.device_id)?.device_name
+          : undefined;
+        return deviceName ? `• ${itemName} (${deviceName})` : `• ${itemName}`;
+      });
+
+      const listText =
+        uncheckedCount <= 5
+          ? itemLines.join("\n")
+          : `${itemLines.slice(0, 5).join("\n")}\n• dan ${uncheckedCount - 5} item lainnya`;
+
       Alert.alert(
-        "Konfirmasi Penyelesaian",
-        `Terdapat ${uncheckedCount} item yang belum dicentang. Apakah Anda yakin ingin menyelesaikan Daily Routine sekarang?`,
+        "Konfirmasi Penyelesaian Parsial",
+        `Kamu menyelesaikan routine dengan ${uncheckedCount} item belum dicentang:\n${listText}\n\nTetap selesaikan sekarang?`,
         [
           { text: "Periksa Lagi", style: "cancel" },
           { text: "Ya, Selesaikan", onPress: () => doSubmit(submitItems) },

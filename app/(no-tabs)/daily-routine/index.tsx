@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import EmptyState from "@/components/ui/EmptyState";
+import RoutineProgressCard from "@/components/daily-routine/RoutineProgressCard";
 
 interface IErrorState {
   type: "not_checked_in" | "not_found" | "forbidden" | "network_or_server";
@@ -185,6 +185,19 @@ export default function DailyRoutineListScreen() {
         {loading ? (
           // Skeleton loader (M8 - P2)
           <View style={styles.skeletonContainer}>
+            {/* Skeleton Ringkasan Progress */}
+            <View style={[styles.skeletonCard, { marginBottom: 4 }]}>
+              <View style={styles.skeletonHeaderRow}>
+                <View style={[styles.skeletonTitleBar, { width: "55%" }]} />
+                <View style={[styles.skeletonTextSmall, { width: 50 }]} />
+              </View>
+              <View style={[styles.skeletonTitleBar, { width: "40%", height: 14, marginBottom: 10 }]} />
+              <View style={[styles.skeletonDescBar, { height: 8, borderRadius: 4, marginBottom: 12 }]} />
+              <View style={styles.skeletonInfoRow}>
+                <View style={styles.skeletonTextSmall} />
+                <View style={styles.skeletonTextSmall} />
+              </View>
+            </View>
             {[1, 2].map((k) => (
               <View key={k} style={styles.skeletonCard}>
                 <View style={styles.skeletonHeaderRow}>
@@ -202,53 +215,20 @@ export default function DailyRoutineListScreen() {
               </View>
             ))}
           </View>
-        ) : errorState ? (
-          // M4: Dedicated Error States
-          errorState.type === "not_checked_in" ? (
-            <EmptyState
-              title={errorState.title}
-              description={errorState.message}
-              actionLabel="Check In Sekarang"
-              onAction={() => router.push("/(no-tabs)/checkin")}
-              icon={<ClockOutline color={colors.warning} width={40} height={40} />}
-            />
-          ) : errorState.type === "not_found" ? (
-            <EmptyState
-              title={errorState.title}
-              description={errorState.message}
-              actionLabel="Muat Ulang"
-              onAction={() => fetchData(true)}
-              icon={<InfoOutlineRounded color={colors.warning} width={40} height={40} />}
-            />
-          ) : errorState.type === "forbidden" ? (
-            <EmptyState
-              title={errorState.title}
-              description={errorState.message}
-              actionLabel="Kembali"
-              onAction={handleHeaderBack}
-              icon={<InfoOutlineRounded color={colors.danger} width={40} height={40} />}
-            />
-          ) : (
-            <EmptyState
-              title={errorState.title}
-              description={errorState.message}
-              actionLabel="Coba Lagi"
-              onAction={() => fetchData(true)}
-              icon={<InfoOutlineRounded color={colors.danger} width={40} height={40} />}
-            />
-          )
-        ) : !data?.routines || data.routines.length === 0 ? (
-          // Empty State
-          <EmptyState
-            title="Tidak Ada Daily Routine"
-            description="Tidak ada penugasan checklist daily routine untuk site Anda hari ini."
-            actionLabel="Muat Ulang"
-            onAction={() => fetchData(true)}
-            icon={<CheckRounded color={colors.primary} width={36} height={36} />}
-          />
         ) : (
-          // M5: Multi-routine cards
           <View>
+            {/* Kartu Progress Tugas Hari Ini (RPT-1: 123 §5 / FR-RPT-DR-07) */}
+            <RoutineProgressCard
+              routines={data?.routines}
+              errorType={errorState?.type}
+              errorMessage={errorState?.message}
+              onRefresh={() => fetchData(true)}
+              onCheckIn={() => router.push("/(no-tabs)/checkin")}
+            />
+
+            {/* Jika ada routines, render daftar kartu rutinitas individual */}
+            {data?.routines && data.routines.length > 0 && (
+              <View>
             {data.routines.map((item, index) => {
               if (!item?.routine) return null;
               const routine = item.routine;
@@ -348,6 +328,8 @@ export default function DailyRoutineListScreen() {
                 </View>
               );
             })}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>

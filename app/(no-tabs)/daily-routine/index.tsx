@@ -1,7 +1,7 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded, ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
-import { getTodayRoutines, startDailyRoutineLog } from "@/services/dailyRoutine";
+import { getTodayRoutines, startDailyRoutineLog, mapDailyRoutineError } from "@/services/dailyRoutine";
 import { ITodayRoutinesAllResponse, ITodayRoutineResponse } from "@/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import EmptyState from "@/components/ui/EmptyState";
 
 interface IErrorState {
-  type: "not_checked_in" | "forbidden" | "network_or_server";
+  type: "not_checked_in" | "not_found" | "forbidden" | "network_or_server";
   title: string;
   message: string;
 }
@@ -46,36 +46,70 @@ export default function DailyRoutineListScreen() {
       setData(res.data);
     } catch (error: any) {
       setData(null);
-      const msg = error?.message || "";
-      const code = error?.code ?? error?.response?.status;
+      const code =
+        error?.code ??
+        error?.response?.status ??
+        error?.status ??
+        (typeof error?.code === "number" ? error.code : 0);
+
+      const rawMsg =
+        (typeof error === "string" ? error : null) ||
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "";
+      const lowerMsg = String(rawMsg).toLowerCase();
 
       if (
         code === 400 ||
-        msg.toLowerCase().includes("check in") ||
-        msg.toLowerCase().includes("checked in") ||
-        msg.toLowerCase().includes("belum check in")
+        lowerMsg.includes("not checked in") ||
+        lowerMsg.includes("haven't checked in") ||
+        lowerMsg.includes("have not checked in") ||
+        lowerMsg.includes("check in") ||
+        lowerMsg.includes("checked in") ||
+        lowerMsg.includes("belum check in") ||
+        lowerMsg.includes("belum check-in")
       ) {
         setErrorState({
           type: "not_checked_in",
           title: "Belum Melakukan Check In",
-          message:
-            "Anda harus melakukan absensi check in terlebih dahulu untuk mengakses tugas Daily Routine hari ini.",
+          message: "Anda belum check-in hari ini.",
         });
-      } else if (code === 403) {
+      } else if (
+        code === 404 ||
+        lowerMsg.includes("daily routine not found") ||
+        lowerMsg.includes("daily_routine not found") ||
+        (lowerMsg.includes("routine") && lowerMsg.includes("not found")) ||
+        (lowerMsg.includes("routine") && lowerMsg.includes("tidak ditemukan"))
+      ) {
+        setErrorState({
+          type: "not_found",
+          title: "Routine Tidak Tersedia",
+          message:
+            "Routine tidak tersedia untuk site check-in Anda. Pastikan Anda check-in di site yang benar.",
+        });
+      } else if (
+        code === 403 ||
+        lowerMsg.includes("forbidden") ||
+        lowerMsg.includes("unauthorized") ||
+        lowerMsg.includes("access denied") ||
+        lowerMsg.includes("permission") ||
+        lowerMsg.includes("akses ditolak") ||
+        lowerMsg.includes("tidak memiliki izin")
+      ) {
         setErrorState({
           type: "forbidden",
           title: "Akses Ditolak",
-          message:
-            msg ||
-            "Anda tidak memiliki izin akses untuk fitur Daily Routine. Silakan hubungi administrator.",
+          message: "Anda tidak memiliki izin untuk memulai routine ini.",
         });
       } else {
         setErrorState({
           type: "network_or_server",
           title: code === 0 ? "Koneksi Bermasalah" : "Terjadi Kesalahan Server",
-          message:
-            msg ||
-            "Gagal memuat data Daily Routine. Silakan periksa jaringan internet Anda dan coba lagi.",
+          message: mapDailyRoutineError(
+            error,
+            "Gagal memuat data Daily Routine. Silakan periksa jaringan internet Anda dan coba lagi."
+          ),
         });
       }
     } finally {
@@ -100,7 +134,7 @@ export default function DailyRoutineListScreen() {
         await startDailyRoutineLog(item.routine.id);
       } catch (error: any) {
         showToast(
-          error?.message || error?.response?.data?.message || "Gagal memulai daily routine",
+          mapDailyRoutineError(error, "Gagal memulai daily routine"),
           "error"
         );
         return;
@@ -177,6 +211,14 @@ export default function DailyRoutineListScreen() {
               actionLabel="Check In Sekarang"
               onAction={() => router.push("/(no-tabs)/checkin")}
               icon={<ClockOutline color={colors.warning} width={40} height={40} />}
+            />
+          ) : errorState.type === "not_found" ? (
+            <EmptyState
+              title={errorState.title}
+              description={errorState.message}
+              actionLabel="Muat Ulang"
+              onAction={() => fetchData(true)}
+              icon={<InfoOutlineRounded color={colors.warning} width={40} height={40} />}
             />
           ) : errorState.type === "forbidden" ? (
             <EmptyState

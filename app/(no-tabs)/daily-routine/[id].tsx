@@ -5,8 +5,10 @@ import { IMAGE_BASE_PATH, IMAGE_MAX_WIDTH, IMAGE_QUALITY } from "@/constants";
 import {
   getDailyRoutineById,
   getTodayRoutines,
+  startDailyRoutineLog,
   submitDailyRoutineLog,
   uploadDailyRoutineTemp,
+  mapDailyRoutineError,
 } from "@/services/dailyRoutine";
 import {
   IDailyRoutine,
@@ -84,23 +86,47 @@ export default function DailyRoutineDetailScreen() {
       }
 
       // Fetch routine detail by ID (template + items) and today's routines in parallel
-      const [routineRes, todayRes] = await Promise.all([
-        getDailyRoutineById(id).catch(() => null),
-        getTodayRoutines().catch(() => null),
-      ]);
+      let routineDetail: any = null;
+      let routineErr: any = null;
+      try {
+        const routineRes = await getDailyRoutineById(id);
+        routineDetail = routineRes?.data;
+      } catch (err: any) {
+        routineErr = err;
+      }
 
-      const routineDetail = routineRes?.data;
-      const todayRoutines = todayRes?.data?.routines || [];
-      const matchingToday = todayRoutines.find((r) => r.routine?.id === id);
+      let todayRoutines: any[] = [];
+      try {
+        const todayRes = await getTodayRoutines();
+        todayRoutines = todayRes?.data?.routines || [];
+      } catch (err: any) {
+        console.warn("getTodayRoutines in detail error:", err);
+      }
 
       if (!routineDetail) {
-        showToast("Routine tidak ditemukan", "error");
+        showToast(
+          mapDailyRoutineError(routineErr, "Routine tidak ditemukan"),
+          "error"
+        );
         router.back();
         return;
       }
 
-      const targetLog = matchingToday?.log || null;
+      const matchingToday = todayRoutines.find((r) => r.routine?.id === id);
+      let targetLog = matchingToday?.log || null;
       const targetLogItems = matchingToday?.log_items || [];
+
+      // Defensive: bila targetLog belum ada (mis. navigasi langsung / deep link), inisialisasi via startDailyRoutineLog
+      if (!targetLog) {
+        try {
+          const startRes = await startDailyRoutineLog(id);
+          if (startRes?.data) {
+            targetLog = startRes.data;
+          }
+        } catch (startErr: any) {
+          console.warn("Auto-start log in detail warning:", startErr);
+        }
+      }
 
       setRoutine(routineDetail);
       setLogData(targetLog);
@@ -387,8 +413,21 @@ export default function DailyRoutineDetailScreen() {
     }
 
     if (!logData) {
-      showToast("Log belum dimulai", "error");
-      return;
+      try {
+        const startRes = await startDailyRoutineLog(id);
+        if (startRes?.data) {
+          setLogData(startRes.data);
+        } else {
+          showToast("Log belum dimulai", "error");
+          return;
+        }
+      } catch (startErr: any) {
+        showToast(
+          mapDailyRoutineError(startErr, "Log belum dimulai"),
+          "error"
+        );
+        return;
+      }
     }
 
     const states = Object.values(itemStates);
@@ -472,7 +511,7 @@ export default function DailyRoutineDetailScreen() {
     } catch (error: any) {
       console.error("Submit error:", error);
       showToast(
-        error?.response?.data?.message || error?.message || "Gagal submit",
+        mapDailyRoutineError(error, "Gagal menyelesaikan daily routine"),
         "error"
       );
     } finally {

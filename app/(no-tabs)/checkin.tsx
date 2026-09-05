@@ -174,6 +174,11 @@ export default function CheckinScreen() {
     return withDistance;
   }, [siteData, location]);
 
+  const selectedSite = useMemo(
+    () => sitesList.find((s: any) => s.id === selectedLocation) || null,
+    [sitesList, selectedLocation]
+  );
+
   const requestLocation = async () => {
     setLoadingLocation(true);
     setPermissionDenied(false);
@@ -460,7 +465,22 @@ export default function CheckinScreen() {
                   </View>
                 )
               ) : (
-                <MapEmbed location={location} />
+                <MapEmbed
+                  location={location}
+                  center={
+                    selectedSite && selectedSite.latitude != null && selectedSite.longitude != null
+                      ? {
+                          lat: Number(selectedSite.latitude),
+                          lng: Number(selectedSite.longitude),
+                        }
+                      : undefined
+                  }
+                  radiusMeters={
+                    selectedSite && selectedSite.tolerance != null
+                      ? Number(selectedSite.tolerance)
+                      : undefined
+                  }
+                />
               )}
               <View style={styles.locationOverlay}>
                 <Text style={styles.locationOverlayText}>

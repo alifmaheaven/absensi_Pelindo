@@ -199,3 +199,48 @@ export async function uploadEvidPermanent(payload: {
     throw error;
   }
 }
+
+export interface IAttendanceMySummaryTotals {
+  A: number;
+  T: number;
+  S: number;
+  I: number;
+  C: number;
+  L: number;
+  X: number;
+  '.': number;
+  hadir: number;
+  terlambat: number;
+  sakit: number;
+  izin: number;
+  cuti: number;
+  alpha: number;
+  total_hadir: number;
+}
+
+export interface IAttendanceMySummary {
+  month: string;
+  days_in_month: number;
+  user_id: string;
+  name: string;
+  matrix: string[];
+  totals: IAttendanceMySummaryTotals;
+}
+
+/**
+ * R-BL-4: GET /api/v2/attendance/my-summary?month=YYYY-MM
+ * Self-service monthly summary for authenticated mobile user.
+ */
+export async function getAttendanceMySummary(
+  month: string,
+): Promise<Response<IAttendanceMySummary>> {
+  try {
+    const response = await axios.get("/api/v2/attendance/my-summary", {
+      params: { month },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("Get my attendance summary error:", error);
+    throw error;
+  }
+}

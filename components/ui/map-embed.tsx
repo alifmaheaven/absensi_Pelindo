@@ -1,20 +1,49 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors } from "@/hooks/use-theme-color";
 import * as Location from "expo-location";
 import React, { useRef } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 
-interface MapEmbedProps {
-  location: Location.LocationObject | null;
+import { Circle } from "react-native-maps";
+
+export interface MapCenter {
+  lat: number;
+  lng: number;
 }
 
-export const MapEmbed: React.FC<MapEmbedProps> = ({ location }) => {
+export interface MapEmbedProps {
+  location: Location.LocationObject | null;
+  center?: MapCenter | null;
+  radiusMeters?: number | null;
+}
+
+// Re-export Circle from react-native-maps for type/component parity
+export { Circle };
+
+export const MapEmbed: React.FC<MapEmbedProps> = ({
+  location,
+  center,
+  radiusMeters,
+}) => {
+  const colors = useThemeColors();
   const webViewRef = useRef<WebView>(null);
 
   const createMapHTML = () => {
     const lat = location?.coords?.latitude ?? -2.5;
     const lon = location?.coords?.longitude ?? 118;
     const zoom = 18;
+
+    const hasGeofence =
+      center &&
+      typeof center.lat === "number" &&
+      !isNaN(center.lat) &&
+      typeof center.lng === "number" &&
+      !isNaN(center.lng) &&
+      typeof radiusMeters === "number" &&
+      !isNaN(radiusMeters) &&
+      radiusMeters > 0;
+
+    const strokeColor = colors.primary || "#1e90ff";
 
     return `
       <!DOCTYPE html>
@@ -41,7 +70,22 @@ export const MapEmbed: React.FC<MapEmbedProps> = ({ location }) => {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
             maxZoom: 19,
           }).addTo(map);
-          L.marker([${lat}, ${lon}]).addTo(map);
+          var userMarker = L.marker([${lat}, ${lon}]).addTo(map);
+          ${
+            hasGeofence
+              ? `
+          var geofenceCircle = L.circle([${center.lat}, ${center.lng}], {
+            color: '${strokeColor}',
+            fillColor: '${strokeColor}',
+            fillOpacity: 0.15,
+            radius: ${radiusMeters},
+            weight: 2
+          }).addTo(map);
+          var group = new L.featureGroup([userMarker, geofenceCircle]);
+          map.fitBounds(group.getBounds().pad(0.2));
+          `
+              : ""
+          }
         </script>
       </body>
       </html>

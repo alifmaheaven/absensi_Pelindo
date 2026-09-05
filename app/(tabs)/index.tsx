@@ -20,6 +20,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
+  ActivityIndicator,
   Alert,
   AppState,
   RefreshControl,
@@ -33,6 +34,7 @@ import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
 import { TIMEZONE } from "@/constants";
 import type { IScheduleToday, Ishift } from "@/types";
+import { getPendingCount, syncQueuedRequests } from "@/lib/offlineQueue";
 
 export function getWorkStatus(
   datetime?: string | null,
@@ -131,6 +133,43 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // R-BL-11: Antrean absensi offline
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
+  const [isSyncingOffline, setIsSyncingOffline] = useState(false);
+
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const count = await getPendingCount();
+      setPendingOfflineCount(count);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleSyncOffline = async () => {
+    if (isSyncingOffline) return;
+    setIsSyncingOffline(true);
+    try {
+      const synced = await syncQueuedRequests();
+      await refreshPendingCount();
+      if (synced > 0) {
+        showToast(`Berhasil menyinkronkan ${synced} absensi`, "success");
+        fetchAttendance();
+      } else {
+        const remaining = await getPendingCount();
+        if (remaining === 0) {
+          showToast("Semua absensi telah disinkronkan", "info");
+        } else {
+          showToast("Koneksi belum stabil untuk sinkronisasi", "error");
+        }
+      }
+    } catch {
+      showToast("Gagal menyinkronkan absensi", "error");
+    } finally {
+      setIsSyncingOffline(false);
+    }
+  };
 
   // S-MO-1: Algoritma Hibrida 3 Lapis
   // Lapis 1: Record tanggal kalender hari ini
@@ -428,6 +467,7 @@ export default function HomeScreen() {
         fetchSchedule(),
         fetchAttendance(),
         fetchUnreadCount(),
+        refreshPendingCount(),
         getProfile().then((res) => {
           if (res.data) useAuthStore.getState().setUser(res.data);
         }).catch(() => {}),
@@ -444,7 +484,8 @@ export default function HomeScreen() {
       fetchAttendance();
       fetchSchedule();
       fetchUnreadCount();
-    }, [user?.id])
+      refreshPendingCount();
+    }, [user?.id, refreshPendingCount])
   );
 
   // Re-fetch when app returns from background
@@ -454,10 +495,11 @@ export default function HomeScreen() {
         fetchAttendance();
         fetchSchedule();
         fetchUnreadCount();
+        refreshPendingCount();
       }
     });
     return () => sub.remove();
-  }, [user?.id]);
+  }, [user?.id, refreshPendingCount]);
 
   // Connect WebSocket for live notification updates
   useEffect(() => {
@@ -618,6 +660,33 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* R-BL-11: Pill antrean offline */}
+          {pendingOfflineCount > 0 && (
+            <View style={styles.offlinePillContainer}>
+              <View style={styles.offlinePillTextRow}>
+                <Text style={styles.offlinePillIcon}>⏳</Text>
+                <Text style={styles.offlinePillText}>
+                  {pendingOfflineCount} absensi menunggu sinkronisasi
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.offlineSyncButton,
+                  isSyncingOffline && styles.offlineSyncButtonDisabled,
+                ]}
+                onPress={handleSyncOffline}
+                disabled={isSyncingOffline}
+                activeOpacity={0.8}
+              >
+                {isSyncingOffline ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.offlineSyncButtonText}>Sinkronkan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Tips Card */}
           <View style={styles.tipsCard}>
@@ -859,6 +928,57 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   avatarIcon: {
     width: 25,
     height: 25,
+  },
+  // R-BL-11: Pill antrean offline
+  offlinePillContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: c.warningSoft,
+    borderWidth: 1,
+    borderColor: c.warning,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  offlinePillTextRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 10,
+  },
+  offlinePillIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  offlinePillText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: c.textStrong,
+    flexShrink: 1,
+  },
+  offlineSyncButton: {
+    backgroundColor: c.warning,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 80,
+  },
+  offlineSyncButtonDisabled: {
+    opacity: 0.6,
+  },
+  offlineSyncButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
   },
   // Tips Card
   tipsCard: {

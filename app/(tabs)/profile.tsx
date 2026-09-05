@@ -6,14 +6,17 @@ import { useAuthStore } from "@/stores/auth";
 import { smartCapitalize } from "@/utils/utils";
 import API from "@/lib/axios";
 import { getLatestVersion } from "@/services/version";
+import { getAttendanceMySummary, type IAttendanceMySummary } from "@/services/attendance";
 import Constants from "expo-constants";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { useState , useMemo } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useState, useMemo, useCallback } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +26,25 @@ import {
 
 const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 const BUILD_NUMBER = Constants.expoConfig?.extra?.eas?.buildNumber ?? "-";
+
+const getWIBMonthString = (date: Date = new Date()): string => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(date);
+  const y = parts.find((p) => p.type === "year")?.value || "2026";
+  const m = parts.find((p) => p.type === "month")?.value || "09";
+  return `${y}-${m}`;
+};
+
+const getWIBMonthDisplay = (date: Date = new Date()): string => {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+};
 
 const THEME_OPTIONS: {
   key: ThemePreference;
@@ -43,6 +65,85 @@ export default function ProfileScreen() {
   const { preference, setPreference } = useThemePreference();
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  // R-BL-4: State rekap absensi bulanan milik sendiri
+  const [summaryData, setSummaryData] = useState<IAttendanceMySummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const currentMonthDisplay = useMemo(() => getWIBMonthDisplay(), []);
+
+  const fetchSummary = useCallback(async () => {
+    setSummaryLoading(true);
+    setSummaryError(false);
+    try {
+      const monthStr = getWIBMonthString();
+      const res = await getAttendanceMySummary(monthStr);
+      const payload: any = res.data;
+      const actualData: IAttendanceMySummary = payload?.data || payload;
+      setSummaryData(actualData || null);
+    } catch (error) {
+      console.warn("Failed to fetch my attendance summary:", error);
+      setSummaryError(true);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSummary();
+    }, [fetchSummary])
+  );
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchSummary();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const totals = summaryData?.totals;
+  const summaryChips = [
+    {
+      label: "Hadir",
+      count: totals?.hadir ?? totals?.A ?? 0,
+      bg: colors.successSoft,
+      color: colors.success,
+    },
+    {
+      label: "Terlambat",
+      count: totals?.terlambat ?? totals?.T ?? 0,
+      bg: colors.warningSoft,
+      color: colors.warning,
+    },
+    {
+      label: "Sakit",
+      count: totals?.sakit ?? totals?.S ?? 0,
+      bg: colors.primarySoft,
+      color: colors.primary,
+    },
+    {
+      label: "Izin",
+      count: totals?.izin ?? totals?.I ?? 0,
+      bg: colors.surface,
+      color: colors.textSecondary,
+    },
+    {
+      label: "Cuti",
+      count: totals?.cuti ?? totals?.C ?? 0,
+      bg: colors.surface,
+      color: colors.primary,
+    },
+    {
+      label: "Alpha",
+      count: totals?.alpha ?? totals?.L ?? 0,
+      bg: colors.dangerSoft,
+      color: colors.danger,
+    },
+  ];
 
   const menuItems = [
     { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => router.push("/(no-tabs)/edit-profile") },
@@ -122,7 +223,59 @@ export default function ProfileScreen() {
         <Text style={styles.userEmail}>{user?.email}</Text>
       </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
+      >
+        {/* R-BL-4: Kartu Rekap Kehadiran Bulanan */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryCardHeader}>
+            <View>
+              <Text style={styles.summaryTitle}>Rekap Kehadiran</Text>
+              <Text style={styles.summarySubtitle}>{currentMonthDisplay}</Text>
+            </View>
+            {summaryLoading && (
+              <ActivityIndicator size="small" color={colors.primary} />
+            )}
+          </View>
+
+          {summaryError ? (
+            <View style={styles.summaryErrorContainer}>
+              <Text style={styles.summaryErrorText}>
+                Gagal memuat ringkasan absensi
+              </Text>
+              <TouchableOpacity
+                onPress={fetchSummary}
+                style={styles.summaryRetryButton}
+              >
+                <Text style={styles.summaryRetryText}>Coba Lagi</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.summaryChipsGrid}>
+              {summaryChips.map((chip, idx) => (
+                <View
+                  key={idx}
+                  style={[styles.summaryChip, { backgroundColor: chip.bg }]}
+                >
+                  <Text style={[styles.summaryChipCount, { color: chip.color }]}>
+                    {summaryLoading ? "-" : chip.count}
+                  </Text>
+                  <Text style={[styles.summaryChipLabel, { color: chip.color }]}>
+                    {chip.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         <View style={styles.menuCard}>
           {menuItems.map((item, index) => (
             <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
@@ -294,6 +447,77 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  summaryCard: {
+    backgroundColor: c.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  summaryCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: c.textStrong,
+  },
+  summarySubtitle: {
+    fontSize: 12,
+    color: c.textMuted,
+    marginTop: 2,
+  },
+  summaryChipsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    rowGap: 10,
+  },
+  summaryChip: {
+    width: "31%",
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryChipCount: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 2,
+  },
+  summaryChipLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  summaryErrorContainer: {
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  summaryErrorText: {
+    fontSize: 13,
+    color: c.danger,
+    marginBottom: 10,
+  },
+  summaryRetryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    backgroundColor: c.primarySoft,
+    borderRadius: 8,
+  },
+  summaryRetryText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: c.primary,
   },
   menuCard: {
     backgroundColor: c.card,

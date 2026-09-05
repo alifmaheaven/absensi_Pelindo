@@ -38,7 +38,17 @@ export async function uploadPhotos(
     files.forEach((file) => {
       formData.append("photos", file as any);
     });
-    if (category) {
+  }
+
+  if (category) {
+    const hasCategory =
+      typeof (formData as any).has === "function"
+        ? (formData as any).has("category")
+        : Array.isArray((formData as any)._parts)
+        ? (formData as any)._parts.some((part: any) => Array.isArray(part) && part[0] === "category")
+        : false;
+
+    if (!hasCategory) {
       formData.append("category", category);
     }
   }

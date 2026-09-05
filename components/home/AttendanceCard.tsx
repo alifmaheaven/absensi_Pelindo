@@ -20,7 +20,8 @@ export function mapTimeToColor(
   datetime?: string | null,
   type: "checkin" | "checkout" = "checkin",
   shift?: Ishift | null,
-  theme?: ThemeColors
+  theme?: ThemeColors,
+  shiftDate?: string | null
 ): {
   text: string;
   container: string;
@@ -51,9 +52,24 @@ export function mapTimeToColor(
       : shift?.end_time ?? `0${DEFAULT_WORK_HOURS.checkout}:00`;
   const [sh, sm] = scheduledHourStr.split(":").map(Number);
 
-  const scheduledTime = new Date(targetTime);
+  // S-MO-2: Tanggal jadwal diturunkan dari tanggal shift (baseDate), bukan tanggal checkout aktual.
+  // Mencegah penambahan ganda +1 hari pada checkout pagi hari H+1.
+  let baseDate = new Date(targetTime);
+  if (shiftDate) {
+    const parsedShiftDate = parseWIBDate(shiftDate.includes(" ") ? shiftDate : `${shiftDate} 00:00:00`);
+    if (parsedShiftDate) {
+      baseDate = parsedShiftDate;
+    }
+  } else if (type === "checkout" && shift?.is_overnight) {
+    const checkinSh = Number(shift.start_time.split(":")[0]);
+    if (targetTime.getHours() < checkinSh) {
+      baseDate.setDate(baseDate.getDate() - 1);
+    }
+  }
+
+  const scheduledTime = new Date(baseDate);
   scheduledTime.setHours(sh, sm ?? 0, 0, 0);
-  // Overnight shift: checkout lewat tengah malam
+  // Overnight shift: checkout lewat tengah malam (H+1 dari tanggal mulai shift)
   if (type === "checkout" && shift?.is_overnight) {
     const eh = sh;
     const checkinSh = Number(shift.start_time.split(":")[0]);
@@ -88,8 +104,10 @@ interface AttendanceCardProps {
   subtitle: string;
   subtitle2?: string;
   shift?: Ishift | null;
+  shiftDate?: string | null;
   onPress: () => void;
   badgeText: string;
+  isOverdue?: boolean;
 }
 
 export default function AttendanceCard({
@@ -97,17 +115,22 @@ export default function AttendanceCard({
   time,
   subtitle,
   shift,
+  shiftDate,
   onPress,
   badgeText,
+  isOverdue,
 }: AttendanceCardProps) {
   const theme = useThemeColors();
-  const colors = mapTimeToColor(time, type, shift, theme);
+  const isDark = theme ? (theme.background === "#121212" || theme.surface === "#1e1e1e") : false;
+  const colors = mapTimeToColor(time, type, shift, theme, shiftDate);
   const formattedTime = getHourMinute(time);
 
   // Default styles based on type (fallback if time is null/empty)
-  const backgroundColor = time ? colors.container : theme.surface;
-  const textColor = time ? colors.text : theme.text;
-  const buttonColor = time ? colors.button : theme.primary;
+  // Khusus overdue pada checkout belum selesai: tampilkan styling alert
+  const isOverdueAlert = isOverdue && type === "checkout" && !time;
+  const backgroundColor = time ? colors.container : isOverdueAlert ? (theme ? theme.dangerSoft : "#FFE9E9") : theme.surface;
+  const textColor = time ? colors.text : isOverdueAlert ? (isDark ? "#FFFFFF" : "#991B1B") : theme.text;
+  const buttonColor = time ? colors.button : isOverdueAlert ? (isDark ? "#DC2626" : "#B30000") : theme.primary;
 
   const cardTitle = type === "checkin" ? "Check in" : "Check out";
 

@@ -44,19 +44,44 @@ export async function requestNotificationPermissions(): Promise<boolean> {
   }
 }
 
+// Mutex dan debounce state untuk mencegah race condition pemanggilan simultan dari index.tsx dan jadwal.tsx
+let isSyncing = false;
+let pendingSchedules: IWeekScheduleItem[] | null = null;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 /**
- * Schedule local reminder notifications for upcoming shifts in the week
+ * Schedule local reminder notifications for upcoming shifts in the week (Debounced & Mutexed)
  */
 export async function syncShiftNotifications(schedules: IWeekScheduleItem[]) {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+  }
+
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    executeSyncShiftNotifications(schedules);
+  }, 400);
+}
+
+async function executeSyncShiftNotifications(schedules: IWeekScheduleItem[]) {
+  if (isSyncing) {
+    pendingSchedules = schedules;
+    return;
+  }
+
+  isSyncing = true;
   try {
     const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) return;
+    if (!hasPermission) {
+      if (__DEV__) console.debug("[ShiftReminder] Permission not granted; skipping schedule.");
+      return;
+    }
 
     // Get all scheduled notifications and cancel previously scheduled shift reminders
-    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
     for (const notif of scheduled) {
       if (notif.content.data?.type === "shift_reminder") {
-        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier).catch(() => {});
       }
     }
 
@@ -70,7 +95,6 @@ export async function syncShiftNotifications(schedules: IWeekScheduleItem[]) {
 
       // item.date is "YYYY-MM-DD", shift.start_time is "HH:mm" or "HH:mm:ss"
       const startTime = shift.start_time.slice(0, 5);
-      const [hours, minutes] = startTime.split(":").map(Number);
 
       // Build target shift start Date in WIB (+07:00)
       const shiftStartDate = new Date(`${item.date}T${startTime}:00+07:00`);
@@ -81,10 +105,15 @@ export async function syncShiftNotifications(schedules: IWeekScheduleItem[]) {
 
       // Only schedule if the trigger time is in the future (at least 1 minute ahead)
       if (triggerTimeMs > now + 60 * 1000) {
+        const bodyText =
+          reminderMins === 0
+            ? `Shift "${shift.name}" Anda dimulai sekarang pada pukul ${startTime} WIB. Siapkan kehadiran Anda!`
+            : `Shift "${shift.name}" Anda akan dimulai dalam ${reminderMins} menit pada pukul ${startTime} WIB. Siapkan kehadiran Anda!`;
+
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "⏰ Pengingat Jadwal Shift",
-            body: `Shift "${shift.name}" Anda akan dimulai dalam ${reminderMins} menit pada pukul ${startTime} WIB. Siapkan kehadiran Anda!`,
+            body: bodyText,
             data: {
               type: "shift_reminder",
               shiftId: shift.id,
@@ -97,6 +126,8 @@ export async function syncShiftNotifications(schedules: IWeekScheduleItem[]) {
             type: Notifications.SchedulableTriggerInputTypes.DATE,
             date: new Date(triggerTimeMs),
           },
+        }).catch((err) => {
+          if (__DEV__) console.debug("[ShiftReminder] Failed to schedule single notification:", err);
         });
 
         if (__DEV__) {
@@ -108,5 +139,12 @@ export async function syncShiftNotifications(schedules: IWeekScheduleItem[]) {
     }
   } catch (error) {
     if (__DEV__) console.debug("Error scheduling shift reminders:", error);
+  } finally {
+    isSyncing = false;
+    if (pendingSchedules) {
+      const next = pendingSchedules;
+      pendingSchedules = null;
+      executeSyncShiftNotifications(next);
+    }
   }
 }

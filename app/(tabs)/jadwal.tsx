@@ -3,11 +3,12 @@ import { getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
 import type { IWeekScheduleItem } from "@/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState, useCallback , useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import ScheduleSkeleton from "@/components/ui/ScheduleSkeleton";
 import EmptyState from "@/components/ui/EmptyState";
-import { Calender } from "@/components/icon";
+import { Calender, InfoOutlineRounded } from "@/components/icon";
+import { getAccessibleTextColor, parseWIBDate } from "@/utils/utils";
 
 export default function JadwalScreen() {
   const colors = useThemeColors();
@@ -15,11 +16,13 @@ export default function JadwalScreen() {
   const [schedules, setSchedules] = useState<IWeekScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const fetchSchedule = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) setRefreshing(true);
       else setIsLoading(true);
+      setIsError(false);
 
       const res = await getWeekSchedule();
       const list = res.data?.schedules || [];
@@ -27,6 +30,7 @@ export default function JadwalScreen() {
       syncShiftNotifications(list);
     } catch (e) {
       console.error("Failed to fetch schedule:", e);
+      setIsError(true);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -38,6 +42,23 @@ export default function JadwalScreen() {
   }, [fetchSchedule]);
 
   const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
+
+  const getDayShortName = (dateStr?: string) => {
+    if (!dateStr) return "";
+    const shortDays = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const d = parseWIBDate(dateStr.includes(" ") ? dateStr : `${dateStr} 00:00:00`);
+    if (!d) return "";
+    return shortDays[d.getDay()];
+  };
+
+  const getNextDayShortName = (dateStr?: string) => {
+    if (!dateStr) return "";
+    const shortDays = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const d = parseWIBDate(dateStr.includes(" ") ? dateStr : `${dateStr} 00:00:00`);
+    if (!d) return "";
+    d.setDate(d.getDate() + 1);
+    return shortDays[d.getDay()];
+  };
 
   return (
     <View style={styles.container}>
@@ -65,21 +86,45 @@ export default function JadwalScreen() {
       >
         {isLoading ? (
           <ScheduleSkeleton count={7} />
-        ) : schedules.length === 0 ? (
+        ) : isError ? (
+          /* S-MO-3: Pemisahan jujur Error State (jaringan / server 500) */
           <EmptyState
-            title="Belum Ada Jadwal"
-            description="Jadwal shift kerja Anda belum ditetapkan oleh administrator. Hubungi supervisor untuk penugasan shift."
+            title="Gagal Memuat Jadwal"
+            description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+            actionLabel="Coba Lagi"
+            onAction={() => fetchSchedule(true)}
+            icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
+          />
+        ) : schedules.length === 0 ? (
+          /* S-MO-3: True Empty State (memang belum ada jadwal) */
+          <EmptyState
+            title="Belum Ada Penugasan Shift"
+            description="Jadwal kerja Anda belum ditetapkan untuk pekan ini. Hubungi supervisor operasional jika ini tidak sesuai."
             actionLabel="Muat Ulang"
             onAction={() => fetchSchedule(true)}
             icon={<Calender color={colors.primary} width={36} height={36} />}
           />
         ) : (
           schedules.map((item, index) => {
-            // item.date format "YYYY-MM-DD" — ambil tanggal langsung (hindari
-            // new Date(spasi/zone) yang bisa off-by-one lintas timezone device).
+            // item.date format "YYYY-MM-DD" — ambil tanggal langsung
             const dateNum = item.date ? item.date.split("-")[2] : "--";
             const bg = item.is_today ? colors.primary : item.has_schedule ? item.shift!.color : colors.primarySoft;
-            const textColor = item.is_today || item.has_schedule ? colors.onGradient : colors.textMuted;
+            // S-MO-5: Helper kontras WCAG AA (getAccessibleTextColor)
+            const textColor = item.is_today
+              ? colors.onGradient
+              : item.has_schedule
+              ? getAccessibleTextColor(item.shift?.color)
+              : colors.textMuted;
+
+            const isOvernight = Boolean(item.has_schedule && item.shift?.is_overnight);
+            const curDayShort = getDayShortName(item.date);
+            const nextDayShort = getNextDayShortName(item.date);
+
+            const timeRangeText = item.has_schedule
+              ? isOvernight
+                ? `${item.shift!.start_time.slice(0, 5)} (${curDayShort}) – ${item.shift!.end_time.slice(0, 5)} (${nextDayShort})`
+                : `${item.shift!.start_time.slice(0, 5)} - ${item.shift!.end_time.slice(0, 5)}`
+              : "Tidak ada jadwal";
 
             return (
               <View
@@ -97,15 +142,20 @@ export default function JadwalScreen() {
                 <View style={styles.scheduleInfo}>
                   {item.has_schedule ? (
                     <>
-                      <Text style={styles.shiftLabel}>{item.shift!.name}</Text>
-                      <Text style={styles.timeText}>
-                        {item.shift!.start_time} - {item.shift!.end_time}
-                      </Text>
+                      <View style={styles.shiftLabelRow}>
+                        <Text style={styles.shiftLabel}>{item.shift!.name}</Text>
+                        {isOvernight && (
+                          <View style={styles.overnightBadge}>
+                            <Text style={styles.overnightBadgeText}>🌙 Lintas Hari (+1)</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.timeText}>{timeRangeText}</Text>
                     </>
                   ) : (
                     <>
                       <Text style={styles.shiftLabel}>Libur</Text>
-                      <Text style={styles.timeText}>Tidak ada jadwal</Text>
+                      <Text style={styles.timeText}>{timeRangeText}</Text>
                     </>
                   )}
                 </View>
@@ -198,11 +248,30 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   scheduleInfo: {
     flex: 1,
   },
+  shiftLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap",
+    marginBottom: 4,
+  },
   shiftLabel: {
     fontSize: 16,
     fontWeight: "600",
     color: c.text,
-    marginBottom: 4,
+  },
+  overnightBadge: {
+    backgroundColor: c.surface,
+    borderColor: c.primary,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  overnightBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: c.textStrong,
   },
   timeText: {
     fontSize: 13,

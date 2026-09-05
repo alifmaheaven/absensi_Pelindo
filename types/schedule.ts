@@ -11,6 +11,32 @@ export interface Ishift {
   color: string;
 }
 
+export interface IActiveOvernightAttendance {
+  id: string;
+  checkin: string;
+  checkout: string | null;
+  site_id?: string | null;
+}
+
+export interface IScheduleOvernightSession {
+  attendance?: IActiveOvernightAttendance;
+  attendance_id?: string | null;
+  checkin?: string | null;
+  schedule?: {
+    id: string;
+    shift_id: string;
+    effective_from: string;
+    effective_to?: string | null;
+    work_days: number[];
+  };
+  shift: Ishift;
+  shift_date?: string;
+  scheduled_start?: string;
+  scheduled_end?: string;
+  is_overdue: boolean;
+  session_hours?: string;
+}
+
 export interface IScheduleToday {
   has_schedule: boolean;
   shift: Ishift | null;
@@ -18,6 +44,7 @@ export interface IScheduleToday {
   scheduled_start: string | null;
   scheduled_end: string | null;
   message: string;
+  active_overnight_session?: IScheduleOvernightSession | null;
 }
 
 export interface IWeekScheduleItem {

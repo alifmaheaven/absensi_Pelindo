@@ -43,21 +43,24 @@ export default function ScheduleSkeleton({ count = 5 }: { count?: number }) {
 
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    paddingVertical: 0,
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: c.card,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: c.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   dateBox: {
-    width: 54,
-    height: 54,
+    width: 55,
+    height: 55,
     borderRadius: 12,
     backgroundColor: c.borderStrong,
   },

@@ -104,6 +104,20 @@ export function formatAttendanceDate(
   }).format(d);
 }
 
+/**
+ * Helper WCAG AA Relative Luminance untuk menentukan warna teks (putih vs hitam gelap)
+ * di atas warna latar belakang arbitrary hex (S-MO-5 / S-FE-7).
+ */
+export function getAccessibleTextColor(hexColor?: string | null): string {
+  if (!hexColor || !/^#[0-9A-Fa-f]{6}$/.test(hexColor)) return "#FFFFFF";
+  const r = parseInt(hexColor.slice(1, 3), 16) / 255;
+  const g = parseInt(hexColor.slice(3, 5), 16) / 255;
+  const b = parseInt(hexColor.slice(5, 7), 16) / 255;
+  // Rumus relative luminance WCAG AA
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.45 ? "#1A1C1E" : "#FFFFFF";
+}
+
 type CompressOptions = {
   maxWidth?: number;
   quality?: number; // 0 - 1

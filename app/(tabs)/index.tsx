@@ -20,13 +20,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import {
+  Alert,
+  AppState,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  AppState,
 } from "react-native";
 import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
@@ -36,7 +37,8 @@ import type { IScheduleToday, Ishift } from "@/types";
 export function getWorkStatus(
   datetime?: string | null,
   type: "checkin" | "checkout" = "checkin",
-  shift?: Ishift | null
+  shift?: Ishift | null,
+  shiftDate?: string | null
 ): string {
   if (!shift) {
     // No schedule assigned — just show neutral state
@@ -53,11 +55,23 @@ export function getWorkStatus(
   const actualTime = parseWIBDate(datetime);
   if (!actualTime) return defaultText;
 
-  // Build scheduledTime using actualTime's date but shift's hours,
-  // then attach the original timezone offset so DST/timezone shifts don't
-  // silently convert the comparison.
+  // S-MO-2: Turunkan tanggal jadwal dari tanggal shift (baseDate), bukan tanggal aktual.
+  // Ini menghapus bug penambahan ganda +1 hari pada checkout pagi hari H+1.
+  let baseDate = new Date(actualTime);
+  if (shiftDate) {
+    const parsedShiftDate = parseWIBDate(shiftDate.includes(" ") ? shiftDate : `${shiftDate} 00:00:00`);
+    if (parsedShiftDate) {
+      baseDate = parsedShiftDate;
+    }
+  } else if (type === "checkout" && shift.is_overnight && eh < sh) {
+    // Jika checkout terjadi di jam pagi (< sh), maka tanggal mulai shift adalah kemarin
+    if (actualTime.getHours() < sh) {
+      baseDate.setDate(baseDate.getDate() - 1);
+    }
+  }
+
   const buildScheduled = (hh: number, mm: number): Date => {
-    const d = new Date(actualTime);
+    const d = new Date(baseDate);
     d.setHours(hh, mm, 0, 0);
     return d;
   };
@@ -118,17 +132,252 @@ export default function HomeScreen() {
   const [todaySchedule, setTodaySchedule] = useState<IScheduleToday | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // Record attendance hari ini (tanggal WIB). Tetap ada setelah checkout
-  // (record tidak hilang — beda dengan endpoint active-checkins yang hanya
-  // mengembalikan record belum checkout).
-  // Bandingkan tanggal WIB dari `checkin` (disimpan WIB), BUKAN `created_at`
-  // (UTC) — di jam 00:00–06:59 WIB, UTC masih tanggal kemarin → salah.
-  // Lihat .planning/notes/timezone-audit-2026-08-09.md
+  // S-MO-1: Algoritma Hibrida 3 Lapis
+  // Lapis 1: Record tanggal kalender hari ini
+  // Lapis 2: todaySchedule.active_overnight_session (kontrak §B.1)
+  // Lapis 3: Fallback lokal wajib (record terakhir checkout == null & selisih <= 18 jam)
+  // Tambahan penyelesaian: record yang baru di-checkout hari ini dari sesi semalam
   const activeCheckin = useMemo(() => {
-    if (!checkInData?.length) return null;
     const today = getTodayDateString();
-    return checkInData.find((c) => c.checkin?.split(" ")[0] === today) ?? null;
-  }, [checkInData]);
+
+    // 1. Record tanggal hari ini (paling tinggi bila ada sesi hari ini)
+    if (checkInData?.length) {
+      const todayRecord = checkInData.find((c) => c.checkin?.split(" ")[0] === today);
+      if (todayRecord) return todayRecord;
+    }
+
+    // 2. todaySchedule.active_overnight_session dari backend
+    if (todaySchedule?.active_overnight_session) {
+      const overnight = todaySchedule.active_overnight_session;
+      const attId = overnight.attendance?.id ?? overnight.attendance_id;
+      const checkinStr = overnight.attendance?.checkin ?? overnight.checkin;
+
+      const matched = checkInData?.find(
+        (c) => (attId && c.id === attId) || (checkinStr && c.checkin === checkinStr)
+      );
+      if (matched) return matched;
+
+      if (overnight.attendance) {
+        return {
+          id: overnight.attendance.id,
+          checkin: overnight.attendance.checkin,
+          checkout: overnight.attendance.checkout,
+          site_id: overnight.attendance.site_id ?? null,
+          user_id: user?.id ?? "",
+          created_at: overnight.attendance.checkin,
+        } as IAttendance;
+      }
+    }
+
+    // 3. Fallback lokal wajib (backend lama / APK n-1 / network race):
+    // Record attendance terakhir dengan checkout == null dan selisih <= 18 jam
+    if (checkInData?.length) {
+      const latestUnfinished = checkInData.find((c) => c.checkin && !c.checkout);
+      if (latestUnfinished?.checkin) {
+        const checkinDate = parseWIBDate(latestUnfinished.checkin);
+        if (checkinDate) {
+          const elapsedMs = currentTime.getTime() - checkinDate.getTime();
+          const elapsedHours = elapsedMs / (1000 * 60 * 60);
+          if (elapsedHours >= 0 && elapsedHours <= 18) {
+            return latestUnfinished;
+          }
+        }
+      }
+
+      // Transisi pasca-checkout: record sesi semalam yang di-checkout hari ini
+      const checkedOutToday = checkInData.find(
+        (c) => c.checkout?.split(" ")[0] === today && c.checkin?.split(" ")[0] !== today
+      );
+      if (checkedOutToday) return checkedOutToday;
+    }
+
+    return null;
+  }, [checkInData, todaySchedule, currentTime, user?.id]);
+
+  // Evaluasi sesi shift malam (overnight session), overdue, dan status pulang awal (S-MO-4)
+  const overnightSessionInfo = useMemo(() => {
+    const today = getTodayDateString();
+    const serverOvernight = todaySchedule?.active_overnight_session;
+
+    let isNightShiftActive = false;
+    let shift: Ishift | null = null;
+    let shiftDateStr = "";
+    let checkinTimeStr = "";
+    let isOverdue = false;
+
+    if (serverOvernight) {
+      isNightShiftActive = !serverOvernight.attendance?.checkout;
+      shift = serverOvernight.shift;
+      shiftDateStr = serverOvernight.shift_date || activeCheckin?.checkin?.split(" ")[0] || "";
+      checkinTimeStr = serverOvernight.attendance?.checkin || serverOvernight.checkin || activeCheckin?.checkin || "";
+      isOverdue = Boolean(serverOvernight.is_overdue);
+    } else if (activeCheckin?.checkin && !activeCheckin?.checkout) {
+      // Deteksi lokal: checkin bukan hari ini (atau shift is_overnight), selisih <= 18 jam
+      const checkinDate = parseWIBDate(activeCheckin.checkin);
+      if (checkinDate) {
+        const elapsedHours = (currentTime.getTime() - checkinDate.getTime()) / (1000 * 60 * 60);
+        const checkinDay = activeCheckin.checkin.split(" ")[0];
+        const isPastMidnight = checkinDay !== today && elapsedHours >= 0 && elapsedHours <= 18;
+        const isShiftOvernight = Boolean(todaySchedule?.shift?.is_overnight);
+
+        if (isPastMidnight || isShiftOvernight) {
+          isNightShiftActive = true;
+          shift = todaySchedule?.shift ?? {
+            id: "overnight-fallback",
+            code: "SHIFT-MALAM",
+            name: "Shift Malam",
+            start_time: "22:00:00",
+            end_time: "06:00:00",
+            grace_late: 15,
+            grace_early: 15,
+            reminder_minutes: 30,
+            is_overnight: true,
+            color: "#5B21B6",
+          };
+          shiftDateStr = checkinDay;
+          checkinTimeStr = activeCheckin.checkin;
+        }
+      }
+    }
+
+    if (!isNightShiftActive || !shift) {
+      // Cek apakah baru checkout dari shift malam hari ini (Post-Checkout transition)
+      const isRecentlyCompletedNightShift = Boolean(
+        activeCheckin?.checkout &&
+        activeCheckin?.checkout?.split(" ")[0] === today &&
+        activeCheckin?.checkin?.split(" ")[0] !== today
+      );
+      return {
+        isActive: false,
+        isOverdue: false,
+        isCompleted: isRecentlyCompletedNightShift,
+        completedCheckoutTime: isRecentlyCompletedNightShift ? activeCheckin?.checkout?.split(" ")[1]?.slice(0, 5) : null,
+        shift: null,
+        shiftDate: "",
+        checkinTime: "",
+        scheduledEndStr: "",
+        elapsedStr: "",
+        remainingStr: "",
+        overdueMinutes: 0,
+        isEarlyCheckout: false,
+      };
+    }
+
+    // Bangun scheduled end Date di zona WIB
+    const [eh, em] = shift.end_time.split(":").map(Number);
+    const parsedShiftDate = parseWIBDate(`${shiftDateStr} 00:00:00`) || new Date(currentTime);
+    const scheduledEndDate = new Date(parsedShiftDate);
+    scheduledEndDate.setHours(eh, em || 0, 0, 0);
+    // Tambah 1 hari karena shift lintas hari
+    scheduledEndDate.setDate(scheduledEndDate.getDate() + 1);
+
+    const nowMs = currentTime.getTime();
+    const scheduledEndMs = scheduledEndDate.getTime();
+    const graceEarlyMs = (shift.grace_early ?? 15) * 60 * 1000;
+
+    // Evaluasi overdue jika server belum menandai
+    if (!isOverdue && nowMs > scheduledEndMs + graceEarlyMs) {
+      isOverdue = true;
+    }
+
+    // Durasi berjalan sejak checkin
+    let elapsedStr = "--";
+    const checkinDate = parseWIBDate(checkinTimeStr);
+    if (checkinDate) {
+      const elapsedMs = Math.max(0, nowMs - checkinDate.getTime());
+      const hours = Math.floor(elapsedMs / 3600000);
+      const minutes = Math.floor((elapsedMs % 3600000) / 60000);
+      elapsedStr = `${hours} Jam ${minutes} Menit`;
+    }
+
+    // Sisa waktu tugas
+    let remainingStr = "--";
+    let overdueMinutes = 0;
+    if (nowMs < scheduledEndMs) {
+      const remMs = scheduledEndMs - nowMs;
+      const remHours = Math.floor(remMs / 3600000);
+      const remMinutes = Math.floor((remMs % 3600000) / 60000);
+      remainingStr = `~${remHours} Jam ${remMinutes} Menit`;
+    } else {
+      remainingStr = "Waktu shift berakhir";
+      overdueMinutes = Math.floor((nowMs - scheduledEndMs) / 60000);
+    }
+
+    const isEarlyCheckout = nowMs < (scheduledEndMs - graceEarlyMs);
+
+    return {
+      isActive: true,
+      isOverdue,
+      isCompleted: false,
+      completedCheckoutTime: null,
+      shift,
+      shiftDate: shiftDateStr,
+      checkinTime: checkinTimeStr,
+      scheduledEndStr: `${shift.end_time.slice(0, 5)} WIB`,
+      elapsedStr,
+      remainingStr,
+      overdueMinutes,
+      isEarlyCheckout,
+    };
+  }, [todaySchedule, activeCheckin, currentTime]);
+
+  const currentShift = useMemo(() => {
+    if (overnightSessionInfo.isActive && overnightSessionInfo.shift) {
+      return overnightSessionInfo.shift;
+    }
+    return todaySchedule?.shift ?? null;
+  }, [overnightSessionInfo, todaySchedule]);
+
+  const shiftDateForStatus = useMemo(() => {
+    if (overnightSessionInfo.shiftDate) {
+      return overnightSessionInfo.shiftDate;
+    }
+    return activeCheckin?.checkin?.split(" ")[0] ?? null;
+  }, [overnightSessionInfo, activeCheckin]);
+
+  const graceStartStr = useMemo(() => {
+    if (!overnightSessionInfo.shift) return "05:45";
+    const [eh, em] = overnightSessionInfo.shift.end_time.split(":").map(Number);
+    const graceMins = overnightSessionInfo.shift.grace_early ?? 15;
+    let totalMin = eh * 60 + em - graceMins;
+    if (totalMin < 0) totalMin += 24 * 60;
+    const gh = Math.floor(totalMin / 60);
+    const gm = totalMin % 60;
+    return `${String(gh).padStart(2, "0")}:${String(gm).padStart(2, "0")}`;
+  }, [overnightSessionInfo.shift]);
+
+  const handleCheckoutPress = () => {
+    if (!activeCheckin?.checkin) {
+      showToast("Anda belum check in", "info");
+      return;
+    }
+    if (activeCheckin?.checkout) {
+      showToast("Anda sudah check out", "info");
+      return;
+    }
+
+    // Keputusan D87 Opsi A: Modal konfirmasi pulang-awal jika belum jam normal
+    if (overnightSessionInfo.isActive && overnightSessionInfo.isEarlyCheckout) {
+      const shiftName = overnightSessionInfo.shift?.name || "Shift Malam";
+      const endHour = overnightSessionInfo.shift?.end_time?.slice(0, 5) || "06:00";
+      const currentHour = formatTime(currentTime).slice(0, 5);
+
+      Alert.alert(
+        "Pulang Lebih Awal?",
+        `Jadwal ${shiftName} Anda berakhir pukul ${endHour} WIB.\n\nApakah Anda yakin ingin melakukan Check Out sekarang pada pukul ${currentHour} WIB?`,
+        [
+          { text: "Batal", style: "cancel" },
+          {
+            text: "Ya, Lanjut Check Out",
+            onPress: () => router.push("/(no-tabs)/checkout"),
+          },
+        ]
+      );
+      return;
+    }
+
+    router.push("/(no-tabs)/checkout");
+  };
 
   const fetchSchedule = async () => {
     try {
@@ -400,6 +649,74 @@ export default function HomeScreen() {
               </View>
             </View>
 
+            {/* S-MO-4: Banner Shift Malam / Overdue / Pasca-Checkout */}
+            {overnightSessionInfo.isActive && overnightSessionInfo.isOverdue ? (
+              <View style={styles.overdueBanner}>
+                <View style={styles.bannerHeaderRow}>
+                  <Text style={styles.bannerEmoji}>⚠️</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.overdueTitle}>
+                      WAKTU SHIFT TELAH BERAKHIR (OVERDUE)
+                    </Text>
+                    <Text style={styles.overdueSubtitle}>
+                      {overnightSessionInfo.shift?.name || "Shift Malam"} berakhir pukul{" "}
+                      {overnightSessionInfo.scheduledEndStr}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.bannerDetailBox}>
+                  <Text style={styles.bannerDetailText}>
+                    Waktu Sekarang (WIB): {formatTime(currentTime)}
+                  </Text>
+                  <Text style={styles.bannerDetailText}>
+                    Keterlambatan Check Out: {overnightSessionInfo.overdueMinutes} Menit
+                  </Text>
+                </View>
+                <Text style={styles.bannerNotice}>
+                  Anda belum melakukan Check Out kepulangan. Segera selesaikan absensi agar jam kerja Anda tercatat utuh.
+                </Text>
+              </View>
+            ) : overnightSessionInfo.isActive ? (
+              <View style={styles.overnightBanner}>
+                <View style={styles.bannerHeaderRow}>
+                  <Text style={styles.bannerEmoji}>🌙</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.overnightTitle}>
+                      SESI SHIFT MALAM BERJALAN
+                    </Text>
+                    <Text style={styles.overnightSubtitle}>
+                      {overnightSessionInfo.shift?.name || "Shift Malam"}:{" "}
+                      {overnightSessionInfo.shift?.start_time.slice(0, 5)} WIB (Kemarin) s.d.{" "}
+                      {overnightSessionInfo.shift?.end_time.slice(0, 5)} WIB (Pagi)
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.metricsGrid}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Waktu Sekarang</Text>
+                    <Text style={styles.metricValue}>{formatTime(currentTime)}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Durasi Berjalan</Text>
+                    <Text style={styles.metricValue}>{overnightSessionInfo.elapsedStr}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Sisa Waktu</Text>
+                    <Text style={styles.metricValue}>{overnightSessionInfo.remainingStr}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : overnightSessionInfo.isCompleted ? (
+              <View style={styles.completedBanner}>
+                <Text style={styles.completedTitle}>
+                  ✅ Shift Malam Selesai
+                </Text>
+                <Text style={styles.completedSubtitle}>
+                  Checked out pukul {overnightSessionInfo.completedCheckoutTime} WIB. Sesi dinas malam Anda telah tuntas dilaporkan.
+                </Text>
+              </View>
+            ) : null}
+
             {/* Clock Section */}
             <View style={styles.clockSection}>
               <View style={styles.clockIconRow}>
@@ -416,8 +733,9 @@ export default function HomeScreen() {
               <AttendanceCard
                 type="checkin"
                 time={activeCheckin?.checkin}
-                subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", todaySchedule?.shift)}
-                shift={todaySchedule?.shift}
+                subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", currentShift, shiftDateForStatus)}
+                shift={currentShift}
+                shiftDate={shiftDateForStatus}
                 badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
                 onPress={() => {
                   if (activeCheckin?.checkin) {
@@ -431,24 +749,26 @@ export default function HomeScreen() {
               <AttendanceCard
                 type="checkout"
                 time={activeCheckin?.checkout}
-                subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", todaySchedule?.shift)}
-                shift={todaySchedule?.shift}
+                subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", currentShift, shiftDateForStatus)}
+                shift={currentShift}
+                shiftDate={shiftDateForStatus}
+                isOverdue={overnightSessionInfo.isOverdue}
                 badgeText={
-                  activeCheckin?.checkout ? "Checked Out" : "Check Out"
+                  activeCheckin?.checkout
+                    ? "Checked Out"
+                    : overnightSessionInfo.isOverdue
+                    ? "Check Out Sekarang"
+                    : "Check Out"
                 }
-                onPress={() => {
-                  if (!activeCheckin?.checkin) {
-                    showToast("Anda belum check in", "info");
-                    return;
-                  }
-                  if (activeCheckin?.checkout) {
-                    showToast("Anda sudah check out", "info");
-                    return;
-                  }
-                  router.push("/(no-tabs)/checkout");
-                }}
+                onPress={handleCheckoutPress}
               />
             </View>
+
+            {overnightSessionInfo.isActive && !overnightSessionInfo.isOverdue && (
+              <Text style={styles.overnightNote}>
+                Catatan: Anda dapat melakukan check-out saat shift selesai (mulai {graceStartStr} WIB).
+              </Text>
+            )}
           </View>
 
           {/* Akses Cepat */}
@@ -624,6 +944,119 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: c.text,
+  },
+  // S-MO-4: Overnight & Overdue Banners
+  overnightBanner: {
+    backgroundColor: c.surface,
+    borderWidth: 1.5,
+    borderColor: c.primary,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  overdueBanner: {
+    backgroundColor: c.dangerSoft,
+    borderWidth: 1.5,
+    borderColor: c.danger,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  completedBanner: {
+    backgroundColor: c.successSoft,
+    borderWidth: 1.5,
+    borderColor: c.success,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+  },
+  bannerHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  bannerEmoji: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  overnightTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: c.primary,
+    letterSpacing: 0.5,
+  },
+  overnightSubtitle: {
+    fontSize: 12,
+    color: c.textSecondary,
+    marginTop: 2,
+  },
+  overdueTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: c.danger,
+    letterSpacing: 0.5,
+  },
+  overdueSubtitle: {
+    fontSize: 12,
+    color: c.textStrong,
+    marginTop: 2,
+  },
+  bannerDetailBox: {
+    backgroundColor: "rgba(0,0,0,0.05)",
+    borderRadius: 8,
+    padding: 8,
+    marginVertical: 6,
+  },
+  bannerDetailText: {
+    fontSize: 12,
+    color: c.text,
+    fontWeight: "500",
+  },
+  bannerNotice: {
+    fontSize: 11,
+    color: c.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  metricsGrid: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 6,
+    backgroundColor: "rgba(0,0,0,0.03)",
+    borderRadius: 10,
+    padding: 8,
+  },
+  metricItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  metricLabel: {
+    fontSize: 10,
+    color: c.textSecondary,
+    marginBottom: 2,
+  },
+  metricValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: c.textStrong,
+  },
+  completedTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: c.success,
+    marginBottom: 4,
+  },
+  completedSubtitle: {
+    fontSize: 12,
+    color: c.text,
+    lineHeight: 16,
+  },
+  overnightNote: {
+    fontSize: 11,
+    color: c.textSecondary,
+    marginTop: 10,
+    textAlign: "center",
+    fontStyle: "italic",
   },
   // Clock Section
   clockSection: {

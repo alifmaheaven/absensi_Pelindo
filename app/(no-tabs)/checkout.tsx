@@ -12,6 +12,7 @@ import { useRequest } from "@/hooks/use-request";
 import axios from "@/lib/axios";
 import {
   getEvidGroupId,
+  getAttendanceList,
   updateAttendance,
   uploadEvidPermanent,
   uploadEvidGroupId,
@@ -19,11 +20,12 @@ import {
 import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
+import { parseWIBDate } from "@/utils/utils";
 import NetInfo from "@react-native-community/netinfo";
 import { queueOfflineCheckOut } from "@/lib/offlineQueue";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState , useMemo } from "react";
 import {
   ActivityIndicator,
@@ -75,22 +77,74 @@ export default function CheckoutScreen() {
   const submittingRef = useRef(false);
   const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
 
+  const params = useLocalSearchParams<{ attendance_id?: string }>();
   const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
 
-  // Load check-in data on mount
+  // Load check-in data on mount dengan pertahanan berlapis (D89.2)
   useEffect(() => {
     const fetchCheckIn = async () => {
+      // 1. Coba dari /attendance/active-checkins
       try {
         const res = await fetchActiveCheckinsReq();
         const list = Array.isArray(res) ? res : (res?.data ?? []);
-        setActiveCheckin(Array.isArray(list) && list.length > 0 ? (list[0] as IAttendance) : null);
+        if (Array.isArray(list) && list.length > 0) {
+          if (params.attendance_id) {
+            const matched = list.find((item: any) => item.id === params.attendance_id);
+            if (matched) {
+              setActiveCheckin(matched as IAttendance);
+              return;
+            }
+          }
+          setActiveCheckin(list[0] as IAttendance);
+          return;
+        }
       } catch (error) {
-        console.error("Error fetching checkIn:", error);
-        setActiveCheckin(null);
+        console.error("Error fetching checkIn from active-checkins:", error);
       }
+
+      // 2. Pertahanan berlapis (D89.2): Fallback ke getAttendanceList jika kosong
+      // (mis. backend lama dengan filter checkin::date = today atau koneksi belum ter-refresh)
+      try {
+        const userId = user?.id || useAuthStore.getState().user?.id;
+        if (userId) {
+          const attRes = await getAttendanceList({
+            page: 1,
+            per_page: 5,
+            order_by_desc: ["created_at"],
+            user_id_exact: [userId],
+          });
+          const attList: IAttendance[] = attRes.data?.data || [];
+
+          // Prioritaskan yang cocok dengan attendance_id dari parameter rute
+          if (params.attendance_id) {
+            const matched = attList.find((c) => c.id === params.attendance_id && !c.checkout);
+            if (matched) {
+              setActiveCheckin(matched);
+              return;
+            }
+          }
+
+          // Cari record terakhir yang belum checkout dalam rentang <= 18 jam
+          const candidate = attList.find((c) => c.checkin && !c.checkout);
+          if (candidate?.checkin) {
+            const parsed = parseWIBDate(candidate.checkin);
+            if (parsed) {
+              const elapsedHours = (Date.now() - parsed.getTime()) / (1000 * 60 * 60);
+              if (elapsedHours >= 0 && elapsedHours <= 18) {
+                setActiveCheckin(candidate);
+                return;
+              }
+            }
+          }
+        }
+      } catch (fallbackError) {
+        console.error("Error in fallback attendance fetch:", fallbackError);
+      }
+
+      setActiveCheckin(null);
     };
     fetchCheckIn();
-  }, []);
+  }, [params.attendance_id, user?.id]);
 
   // Get GPS location
   const requestLocation = async () => {

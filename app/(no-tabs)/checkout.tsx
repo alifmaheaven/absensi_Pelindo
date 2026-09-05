@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { ArrowLeft, ImageIcon } from "@/components/icon";
+import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -76,6 +76,7 @@ export default function CheckoutScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const submittingRef = useRef(false);
   const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
+  const [multiSessionWarning, setMultiSessionWarning] = useState<string | null>(null);
 
   const params = useLocalSearchParams<{ attendance_id?: string }>();
   const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
@@ -88,6 +89,11 @@ export default function CheckoutScreen() {
         const res = await fetchActiveCheckinsReq();
         const list = Array.isArray(res) ? res : (res?.data ?? []);
         if (Array.isArray(list) && list.length > 0) {
+          if (list.length > 1) {
+            setMultiSessionWarning(`${list.length} sesi belum selesai, checkout memakai sesi terbaru`);
+          } else {
+            setMultiSessionWarning(null);
+          }
           if (params.attendance_id) {
             const matched = list.find((item: any) => item.id === params.attendance_id);
             if (matched) {
@@ -440,6 +446,14 @@ export default function CheckoutScreen() {
               </View>
             </View>
 
+            {/* Warning multi-sesi jujur bila list.length > 1 */}
+            {multiSessionWarning && (
+              <View style={styles.multiSessionBanner}>
+                <InfoOutlineRounded color={colors.warning} width={20} height={20} />
+                <Text style={styles.multiSessionWarningText}>{multiSessionWarning}</Text>
+              </View>
+            )}
+
             {/* Location Info — from check-in record (Read-Only) */}
             <Text style={styles.sectionTitle}>Lokasi Check In</Text>
             {activeCheckin ? (
@@ -710,4 +724,22 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: c.card, borderRadius: 16, borderWidth: 1.5, borderColor: c.border, marginBottom: 24, borderStyle: "dashed" },
   emptyStateEmoji: { fontSize: 40, marginBottom: 10 },
   emptyStateText: { fontSize: 16, fontWeight: "bold", color: c.text, textAlign: "center", marginBottom: 4 },
+  multiSessionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: c.warningSoft,
+    borderColor: c.warning,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  multiSessionWarningText: {
+    flex: 1,
+    fontSize: 13,
+    color: c.textStrong,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
 });

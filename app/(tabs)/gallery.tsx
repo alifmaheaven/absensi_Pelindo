@@ -17,7 +17,7 @@ import { router } from "expo-router";
 import { getFolders, createFolder, deleteFolder } from "@/services/gallery";
 import { IGalleryFolder } from "@/types/gallery";
 import EmptyState from "@/components/ui/EmptyState";
-import { GalleryIcon } from "@/components/icon";
+import { GalleryIcon, InfoOutlineRounded } from "@/components/icon";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const GRID_COLS = 2;
@@ -34,6 +34,7 @@ export default function GalleryScreen() {
   const [creating, setCreating] = useState(false);
   const [isAccessDenied, setIsAccessDenied] = useState(false);
   const [deniedMessage, setDeniedMessage] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -41,10 +42,14 @@ export default function GalleryScreen() {
       setFolders(res?.data?.data || []);
       setIsAccessDenied(false);
       setDeniedMessage(null);
+      setIsError(false);
     } catch (err: any) {
       if (err?.code === 403 || err?.status === 403 || err?.response?.status === 403) {
         setIsAccessDenied(true);
         setDeniedMessage(err?.message || "Anda tidak memiliki izin untuk mengakses Galeri.");
+      } else {
+        console.error("Failed to fetch gallery folders:", err);
+        setIsError(true);
       }
     } finally {
       setLoading(false);
@@ -190,6 +195,7 @@ export default function GalleryScreen() {
           data={folders}
           renderItem={renderFolder}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={folders.length === 0 ? { flexGrow: 1, justifyContent: "center" } : undefined}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
           }
@@ -202,6 +208,14 @@ export default function GalleryScreen() {
                   "Akun Anda tidak memiliki izin untuk mengakses fitur Galeri. Hubungi administrator untuk meminta hak akses."
                 }
                 icon={<GalleryIcon color={colors.danger} width={36} height={36} />}
+              />
+            ) : isError ? (
+              <EmptyState
+                title="Gagal Memuat Galeri"
+                description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+                actionLabel="Coba Lagi"
+                onAction={onRefresh}
+                icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
               />
             ) : (
               <EmptyState

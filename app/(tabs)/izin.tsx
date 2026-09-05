@@ -13,7 +13,7 @@ import { getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
 import { IAttendance, IAttendanceEvidGroupId } from "@/types";
-import { DocumentCheck } from "@/components/icon";
+import { DocumentCheck, InfoOutlineRounded } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
@@ -68,6 +68,7 @@ export default function IzinScreen() {
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   // Detail modal state
   const [detailItem, setDetailItem] = useState<MergedItem | null>(null);
@@ -166,6 +167,7 @@ export default function IzinScreen() {
     if (!user?.id) return;
     try {
       setIsLoading(true);
+      setIsError(false);
 
       const [attendanceRes, statusRes, leavesRes] = await Promise.all([
         getAttendanceList({
@@ -175,7 +177,7 @@ export default function IzinScreen() {
           user_id_exact: [user.id],
         }),
         getAttendanceStatus({ page: 1, per_page: 10 }),
-        getMyLeaves({ page: 1, per_page: 20 }).catch(() => [] as ILeaveRequest[]),
+        getMyLeaves({ page: 1, per_page: 20 }),
       ]);
 
       const attendance = attendanceRes?.data?.data || [];
@@ -237,6 +239,7 @@ export default function IzinScreen() {
       setMergedData(merged);
     } catch (error) {
       console.error("Failed to fetch izin data:", error);
+      setIsError(true);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -254,6 +257,18 @@ export default function IzinScreen() {
 
   if (isLoading && !refreshing) {
     content = <IzinSkeleton />;
+  } else if (isError) {
+    content = (
+      <EmptyState
+        title="Gagal Memuat Pengajuan"
+        description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+        actionLabel="Coba Lagi"
+        onAction={() => {
+          fetchAll();
+        }}
+        icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
+      />
+    );
   } else if (mergedData.length === 0) {
     content = (
       <EmptyState

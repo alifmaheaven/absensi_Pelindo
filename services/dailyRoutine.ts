@@ -29,10 +29,6 @@ export async function getTodayRoutines(): Promise<Response<ITodayRoutinesAllResp
   }
 }
 
-export async function getTodayRoutine(): Promise<Response<ITodayRoutineResponse>> {
-  const res = await axios.get("/daily-routine/today");
-  return res.data;
-}
 
 export async function getDailyRoutineById(id: string): Promise<Response<IDailyRoutine & { items: any[] }>> {
   const res = await axios.get(`/daily-routine/${id}`);

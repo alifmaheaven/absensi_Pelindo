@@ -8,7 +8,7 @@ import {
 } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
-import { ClockOutline } from "@/components/icon";
+import { ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState , useMemo } from "react";
@@ -37,6 +37,7 @@ export default function AttendanceTabScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [isError, setIsError] = useState(false);
 
   const fetchAttendanceList = async (page: number) => {
     return getAttendanceList({
@@ -50,6 +51,7 @@ export default function AttendanceTabScreen() {
   const handleGetList = async () => {
     if (loading || !hasMore) return;
     setLoading(true);
+    setIsError(false);
     try {
       const response = await fetchAttendanceList(meta.page);
       const items = response.data?.data || [];
@@ -72,7 +74,10 @@ export default function AttendanceTabScreen() {
         return { ...prev, total: responseMeta?.total || 0, page: nextPage, total_pages: responseMeta?.total_pages || 0 };
       });
     } catch (error) {
-      console.debug(error);
+      console.error("Failed to fetch attendance:", error);
+      if (attendanceData.length === 0) {
+        setIsError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -80,18 +85,19 @@ export default function AttendanceTabScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setIsError(false);
     try {
-      setAttendanceData([]);
-      setMeta(initialMeta);
-      setHasMore(true);
       const response = await fetchAttendanceList(1);
       const items = response.data?.data || [];
       const responseMeta = response.data?.meta;
       setAttendanceData(items);
-      setMeta((prev) => ({ ...prev, total: responseMeta?.total || 0, page: 2, total_pages: responseMeta?.total_pages || 0 }));
-      if (1 >= (responseMeta?.total_pages || 0)) setHasMore(false);
+      setMeta({ ...initialMeta, total: responseMeta?.total || 0, page: 2, total_pages: responseMeta?.total_pages || 0 });
+      setHasMore(1 < (responseMeta?.total_pages || 0));
     } catch (error) {
-      console.debug(error);
+      console.error("Failed to refresh attendance:", error);
+      if (attendanceData.length === 0) {
+        setIsError(true);
+      }
     } finally {
       setRefreshing(false);
     }
@@ -168,7 +174,7 @@ export default function AttendanceTabScreen() {
             keyExtractor={(item) => String(item.id)}
             renderItem={renderItem}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 24 }}
+            contentContainerStyle={attendanceData.length === 0 ? { flexGrow: 1, justifyContent: "center", paddingBottom: 24 } : { paddingBottom: 24 }}
             onEndReached={handleGetList}
             onEndReachedThreshold={0.5}
             refreshing={refreshing}
@@ -179,13 +185,23 @@ export default function AttendanceTabScreen() {
               </View>
             ) : null}
             ListEmptyComponent={!loading ? (
-              <EmptyState
-                title="Belum Ada Riwayat Absensi"
-                description="Lakukan check in untuk memulai pencatatan kehadiran kerja Anda."
-                actionLabel="Muat Ulang"
-                onAction={handleRefresh}
-                icon={<ClockOutline color={colors.primary} width={36} height={36} />}
-              />
+              isError ? (
+                <EmptyState
+                  title="Gagal Memuat Riwayat Absensi"
+                  description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+                  actionLabel="Coba Lagi"
+                  onAction={handleRefresh}
+                  icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
+                />
+              ) : (
+                <EmptyState
+                  title="Belum Ada Riwayat Absensi"
+                  description="Lakukan check in untuk memulai pencatatan kehadiran kerja Anda."
+                  actionLabel="Muat Ulang"
+                  onAction={handleRefresh}
+                  icon={<ClockOutline color={colors.primary} width={36} height={36} />}
+                />
+              )
             ) : null}
           />
         )}

@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { ArrowLeft, ImageIcon } from "@/components/icon";
+import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import TicketSkeleton from "@/components/ticketing/ticket-skeleton";
 import DeviceDrawer from "@/components/ticketing/DeviceDrawer";
 import { useToast } from "@/components/ui/toast";
@@ -540,7 +540,74 @@ export default function TicketingCreateScreen() {
               </>
               )}
 
-              {/* Attendance - auto-selected from check-in */}
+              {/* Sesi Kehadiran (Check-In) — penanda sesi terpilih + daftar pilihan bila > 1 */}
+              <Text style={styles.sectionTitle}>Sesi Kehadiran (Check-In)</Text>
+              {attendanceOptions.length > 1 ? (
+                <View style={styles.dropdownWrapper}>
+                  <View style={styles.multiSessionAlert}>
+                    <InfoOutlineRounded color={colors.warning} width={16} height={16} />
+                    <Text style={styles.multiSessionAlertText}>
+                      {attendanceOptions.length} sesi aktif ditemukan. Sesi terbaru otomatis terpilih:
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.selectInputDropdown}
+                    onPress={() => setAttendanceDropdownOpen((p) => !p)}
+                  >
+                    <View style={styles.sessionSelectedRow}>
+                      <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                      <Text style={styles.value} numberOfLines={1}>
+                        {attendanceOptions.find((a) => a.id === attendanceSelected)?.name || "Pilih sesi check-in"}
+                      </Text>
+                    </View>
+                    <Ionicons name={attendanceDropdownOpen ? "chevron-up" : "chevron-down"} size={18} />
+                  </TouchableOpacity>
+
+                  {attendanceDropdownOpen && (
+                    <View style={[styles.dropdown, { maxHeight: 200 }]}>
+                      {attendanceOptions.map((att) => {
+                        const isSelected = att.id === attendanceSelected;
+                        return (
+                          <TouchableOpacity
+                            key={att.id}
+                            style={styles.option}
+                            onPress={() => {
+                              setAttendanceSelected(att.id);
+                              setDeviceDrawerSiteId(att.site_id || "");
+                              setAttendanceDropdownOpen(false);
+                            }}
+                          >
+                            <View style={{ width: 24 }}>
+                              {isSelected && (
+                                <Ionicons name="checkmark" size={18} color={colors.primary} />
+                              )}
+                            </View>
+                            <Text style={[styles.optionText, isSelected && { color: colors.primary, fontWeight: "600" }]}>
+                              {att.name}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ) : attendanceOptions.length === 1 ? (
+                <View style={styles.singleSessionCard}>
+                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.singleSessionLabel}>Sesi Aktif Terpilih</Text>
+                    <Text style={styles.singleSessionValue}>{attendanceOptions[0].name}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.noSessionCard}>
+                  <InfoOutlineRounded color={colors.danger} width={20} height={20} />
+                  <Text style={styles.noSessionText}>
+                    Tidak ditemukan sesi check-in aktif. Pastikan Anda telah melakukan check-in sebelum membuat tiket.
+                  </Text>
+                </View>
+              )}
+
               <Text style={styles.sectionTitle}>Severity</Text>
               <SeveritySelector
                 options={severitys}
@@ -1153,5 +1220,64 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   value: { color: c.textStrong },
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
-
+  multiSessionAlert: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: c.warningSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  multiSessionAlertText: {
+    fontSize: 12,
+    color: c.textStrong,
+    flex: 1,
+  },
+  sessionSelectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  singleSessionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: c.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 14,
+    marginBottom: 24,
+  },
+  singleSessionLabel: {
+    fontSize: 11,
+    color: c.textMuted,
+    fontWeight: "600",
+  },
+  singleSessionValue: {
+    fontSize: 13,
+    color: c.textStrong,
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  noSessionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: c.dangerSoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.danger,
+    padding: 14,
+    marginBottom: 24,
+  },
+  noSessionText: {
+    flex: 1,
+    fontSize: 12,
+    color: c.danger,
+    lineHeight: 16,
+  },
 });

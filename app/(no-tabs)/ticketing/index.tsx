@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { ArrowLeft, Device, Ticket } from "@/components/icon";
+import { ArrowLeft, Device, InfoOutlineRounded, Ticket } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
 import { getTicket, getDataStatus } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
@@ -97,6 +97,7 @@ const TicketingScreen = () => {
   const [ticketMeta, setTicketMeta] = useState<IMeta>(initialMeta);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [isError, setIsError] = useState(false);
   const { user } = useAuthStore();
   const [refreshing, setRefreshing] = useState(false);
   const navigating = useRef(false);
@@ -129,6 +130,7 @@ const TicketingScreen = () => {
     if (loading || !hasMore) return;
 
     setLoading(true);
+    setIsError(false);
 
     try {
       const response = await fetchTickets(ticketMeta.page);
@@ -175,7 +177,10 @@ const TicketingScreen = () => {
         };
       });
     } catch (error) {
-      console.debug(error);
+      console.error("Failed to fetch tickets:", error);
+      if (ticketDatas.length === 0) {
+        setIsError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -183,20 +188,11 @@ const TicketingScreen = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setIsError(false);
     try {
-      setTicketDatas([]);
-      setTicketMeta(initialMeta);
-      setHasMore(true);
-
       const response = await fetchTickets(1);
       const tickets = response.data?.data || [];
       const meta = response.data?.meta;
-
-      if (!tickets.length) {
-        setHasMore(false);
-        setRefreshing(false);
-        return;
-      }
 
       // BE returns joined data via `include` param — no separate requests needed
       const ticketMap: TicketData[] = tickets.map((item: any) => ({
@@ -212,18 +208,19 @@ const TicketingScreen = () => {
       }));
 
       setTicketDatas(ticketMap);
-      setTicketMeta((prev) => ({
-        ...prev,
+      setTicketMeta({
+        ...initialMeta,
         total: meta?.total || 0,
         page: 2,
         total_pages: meta?.total_pages || 0,
-      }));
+      });
 
-      if (1 >= (meta?.total_pages || 0)) {
-        setHasMore(false);
-      }
+      setHasMore(1 < (meta?.total_pages || 0));
     } catch (error) {
-      console.debug(error);
+      console.error("Failed to refresh tickets:", error);
+      if (ticketDatas.length === 0) {
+        setIsError(true);
+      }
     } finally {
       setRefreshing(false);
     }
@@ -405,20 +402,30 @@ const TicketingScreen = () => {
             />
           )}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={ticketDatas.length === 0 ? { flexGrow: 1, justifyContent: "center", paddingBottom: 24 } : { paddingBottom: 24 }}
           onEndReached={handleGetTicketList}
           onEndReachedThreshold={0.5}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           ListFooterComponent={loading ? <TicketSkeletonList /> : null}
           ListEmptyComponent={!loading ? (
-            <EmptyState
-              title="Belum Ada Tiket"
-              description="Tidak ada laporan tiket kendala atau perbaikan saat ini."
-              actionLabel="+ Buat Tiket Baru"
-              onAction={() => router.push("/ticketing/create")}
-              icon={<Ticket color={colors.primary} width={36} height={36} />}
-            />
+            isError ? (
+              <EmptyState
+                title="Gagal Memuat Tiket"
+                description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+                actionLabel="Coba Lagi"
+                onAction={handleRefresh}
+                icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
+              />
+            ) : (
+              <EmptyState
+                title="Belum Ada Tiket"
+                description="Tidak ada laporan tiket kendala atau perbaikan saat ini."
+                actionLabel="+ Buat Tiket Baru"
+                onAction={() => router.push("/ticketing/create")}
+                icon={<Ticket color={colors.primary} width={36} height={36} />}
+              />
+            )
           ) : null}
         />
       </View>

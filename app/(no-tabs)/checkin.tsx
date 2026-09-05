@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { ArrowLeft, ImageIcon } from "@/components/icon";
+import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -20,6 +20,8 @@ import {
   uploadEvidGroupId,
   uploadEvidPermanent,
 } from "@/services/attendance";
+import { getActiveCheckins } from "@/services/ticket";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
 import { getDistanceInMeters } from "@/utils/utils";
@@ -75,6 +77,9 @@ export default function CheckinScreen() {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const submittingRef = useRef(false);
   const [checkinStatusId, setCheckinStatusId] = useState<string>("");
+  const [statusList, setStatusList] = useState<IAttendanceStatus[]>([]);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<any[]>([]);
   const { user } = useAuthStore();
   const {
     images,
@@ -119,6 +124,7 @@ export default function CheckinScreen() {
         } else {
           statuses = await getCachedAttendanceStatuses();
         }
+        setStatusList(statuses || []);
 
         // Find checkin status by exact code (ATST001 = Attend)
         const checkinStatus = statuses.find(
@@ -131,6 +137,15 @@ export default function CheckinScreen() {
         } else {
           setCheckinStatusId("ATST001");
         }
+
+        // Cek sesi aktif yang belum checkout (D100 / laporan 76 §C1)
+        try {
+          const activeRes = await getActiveCheckins();
+          const list = Array.isArray(activeRes) ? activeRes : (activeRes?.data ?? []);
+          if (Array.isArray(list)) {
+            setActiveSessions(list);
+          }
+        } catch { /* ignore */ }
       } catch (error) {
         console.debug("Error fetching sites, loading cache:", error);
         const cached = await getCachedSites();
@@ -447,6 +462,87 @@ export default function CheckinScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Warning Sesi Aktif belum selesai bila ada */}
+            {activeSessions.length > 0 && (
+              <View style={styles.multiSessionBanner}>
+                <InfoOutlineRounded color={colors.warning} width={22} height={22} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.multiSessionBannerTitle}>
+                    {activeSessions.length > 1
+                      ? `${activeSessions.length} sesi check-in belum selesai`
+                      : "Sesi check-in aktif terdeteksi"}
+                  </Text>
+                  <Text style={styles.multiSessionBannerText}>
+                    Sesi terakhir: {activeSessions[0]?.name || activeSessions[0]?.code || "Site"} ({activeSessions[0]?.checkin || "-"}). Anda dapat menyelesaikan sesi sebelumnya melalui menu Check Out.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => router.push("/(no-tabs)/checkout")}
+                  style={styles.checkoutNavButton}
+                >
+                  <Text style={styles.checkoutNavButtonText}>Checkout</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Status Kehadiran — penanda status terpilih + daftar pilihan bila > 1 */}
+            <Text style={styles.sectionTitle}>Status Kehadiran</Text>
+            {statusList.length > 1 ? (
+              <View style={styles.statusDropdownContainer}>
+                <TouchableOpacity
+                  style={styles.statusSelectButton}
+                  onPress={() => setStatusDropdownOpen((p) => !p)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.statusSelectRow}>
+                    <View style={styles.statusBadgeDot} />
+                    <Text style={styles.statusSelectValue}>
+                      {statusList.find((s) => s.id === checkinStatusId)?.name || "Attend"}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={statusDropdownOpen ? "chevron-up" : "chevron-down"}
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+
+                {statusDropdownOpen && (
+                  <View style={styles.statusDropdownMenu}>
+                    {statusList.map((item) => {
+                      const isSelected = item.id === checkinStatusId;
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.statusOptionItem, isSelected && styles.statusOptionItemSelected]}
+                          onPress={() => {
+                            setCheckinStatusId(item.id);
+                            setStatusDropdownOpen(false);
+                          }}
+                        >
+                          <View style={{ width: 22 }}>
+                            {isSelected && (
+                              <Ionicons name="checkmark" size={18} color={colors.primary} />
+                            )}
+                          </View>
+                          <Text style={[styles.statusOptionText, isSelected && { color: colors.primary, fontWeight: "600" }]}>
+                            {item.name} {item.code ? `(${item.code})` : ""}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={styles.statusCardSingle}>
+                <View style={styles.statusBadgeDot} />
+                <Text style={styles.statusCardSingleText}>
+                  {statusList.find((s) => s.id === checkinStatusId)?.name || "Attend (Hadir)"}
+                </Text>
+              </View>
+            )}
 
             {/* Select Location */}
             <Text style={styles.sectionTitle}>Select Location</Text>
@@ -1109,5 +1205,108 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     color: c.textMuted,
     textAlign: "center",
+  },
+  multiSessionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: c.warningSoft,
+    borderColor: c.warning,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  multiSessionBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: c.textStrong,
+    marginBottom: 2,
+  },
+  multiSessionBannerText: {
+    fontSize: 11,
+    color: c.textSecondary,
+    lineHeight: 16,
+  },
+  checkoutNavButton: {
+    backgroundColor: c.warning,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  checkoutNavButtonText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  statusDropdownContainer: {
+    marginBottom: 16,
+  },
+  statusSelectButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: c.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  statusSelectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  statusBadgeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: c.success,
+  },
+  statusSelectValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: c.textStrong,
+  },
+  statusDropdownMenu: {
+    backgroundColor: c.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    marginTop: 6,
+    overflow: "hidden",
+  },
+  statusOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
+  },
+  statusOptionItemSelected: {
+    backgroundColor: c.primarySoft,
+  },
+  statusOptionText: {
+    fontSize: 13,
+    color: c.text,
+  },
+  statusCardSingle: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: c.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  statusCardSingleText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: c.text,
   },
 });

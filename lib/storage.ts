@@ -1,4 +1,5 @@
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const TOKEN_KEY = "user_token";
@@ -72,4 +73,38 @@ export async function removeVersionCode() {
     return;
   }
   await SecureStore.deleteItemAsync(VERSION_CODE_KEY);
+}
+
+export type ThemePreference = "system" | "light" | "dark";
+const THEME_PREFERENCE_KEY = "@app_theme_mode";
+
+export async function saveThemePreference(preference: ThemePreference): Promise<void> {
+  if (Platform.OS === "web") {
+    try { localStorage.setItem(THEME_PREFERENCE_KEY, preference); } catch {}
+    return;
+  }
+  try {
+    await AsyncStorage.setItem(THEME_PREFERENCE_KEY, preference);
+  } catch (e) {
+    console.error("[Storage] Failed to save theme preference:", e);
+  }
+}
+
+export async function getThemePreference(): Promise<ThemePreference> {
+  if (Platform.OS === "web") {
+    try {
+      const val = localStorage.getItem(THEME_PREFERENCE_KEY);
+      if (val === "system" || val === "light" || val === "dark") return val;
+    } catch {}
+    return "system";
+  }
+  try {
+    const val = await AsyncStorage.getItem(THEME_PREFERENCE_KEY);
+    if (val === "system" || val === "light" || val === "dark") {
+      return val;
+    }
+    return "system";
+  } catch {
+    return "system";
+  }
 }

@@ -78,7 +78,6 @@ export default function CheckinScreen() {
   const submittingRef = useRef(false);
   const [checkinStatusId, setCheckinStatusId] = useState<string>("");
   const [statusList, setStatusList] = useState<IAttendanceStatus[]>([]);
-  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
   const { user } = useAuthStore();
   const {
@@ -261,6 +260,15 @@ export default function CheckinScreen() {
       timeZone: TIMEZONE,
     });
 
+    // R-LZ-1: Paksa attendance_status_id ke Attend (ATST001 / "attend", fallback ID pertama)
+    const effectiveStatusId =
+      checkinStatusId ||
+      statusList.find(
+        (s) => s.code === "ATST001" || s.name?.toLowerCase() === "attend",
+      )?.id ||
+      statusList[0]?.id ||
+      "ATST001";
+
     try {
       const netState = await NetInfo.fetch();
       const isOffline = !netState.isConnected || !netState.isInternetReachable;
@@ -274,7 +282,7 @@ export default function CheckinScreen() {
           checkin: checkinTimeStr,
           checkin_latitude: location.coords.latitude,
           checkin_longitude: location.coords.longitude,
-          attendance_status_id: checkinStatusId || "ATST001",
+          attendance_status_id: effectiveStatusId,
           description: formattedNotes,
           localImages: images.map((img) => ({
             uri: img.uri,
@@ -324,7 +332,7 @@ export default function CheckinScreen() {
         description: formattedNotes,
         code: `CHK-${Date.now()}`,
         checkin: checkinTimeStr,
-        attendance_status_id: checkinStatusId,
+        attendance_status_id: effectiveStatusId,
         longitude: location.coords.longitude,
         latitude: location.coords.latitude,
       };
@@ -353,7 +361,7 @@ export default function CheckinScreen() {
           checkin: checkinTimeStr,
           checkin_latitude: location.coords.latitude,
           checkin_longitude: location.coords.longitude,
-          attendance_status_id: checkinStatusId || "ATST001",
+          attendance_status_id: effectiveStatusId,
           description: formattedNotes,
           localImages: images.map((img) => ({
             uri: img.uri,
@@ -486,63 +494,6 @@ export default function CheckinScreen() {
               </View>
             )}
 
-            {/* Status Kehadiran — penanda status terpilih + daftar pilihan bila > 1 */}
-            <Text style={styles.sectionTitle}>Status Kehadiran</Text>
-            {statusList.length > 1 ? (
-              <View style={styles.statusDropdownContainer}>
-                <TouchableOpacity
-                  style={styles.statusSelectButton}
-                  onPress={() => setStatusDropdownOpen((p) => !p)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.statusSelectRow}>
-                    <View style={styles.statusBadgeDot} />
-                    <Text style={styles.statusSelectValue}>
-                      {statusList.find((s) => s.id === checkinStatusId)?.name || "Attend"}
-                    </Text>
-                  </View>
-                  <Ionicons
-                    name={statusDropdownOpen ? "chevron-up" : "chevron-down"}
-                    size={18}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-
-                {statusDropdownOpen && (
-                  <View style={styles.statusDropdownMenu}>
-                    {statusList.map((item) => {
-                      const isSelected = item.id === checkinStatusId;
-                      return (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={[styles.statusOptionItem, isSelected && styles.statusOptionItemSelected]}
-                          onPress={() => {
-                            setCheckinStatusId(item.id);
-                            setStatusDropdownOpen(false);
-                          }}
-                        >
-                          <View style={{ width: 22 }}>
-                            {isSelected && (
-                              <Ionicons name="checkmark" size={18} color={colors.primary} />
-                            )}
-                          </View>
-                          <Text style={[styles.statusOptionText, isSelected && { color: colors.primary, fontWeight: "600" }]}>
-                            {item.name} {item.code ? `(${item.code})` : ""}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={styles.statusCardSingle}>
-                <View style={styles.statusBadgeDot} />
-                <Text style={styles.statusCardSingleText}>
-                  {statusList.find((s) => s.id === checkinStatusId)?.name || "Attend (Hadir)"}
-                </Text>
-              </View>
-            )}
 
             {/* Select Location */}
             <Text style={styles.sectionTitle}>Select Location</Text>

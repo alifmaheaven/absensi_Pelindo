@@ -9,17 +9,19 @@ import {
   uploadEvidPermanent,
   uploadEvidGroupId,
 } from "@/services/attendance";
-import { getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
+import { deleteLeave, getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
-import { IAttendance, IAttendanceEvidGroupId } from "@/types";
+import { IAttendance, IAttendanceEvidGroupId, THttpErrorResult } from "@/types";
 import { DocumentCheck, InfoOutlineRounded } from "@/components/icon";
+import { Ionicons } from "@expo/vector-icons";
 import EmptyState from "@/components/ui/EmptyState";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState , useMemo } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Modal,
   RefreshControl,
@@ -53,7 +55,9 @@ interface MergedItem {
   type: "attendance" | "leave_request";
   title: string;
   date: string;
+  end_date?: string;
   status: string;
+  rawStatus?: string;
   reason?: string;
   leave_type?: string;
   evidence_group_id?: string;
@@ -75,6 +79,8 @@ export default function IzinScreen() {
   const [detailEvidence, setDetailEvidence] = useState<IAttendanceEvidGroupId[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [resubmitting, setResubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const {
     images,
     loadingImage,
@@ -163,6 +169,69 @@ export default function IzinScreen() {
     }
   };
 
+  // R-LZ-4: Hapus pengajuan izin milik sendiri (pending/rejected)
+  const confirmDelete = (item: MergedItem) => {
+    if (item.type !== "leave_request") return;
+
+    if (item.status === "Disetujui" || item.rawStatus === "approved") {
+      Alert.alert(
+        "Tidak Dapat Dihapus",
+        "Izin yang sudah disetujui hanya bisa dihapus oleh approver."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Konfirmasi Hapus",
+      `Apakah Anda yakin ingin menghapus pengajuan ${item.title.toLowerCase()} ini?`,
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: () => performDelete(item.id),
+        },
+      ]
+    );
+  };
+
+  const performDelete = async (id: string) => {
+    try {
+      setDeletingId(id);
+      await deleteLeave(id);
+      showToast("Pengajuan izin berhasil dihapus", "success");
+      if (detailItem?.id === id) {
+        setDetailItem(null);
+      }
+      await fetchAll();
+    } catch (error) {
+      const err = error as THttpErrorResult;
+      console.error("Delete leave error:", err);
+      if (
+        err?.code === 403 ||
+        err?.message?.toLowerCase().includes("approved") ||
+        err?.message?.toLowerCase().includes("approver")
+      ) {
+        Alert.alert(
+          "Tidak Dapat Dihapus",
+          "Izin yang sudah disetujui hanya bisa dihapus oleh approver."
+        );
+        showToast(
+          "Izin yang sudah disetujui hanya bisa dihapus oleh approver.",
+          "error"
+        );
+      } else {
+        Alert.alert(
+          "Gagal Menghapus",
+          err?.message || "Terjadi kesalahan saat menghapus pengajuan izin."
+        );
+        showToast("Gagal menghapus pengajuan", "error");
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const fetchAll = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -188,46 +257,53 @@ export default function IzinScreen() {
       const attendId = status.find((s) => s.name?.toLowerCase() === "attend")?.id || "";
       status.forEach((s) => { statusMap[s.id] = s.name; });
 
-      const merged: MergedItem[] = [];
-
-      // Attendance records (approved by admin, non-Attend)
-      attendance
-        .filter((item) => item.attendance_status_id !== attendId)
-        .forEach((item) => {
-          merged.push({
-            id: item.id,
-            type: "attendance",
-            title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
-            date: item.checkin ?? "",
-            status: item.checkin ? "Disetujui" : "Pending",
-            reason: item.description,
-          });
-        });
-
-      // Leave requests (pending/rejected — show even if not yet approved)
-      leaves.forEach((lr) => {
-        // Skip if already has an attendance record for same date (approved).
-        // Bandingkan bagian tanggal saja (WIB) — m.date = checkin WIB
-        // "2026-08-09 17:47:11", lr.leave_date mungkin "2026-08-09" atau ISO.
-        const leaveDay = lr.leave_date?.split(/[T ]/)[0];
-        const alreadyApproved = merged.some(
-          (m) => m.type === "attendance" && (m.date?.split(/[T ]/)[0] === leaveDay)
-        );
-        if (!alreadyApproved) {
-          const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
-          merged.push({
-            id: lr.id,
-            type: "leave_request",
-            title: leaveTypeLabel,
-            date: lr.leave_date,
-            status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
-            reason: lr.reason,
-            leave_type: lr.leave_type,
-            evidence_group_id: lr.evidence_group_id,
-            rejection_reason: lr.rejection_reason,
-          });
-        }
+      // 1. Leave requests milik sendiri (pending, approved, rejected)
+      const leaveItems: MergedItem[] = leaves.map((lr) => {
+        const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
+        return {
+          id: lr.id,
+          type: "leave_request",
+          title: leaveTypeLabel,
+          date: lr.leave_date,
+          end_date: lr.end_date,
+          status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
+          rawStatus: lr.status,
+          reason: lr.reason,
+          leave_type: lr.leave_type,
+          evidence_group_id: lr.evidence_group_id,
+          rejection_reason: lr.rejection_reason,
+        };
       });
+
+      // Helper untuk mengecek apakah attendance record checkin jatuh pada rentang leave request yang sudah di-approve
+      const isCoveredByApprovedLeave = (checkinStr?: string | null) => {
+        if (!checkinStr) return false;
+        const checkinDay = checkinStr.split(/[T ]/)[0];
+        return leaves.some((lr) => {
+          if (lr.status !== "approved") return false;
+          const start = (lr.leave_date || "").split(/[T ]/)[0];
+          const end = (lr.end_date || lr.leave_date || "").split(/[T ]/)[0];
+          return checkinDay >= start && checkinDay <= end;
+        });
+      };
+
+      // 2. Attendance records non-Attend (misal CRUD manual attendance oleh admin web)
+      const attendanceItems: MergedItem[] = attendance
+        .filter(
+          (item) =>
+            item.attendance_status_id !== attendId &&
+            !isCoveredByApprovedLeave(item.checkin)
+        )
+        .map((item) => ({
+          id: item.id,
+          type: "attendance",
+          title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
+          date: item.checkin ?? "",
+          status: item.checkin ? "Disetujui" : "Pending",
+          reason: item.description,
+        }));
+
+      const merged: MergedItem[] = [...leaveItems, ...attendanceItems];
 
       // Sort by date desc — parse WIB (andal di Hermes), NaN → 0 (stabil)
       const dateVal = (d?: string) => {
@@ -280,35 +356,75 @@ export default function IzinScreen() {
       />
     );
   } else {
-    content = mergedData.map((item) => (
-      <TouchableOpacity
-        key={`${item.type}-${item.id}`}
-        style={styles.izinCard}
-        onPress={() => openDetail(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.izinHeader}>
-          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={styles.izinType}>
-              {item.title}
-              {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
-            </Text>
-            {item.type === "leave_request" && item.status === "Pending" && (
-              <Text style={styles.pendingDot}>⏳</Text>
-            )}
+    content = mergedData.map((item) => {
+      const isApprovedLeave =
+        item.type === "leave_request" &&
+        (item.status === "Disetujui" || item.rawStatus === "approved");
+      const canDelete =
+        item.type === "leave_request" &&
+        (item.status === "Pending" ||
+          item.status === "Ditolak" ||
+          item.rawStatus === "pending" ||
+          item.rawStatus === "rejected");
+
+      const dateLabel =
+        item.end_date && item.end_date !== item.date
+          ? `${formatAttendanceDate(item.date, false, { day: "numeric", month: "short", year: "numeric" })} - ${formatAttendanceDate(item.end_date, false, { day: "numeric", month: "short", year: "numeric" })}`
+          : formatAttendanceDate(item.date, false, { day: "numeric", month: "long", year: "numeric" });
+
+      return (
+        <TouchableOpacity
+          key={`${item.type}-${item.id}`}
+          style={styles.izinCard}
+          onPress={() => openDetail(item)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.izinHeader}>
+            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.izinType}>
+                {item.title}
+                {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
+              </Text>
+              {item.type === "leave_request" && item.status === "Pending" && (
+                <Text style={styles.pendingDot}>⏳</Text>
+              )}
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status, colors) }]}>
+                <Text style={styles.statusText}>{item.status}</Text>
+              </View>
+              {canDelete ? (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    confirmDelete(item);
+                  }}
+                  style={styles.cardDeleteBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  disabled={deletingId === item.id}
+                >
+                  {deletingId === item.id ? (
+                    <ActivityIndicator size="small" color={colors.danger} />
+                  ) : (
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  )}
+                </TouchableOpacity>
+              ) : isApprovedLeave ? (
+                <View style={styles.cardLockedBadge}>
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+                </View>
+              ) : null}
+            </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status, colors) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+          <View style={styles.izinDetails}>
+            <Text style={styles.izinDate}>📅 {dateLabel}</Text>
           </View>
-        </View>
-        <View style={styles.izinDetails}>
-          <Text style={styles.izinDate}>📅 {formatAttendanceDate(item.date, false, { day: "numeric", month: "long", year: "numeric" })}</Text>
-        </View>
-        {item.reason ? (
-          <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>
-        ) : null}
-      </TouchableOpacity>
-    ));
+          {item.reason ? (
+            <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>
+          ) : null}
+        </TouchableOpacity>
+      );
+    });
   }
 
   return (
@@ -378,7 +494,9 @@ export default function IzinScreen() {
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Tanggal</Text>
                   <Text style={styles.detailValue}>
-                    {formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "long", year: "numeric" })}
+                    {detailItem.end_date && detailItem.end_date !== detailItem.date
+                      ? `${formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "short", year: "numeric" })} s/d ${formatAttendanceDate(detailItem.end_date, false, { day: "numeric", month: "short", year: "numeric" })}`
+                      : formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "long", year: "numeric" })}
                   </Text>
                 </View>
                 <View style={styles.detailRow}>
@@ -460,6 +578,41 @@ export default function IzinScreen() {
                       )}
                     </TouchableOpacity>
                   </View>
+                ) : null}
+
+                {/* R-LZ-4: Action Hapus untuk pending/rejected atau Info untuk approved */}
+                {detailItem.type === "leave_request" &&
+                (detailItem.status === "Disetujui" || detailItem.rawStatus === "approved") ? (
+                  <View style={styles.approvedNoticeContainer}>
+                    <InfoOutlineRounded color={colors.warning} width={20} height={20} />
+                    <Text style={styles.approvedNoticeText}>
+                      Izin yang sudah disetujui hanya bisa dihapus oleh approver.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {detailItem.type === "leave_request" &&
+                (detailItem.status === "Pending" ||
+                  detailItem.status === "Ditolak" ||
+                  detailItem.rawStatus === "pending" ||
+                  detailItem.rawStatus === "rejected") ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.deleteModalBtn,
+                      deletingId === detailItem.id && { opacity: 0.6 },
+                    ]}
+                    onPress={() => confirmDelete(detailItem)}
+                    disabled={deletingId === detailItem.id}
+                  >
+                    {deletingId === detailItem.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Ionicons name="trash-outline" size={18} color="#fff" />
+                        <Text style={styles.deleteModalBtnText}>Hapus Pengajuan</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 ) : null}
 
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setDetailItem(null)}>
@@ -846,4 +999,53 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontWeight: "600",
     fontSize: 15,
   },
+  // R-LZ-4 Styles
+  cardDeleteBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: c.dangerSoft,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cardLockedBadge: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: c.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  approvedNoticeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: c.warningSoft,
+    borderColor: c.warning,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 8,
+  },
+  approvedNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: c.textStrong,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  deleteModalBtn: {
+    backgroundColor: c.danger,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  deleteModalBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
 });
+

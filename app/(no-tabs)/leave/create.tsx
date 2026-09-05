@@ -16,6 +16,7 @@ import {
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendanceStatus, THttpErrorResult } from "@/types";
+import { formatAttendanceDate } from "@/utils/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -51,9 +52,11 @@ export default function LeaveScreen() {
 
   const [notes, setNotes] = useState("");
   const [leaveDate, setLeaveDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [statusData, setStatusData] = useState<IAttendanceStatus[]>([]);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [endDatePickerVisible, setEndDatePickerVisible] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
   const [attendanceSelected, setAttendanceSelected] = useState("");
   const [disabledDates, setDisabledDates] = useState<string[]>([]);
@@ -92,22 +95,77 @@ export default function LeaveScreen() {
     };
     fetchStatuses();
 
-    // Fetch existing leave dates to disable in calendar
+    // Fetch existing leave dates to disable in calendar (termasuk multi-day range)
     getMyLeaves({ page: 1, per_page: 50 })
       .then((leaves) => {
         if (Array.isArray(leaves)) {
-          const dates = leaves
+          const dates: string[] = [];
+          leaves
             .filter((lr) => lr.status !== "rejected")
-            .map((lr) => (lr.leave_date || "").split("T")[0])
-            .filter(Boolean);
+            .forEach((lr) => {
+              const start = (lr.leave_date || "").split("T")[0];
+              if (!start) return;
+              if (lr.end_date) {
+                const end = lr.end_date.split("T")[0];
+                let curr = new Date(`${start}T00:00:00`);
+                const last = new Date(`${end}T00:00:00`);
+                while (curr <= last) {
+                  const y = curr.getFullYear();
+                  const m = String(curr.getMonth() + 1).padStart(2, "0");
+                  const d = String(curr.getDate()).padStart(2, "0");
+                  dates.push(`${y}-${m}-${d}`);
+                  curr.setDate(curr.getDate() + 1);
+                }
+              } else {
+                dates.push(start);
+              }
+            });
           setDisabledDates(dates);
         }
       })
       .catch(() => {});
   }, []);
 
+  // Ringkasan rentang tanggal untuk preview (R-LZ-3)
+  const rangePreview = useMemo(() => {
+    if (!leaveDate) return null;
+
+    if (!endDate || endDate === leaveDate) {
+      return {
+        label: formatAttendanceDate(leaveDate, false, {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+        days: 1,
+        isMultiDay: false,
+      };
+    }
+
+    const start = new Date(`${leaveDate}T00:00:00`);
+    const end = new Date(`${endDate}T00:00:00`);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    const totalDays = diffDays + 1;
+
+    return {
+      label: `${formatAttendanceDate(leaveDate, false, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })} s/d ${formatAttendanceDate(endDate, false, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })}`,
+      days: totalDays,
+      isMultiDay: true,
+      isValid: diffDays >= 0 && diffDays <= 30,
+    };
+  }, [leaveDate, endDate]);
+
   const handleSubmit = async () => {
-    if (notes === "") {
+    if (notes.trim() === "") {
       showToast("Masukkan catatan!", "error");
       return;
     }
@@ -115,6 +173,28 @@ export default function LeaveScreen() {
     if (leaveDate === "") {
       showToast("Pilih tanggal izin/cuti!", "error");
       return;
+    }
+
+    // Validasi lokal: end >= start & <= 30 hari (R-LZ-3)
+    if (endDate) {
+      const start = new Date(`${leaveDate}T00:00:00`);
+      const end = new Date(`${endDate}T00:00:00`);
+      if (end < start) {
+        Alert.alert(
+          "Tanggal Tidak Valid",
+          "Tanggal selesai tidak boleh lebih awal dari tanggal mulai."
+        );
+        return;
+      }
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays > 30) {
+        Alert.alert(
+          "Batas Rentang Terlampaui",
+          "Rentang pengajuan izin/cuti maksimal 30 hari."
+        );
+        return;
+      }
     }
 
     if (attendanceSelected === "") {
@@ -151,27 +231,49 @@ export default function LeaveScreen() {
         }
       }
 
-      await API.post("/leave/", {
+      // Payload: kirim end_date HANYA bila diisi (R-LZ-3)
+      const payload: any = {
         leave_date: leaveDate,
         leave_type: isCuti ? "cuti" : "izin",
         attendance_status_id: attendanceSelected,
         reason: notes,
-        ...(evidenceGroupId ? { evidence_group_id: evidenceGroupId } : {}),
-      });
+      };
+      if (endDate && endDate.trim()) {
+        payload.end_date = endDate.trim();
+      }
+      if (evidenceGroupId) {
+        payload.evidence_group_id = evidenceGroupId;
+      }
+
+      await API.post("/leave/", payload);
 
       showToast("Pengajuan izin/cuti berhasil dikirim!", "success");
       router.replace("/");
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(JSON.stringify(err, null, 2));
-      Alert.alert(
-        "Gagal",
-        err?.message || "Terjadi kesalahan, coba lagi.",
-      );
+
+      // Error 409 -> "Sudah ada pengajuan pada rentang tanggal tersebut."
+      if (
+        err?.code === 409 ||
+        err?.message?.toLowerCase().includes("overlap") ||
+        err?.message?.toLowerCase().includes("konflik")
+      ) {
+        Alert.alert(
+          "Pengajuan Gagal",
+          "Sudah ada pengajuan pada rentang tanggal tersebut."
+        );
+      } else {
+        Alert.alert(
+          "Gagal",
+          err?.message || "Terjadi kesalahan, coba lagi.",
+        );
+      }
     } finally {
       setLoadingSubmit(false);
     }
   };
+
 
   return (
     <View style={{ flex: 1 }}>
@@ -253,19 +355,59 @@ export default function LeaveScreen() {
               )}
             </View>
 
-            {/* Tanggal Izin/Cuti */}
+            {/* Tanggal Izin/Cuti (R-LZ-3 Rentang Tanggal) */}
             <Text style={styles.sectionTitle}>Tanggal Izin/Cuti</Text>
-            <TouchableOpacity
-              style={styles.dateContainer}
-              onPress={() => setDatePickerVisible(true)}
-            >
-              <View style={styles.dateRow}>
-                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                <Text style={leaveDate ? styles.dateValue : styles.datePlaceholder}>
-                  {leaveDate || "Pilih tanggal"}
-                </Text>
+            <View style={styles.datePickerRow}>
+              {/* Tanggal Mulai */}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dateFieldLabel}>Mulai</Text>
+                <TouchableOpacity
+                  style={styles.dateContainer}
+                  onPress={() => setDatePickerVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.dateRow}>
+                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                    <Text style={leaveDate ? styles.dateValue : styles.datePlaceholder} numberOfLines={1}>
+                      {leaveDate || "Pilih tanggal"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+
+              {/* Tanggal Selesai (Opsional) */}
+              <View style={{ flex: 1 }}>
+                <View style={styles.dateLabelRow}>
+                  <Text style={styles.dateFieldLabel}>s/d (opsional)</Text>
+                  {endDate ? (
+                    <TouchableOpacity
+                      onPress={() => setEndDate("")}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.clearDateText}>Batal</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+                <TouchableOpacity
+                  style={styles.dateContainer}
+                  onPress={() => {
+                    if (!leaveDate) {
+                      showToast("Pilih tanggal mulai terlebih dahulu!", "info");
+                      return;
+                    }
+                    setEndDatePickerVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.dateRow}>
+                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                    <Text style={endDate ? styles.dateValue : styles.datePlaceholder} numberOfLines={1}>
+                      {endDate || "s/d (opsional)"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
 
             <DatePicker
               visible={datePickerVisible}
@@ -274,9 +416,39 @@ export default function LeaveScreen() {
               onConfirm={(date) => {
                 setLeaveDate(date);
                 setDatePickerVisible(false);
+                if (endDate && new Date(`${endDate}T00:00:00`) < new Date(`${date}T00:00:00`)) {
+                  setEndDate("");
+                }
               }}
               onClose={() => setDatePickerVisible(false)}
             />
+
+            <DatePicker
+              visible={endDatePickerVisible}
+              value={endDate || leaveDate}
+              disabledDates={disabledDates}
+              onConfirm={(date) => {
+                setEndDate(date);
+                setEndDatePickerVisible(false);
+              }}
+              onClose={() => setEndDatePickerVisible(false)}
+            />
+
+            {/* Preview Ringkasan Rentang Tanggal (R-LZ-3) */}
+            {rangePreview && (
+              <View style={styles.previewContainer}>
+                <View style={styles.previewHeaderRow}>
+                  <Ionicons name="calendar" size={16} color={colors.primary} />
+                  <Text style={styles.previewTitle}>Ringkasan Pengajuan</Text>
+                </View>
+                <Text style={styles.previewDateRange}>{rangePreview.label}</Text>
+                <Text style={styles.previewDaysCount}>
+                  Total durasi: <Text style={styles.previewDaysHighlight}>{rangePreview.days} hari</Text>
+                  {rangePreview.isMultiDay ? " (rentang cuti/izin)" : " (1 hari)"}
+                </Text>
+              </View>
+            )}
+
 
             {/* Notes */}
             <Text style={styles.sectionTitle}>Notes</Text>
@@ -497,13 +669,35 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   option: { padding: 12, flexDirection: "row", alignItems: "center" },
   optionText: { fontSize: 14 },
 
-  // Date Input
+  // Date Input & Range (R-LZ-3)
+  datePickerRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  dateLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dateFieldLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: c.textSecondary,
+    marginBottom: 6,
+  },
+  clearDateText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: c.danger,
+    marginBottom: 6,
+  },
   dateContainer: {
     backgroundColor: c.inputBg,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: c.border,
-    marginBottom: 24,
+    marginBottom: 12,
     padding: 16,
   },
   dateRow: {
@@ -519,6 +713,41 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     color: c.textMuted,
   },
+  previewContainer: {
+    backgroundColor: c.primarySoft,
+    borderWidth: 1,
+    borderColor: c.primary,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+  },
+  previewHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  previewTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: c.primary,
+  },
+  previewDateRange: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: c.textStrong,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  previewDaysCount: {
+    fontSize: 12,
+    color: c.textSecondary,
+  },
+  previewDaysHighlight: {
+    fontWeight: "700",
+    color: c.primary,
+  },
+
 
   // Notes
   notesContainer: {

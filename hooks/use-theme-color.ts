@@ -3,14 +3,16 @@
  * - `useThemeColor(props, name)` — satu warna token, dengan override per-mode (pola lama, dipertahankan).
  * - `useThemeColors()` — seluruh palet mode aktif; dipakai screen/komponen pengganti hardcode warna.
  * - `useIsDarkTheme()` — boolean mode gelap (untuk StatusBar, gradient, dsb.).
+ * - `useThemePreference()` — hook baca dan ubah preferensi tema ('system' | 'light' | 'dark').
  * Data token: `constants/theme.ts`. `lib/theme.ts` hanyalah wrapper deprecated.
  */
 
 import { useMemo } from 'react';
 import { Colors, type ThemeColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeStore, type ThemePreference } from '@/stores/theme';
 
-export type { ThemeColors };
+export type { ThemeColors, ThemePreference };
 
 export function useThemeColor(
   props: { light?: string; dark?: string },
@@ -36,4 +38,19 @@ export function useThemeColors(): ThemeColors {
 /** true bila device berada dalam mode gelap. */
 export function useIsDarkTheme(): boolean {
   return useColorScheme() === 'dark';
+}
+
+/**
+ * Hook untuk membaca dan mengubah preferensi tema ('system' | 'light' | 'dark').
+ */
+export function useThemePreference() {
+  const preference = useThemeStore((s) => s.preference);
+  const setPreference = useThemeStore((s) => s.setPreference);
+  const isHydrated = useThemeStore((s) => s.isHydrated);
+
+  return {
+    preference,
+    setPreference,
+    isHydrated,
+  };
 }

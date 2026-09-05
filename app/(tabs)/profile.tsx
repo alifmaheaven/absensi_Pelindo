@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useThemePreference, type ThemeColors, type ThemePreference } from "@/hooks/use-theme-color";
 import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
@@ -24,12 +24,23 @@ import {
 const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 const BUILD_NUMBER = Constants.expoConfig?.extra?.eas?.buildNumber ?? "-";
 
+const THEME_OPTIONS: {
+  key: ThemePreference;
+  label: string;
+  icon: string;
+}[] = [
+  { key: "system", label: "Sistem", icon: "📱" },
+  { key: "light", label: "Terang", icon: "☀️" },
+  { key: "dark", label: "Gelap", icon: "🌙" },
+];
+
 export default function ProfileScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { showToast } = useToast();
+  const { preference, setPreference } = useThemePreference();
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
@@ -123,6 +134,58 @@ export default function ProfileScreen() {
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
           ))}
+
+          {/* Baris / Segment Pilihan Tema */}
+          <View style={styles.themeItem}>
+            <View style={styles.themeRow}>
+              <Text style={styles.menuIcon}>🌓</Text>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>Tema</Text>
+                <Text style={styles.menuSubtitle}>
+                  {preference === "system"
+                    ? "Mengikuti sistem perangkat"
+                    : preference === "dark"
+                    ? "Mode gelap aktif"
+                    : "Mode terang aktif"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.themeSegmentContainer}>
+              {THEME_OPTIONS.map((opt) => {
+                const isSelected = preference === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[
+                      styles.themeSegmentButton,
+                      isSelected && styles.themeSegmentButtonActive,
+                    ]}
+                    onPress={() => setPreference(opt.key)}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Pilih tema ${opt.label}`}
+                    accessibilityState={{ selected: isSelected }}
+                  >
+                    {isSelected && (
+                      <View style={styles.themeCheckBadge}>
+                        <Text style={styles.themeCheckText}>✓</Text>
+                      </View>
+                    )}
+                    <Text style={styles.themeSegmentIcon}>{opt.icon}</Text>
+                    <Text
+                      style={[
+                        styles.themeSegmentLabel,
+                        isSelected && styles.themeSegmentLabelActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -269,6 +332,66 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   menuArrow: {
     fontSize: 24,
     color: c.textFaint,
+  },
+  themeItem: {
+    padding: 16,
+  },
+  themeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  themeSegmentContainer: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  themeSegmentButton: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    position: "relative",
+  },
+  themeSegmentButtonActive: {
+    borderColor: c.primary,
+    backgroundColor: c.primarySoft,
+  },
+  themeSegmentIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  themeSegmentLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: c.textSecondary,
+    textAlign: "center",
+  },
+  themeSegmentLabelActive: {
+    color: c.primary,
+    fontWeight: "700",
+  },
+  themeCheckBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: c.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeCheckText: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: c.onGradient,
+    lineHeight: 12,
   },
   logoutButton: {
     flexDirection: "row",

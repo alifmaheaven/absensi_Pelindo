@@ -17,6 +17,9 @@ export interface IGalleryPhoto {
   file_size: number;
   mime_type: string;
   created_at: string;
+  category?: string | null;
+  ticket_id?: string | null;
+  attendance_id?: string | null;
 }
 
 export interface IGalleryMeta {

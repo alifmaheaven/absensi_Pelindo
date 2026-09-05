@@ -1,5 +1,4 @@
 import apiClient from "@/lib/axios";
-import { IGalleryFolder, IGalleryPhoto, IGalleryShareResponse } from "@/types/gallery";
 
 export async function getFolders(page = 1, perPage = 20) {
   const response = await apiClient.get(`/gallery/folder?page=${page}&per_page=${perPage}`);
@@ -26,7 +25,11 @@ export async function getPhotos(folderId: string, page = 1, perPage = 100) {
   return response.data;
 }
 
-export async function uploadPhotos(folderId: string, files: { uri: string; name: string; type: string }[] | FormData) {
+export async function uploadPhotos(
+  folderId: string,
+  files: { uri: string; name: string; type: string }[] | FormData,
+  category?: string
+) {
   let formData: FormData;
   if (files instanceof FormData) {
     formData = files;
@@ -35,6 +38,9 @@ export async function uploadPhotos(folderId: string, files: { uri: string; name:
     files.forEach((file) => {
       formData.append("photos", file as any);
     });
+    if (category) {
+      formData.append("category", category);
+    }
   }
   const response = await apiClient.post(`/gallery/folder/${folderId}/photo`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -44,6 +50,16 @@ export async function uploadPhotos(folderId: string, files: { uri: string; name:
 
 export async function deletePhoto(photoId: string) {
   const response = await apiClient.delete(`/gallery/photo/${photoId}`);
+  return response.data;
+}
+
+export async function bulkDeletePhotos(photoIds: string[]) {
+  const response = await apiClient.post("/gallery/photo/bulk-delete", { ids: photoIds });
+  return response.data;
+}
+
+export async function updatePhotoCategory(photoId: string, category: string) {
+  const response = await apiClient.patch(`/gallery/photo/${photoId}/category`, { category });
   return response.data;
 }
 

@@ -3,6 +3,7 @@ import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   MAX_SITES_PROXIMITY,
   TIMEZONE,
@@ -436,7 +437,7 @@ export default function CheckinScreen() {
               {!location ? (
                 permissionDenied ? (
                   <View style={styles.loadingContainer}>
-                    <Text style={styles.locationDeniedEmoji}>📍</Text>
+                    <Ionicons name="location-outline" size={40} color={colors.danger} style={{ marginBottom: 10 }} />
                     <Text style={styles.locationDeniedTitle}>
                       Izin lokasi diperlukan
                     </Text>
@@ -516,18 +517,14 @@ export default function CheckinScreen() {
 
 
             {/* Select Location */}
-            <Text style={styles.sectionTitle}>Select Location</Text>
+            <Text style={styles.sectionTitle}>Pilih Lokasi Presensi</Text>
 
             {location && sitesList?.length === 0 ? (
-              <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateEmoji}>📍</Text>
-                <Text style={styles.emptyStateText}>
-                  Tidak ada lokasi absen terdaftar
-                </Text>
-                <Text style={styles.emptyStateSubText}>
-                  Hubungi admin untuk menambahkan lokasi
-                </Text>
-              </View>
+              <EmptyState
+                title="Tidak Ada Lokasi Presensi"
+                description="Lokasi kerja Anda belum terdaftar di sistem. Hubungi administrator site Anda."
+                icon={<InfoOutlineRounded color={colors.primary} width={36} height={36} />}
+              />
             ) : (
               sitesList?.map((item: any) => (
                 <TouchableOpacity
@@ -610,9 +607,12 @@ export default function CheckinScreen() {
                   {!loadingImage && (
                     <TouchableOpacity
                       style={styles.removeImageButton}
+                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                       onPress={() => removeImage(index, imageUploadService)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Hapus foto"
                     >
-                      <Text style={styles.removeImageText}>✕</Text>
+                      <Ionicons name="close" size={14} color={colors.onGradient} />
                     </TouchableOpacity>
                   )}
                   {loadingImage && (
@@ -826,7 +826,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     bottom: 10,
     left: 10,
     right: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    backgroundColor: c.card,
+    borderColor: c.border,
+    borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -838,7 +840,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   locationOverlayText: {
     fontSize: 10,
-    color: c.text,
+    color: c.textStrong,
     textAlign: "center",
     fontWeight: "600",
   },
@@ -1009,9 +1011,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     top: 6,
     right: 6,
     backgroundColor: c.overlay,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,

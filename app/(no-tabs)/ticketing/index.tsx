@@ -1,6 +1,8 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, Device, InfoOutlineRounded, Ticket } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
+import InteractiveButton from "@/components/ui/InteractiveButton";
+import StandardSkeleton from "@/components/ui/StandardSkeleton";
 import { getTicket, getDataStatus } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { useTicketStore } from "@/stores/ticket";
@@ -19,7 +21,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState , useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   FlatList,
   TextInput,
@@ -312,7 +314,7 @@ const TicketingScreen = () => {
               <ArrowLeft color="#fff" />
             </TouchableOpacity>
 
-            <Text style={styles.headerTitle}>Ticketing</Text>
+            <Text style={styles.headerTitle}>Tiket Kendala</Text>
 
             <View style={{ width: 60 }} />
           </View>
@@ -321,12 +323,12 @@ const TicketingScreen = () => {
 
       {/* Content */}
       <View style={styles.card}>
-        <TouchableOpacity
-          style={styles.createButton}
+        <InteractiveButton
+          title="Buat Tiket Baru"
+          icon={<Ionicons name="add" size={20} color={colors.onGradient} style={{ marginRight: 6 }} />}
           onPress={() => router.push("/ticketing/create")}
-        >
-          <Text style={styles.createButtonText}>Create New Ticket</Text>
-        </TouchableOpacity>
+          style={{ marginBottom: 16 }}
+        />
 
         {/* Filter Bar */}
         <View style={styles.filterContainer}>
@@ -382,8 +384,8 @@ const TicketingScreen = () => {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>All Ticket</Text>
-          <Text style={styles.ticketCount}>{ticketMeta?.total} Ticket</Text>
+          <Text style={styles.sectionTitle}>Semua Tiket</Text>
+          <Text style={styles.ticketCount}>{ticketMeta?.total || 0} Tiket</Text>
         </View>
 
         <FlatList
@@ -407,7 +409,7 @@ const TicketingScreen = () => {
           onEndReachedThreshold={0.5}
           refreshing={refreshing}
           onRefresh={handleRefresh}
-          ListFooterComponent={loading ? <TicketSkeletonList /> : null}
+          ListFooterComponent={loading ? <StandardSkeleton type="card-list" count={2} /> : null}
           ListEmptyComponent={!loading ? (
             isError ? (
               <EmptyState
@@ -421,7 +423,7 @@ const TicketingScreen = () => {
               <EmptyState
                 title="Belum Ada Tiket"
                 description="Tidak ada laporan tiket kendala atau perbaikan saat ini."
-                actionLabel="+ Buat Tiket Baru"
+                actionLabel="Buat Tiket Baru"
                 onAction={() => router.push("/ticketing/create")}
                 icon={<Ticket color={colors.primary} width={36} height={36} />}
               />
@@ -448,11 +450,16 @@ const TicketItem = ({
   incidentOwners,
 }: TicketItemProps & { incidentOwners?: IIncidentOwner[] }) => {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);  const variantStatus = status.toLowerCase() as BadgeVariant;
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const variantStatus = status.toLowerCase() as BadgeVariant;
   const variantProgress = progress.toLowerCase() as BadgeVariant;
 
   return (
-    <View style={styles.ticketCard}>
+    <TouchableOpacity
+      style={styles.ticketCard}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
       <View style={styles.badgeRow}>
         <Badge text={progress} variant={variantProgress} />
         <Badge text={status} variant={variantStatus} />
@@ -464,7 +471,7 @@ const TicketItem = ({
         <Device width={14} height={14} color={colors.textSecondary} />
         <Text style={styles.deviceText}>{device}</Text>
       </View>
-      <Text style={styles.description}>{description}</Text>
+      <Text style={styles.description} numberOfLines={2}>{description}</Text>
 
       {incidentOwners && incidentOwners.length > 0 && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
@@ -482,12 +489,12 @@ const TicketItem = ({
           <Text style={styles.dateText}>{date}</Text>
         </View>
 
-        <TouchableOpacity style={styles.detailButton} onPress={onPress}>
+        <View style={styles.detailButton}>
           <Ionicons name="eye-outline" size={14} color={colors.primary} />
-          <Text style={styles.detailText}>View Detail</Text>
-        </TouchableOpacity>
+          <Text style={styles.detailText}>Lihat Detail</Text>
+        </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -506,109 +513,81 @@ const Badge = ({ text, variant }: BadgeProps) => {
   );
 };
 
-export const TicketSkeleton = () => {
-  const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);  return (
-    <View style={styles.cardSkeleton}>
-      <View style={styles.badgeRowSkeleton}>
-        <View style={styles.badgeSkeleton} />
-        <View style={styles.badgeSkeleton} />
-      </View>
-
-      <View style={styles.titleSkeleton} />
-      <View style={styles.deviceSkeleton} />
-      <View style={styles.descSkeleton} />
-
-      <View style={styles.footerSkeleton}>
-        <View style={styles.dateSkeleton} />
-        <View style={styles.buttonSkeleton} />
-      </View>
-    </View>
-  );
-};
-
-const TicketSkeletonList = () => {
-  return (
-    <>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <TicketSkeleton key={i} />
-      ))}
-    </>
-  );
-};
-
 /* ================= STYLES ================= */
 
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: c.background,
   },
 
   headerGradient: {
-    height: 140, // Tinggi gradient
-    paddingBottom: 30,
+    height: 130,
+    paddingBottom: 24,
   },
 
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
 
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     color: c.onGradient,
   },
 
   backButton: {
-    padding: 8,
-    borderRadius: 20,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   card: {
     flex: 1,
-    backgroundColor: c.primarySoft,
+    backgroundColor: c.background,
     marginTop: -20,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
-  },
-
-  createButton: {
-    backgroundColor: c.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-
-  createButtonText: {
-    color: c.onGradient,
-    fontWeight: "600",
+    paddingHorizontal: 16,
+    paddingTop: 20,
   },
 
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
 
   sectionTitle: {
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
+    color: c.textStrong,
   },
 
   ticketCount: {
+    fontSize: 13,
     color: c.textSecondary,
+    fontWeight: "500",
   },
 
   ticketCard: {
     backgroundColor: c.card,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     padding: 16,
-    marginBottom: 14,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
 
   badgeRow: {
@@ -618,18 +597,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
 
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
 
   badgeText: {
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: 11,
+    fontWeight: "600",
   },
 
   ticketTitle: {
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
+    color: c.textStrong,
     marginBottom: 4,
   },
 
@@ -639,8 +620,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
 
   description: {
-    fontSize: 12,
+    fontSize: 13,
     color: c.textSecondary,
+    lineHeight: 18,
   },
 
   footerRow: {
@@ -665,76 +647,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
   },
 
   detailText: {
     fontSize: 12,
     color: c.primary,
-    fontWeight: "500",
-  },
-
-  // skeleton
-  cardSkeleton: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-  },
-
-  badgeRowSkeleton: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 10,
-  },
-
-  badgeSkeleton: {
-    width: 60,
-    height: 18,
-    borderRadius: 8,
-    backgroundColor: c.border,
-  },
-
-  titleSkeleton: {
-    height: 16,
-    width: "70%",
-    borderRadius: 8,
-    backgroundColor: c.border,
-    marginBottom: 8,
-  },
-
-  deviceSkeleton: {
-    height: 12,
-    width: "50%",
-    borderRadius: 8,
-    backgroundColor: c.border,
-    marginBottom: 10,
-  },
-
-  descSkeleton: {
-    height: 12,
-    width: "100%",
-    borderRadius: 8,
-    backgroundColor: c.border,
-    marginBottom: 12,
-  },
-
-  footerSkeleton: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  dateSkeleton: {
-    width: 80,
-    height: 12,
-    borderRadius: 8,
-    backgroundColor: c.border,
-  },
-
-  buttonSkeleton: {
-    width: 70,
-    height: 12,
-    borderRadius: 8,
-    backgroundColor: c.border,
+    fontWeight: "600",
   },
 
   // Filter

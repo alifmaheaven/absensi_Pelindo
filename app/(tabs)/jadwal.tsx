@@ -2,12 +2,13 @@ import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
 import type { IWeekScheduleItem } from "@/types";
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import ScheduleSkeleton from "@/components/ui/ScheduleSkeleton";
 import EmptyState from "@/components/ui/EmptyState";
-import { Calender, InfoOutlineRounded } from "@/components/icon";
+import ScreenContainer from "@/components/ui/ScreenContainer";
+import { Calender } from "@/components/icon";
+import { Ionicons } from "@expo/vector-icons";
 import { getAccessibleTextColor, parseWIBDate } from "@/utils/utils";
 
 export default function JadwalScreen() {
@@ -61,160 +62,107 @@ export default function JadwalScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={["#1e90ff", "#4fc3f7"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Jadwal Kerja</Text>
-        <Text style={styles.headerSubtitle}>{monthYear}</Text>
-      </LinearGradient>
+    <ScreenContainer
+      title="Jadwal Kerja"
+      subtitle={monthYear}
+      refreshing={refreshing}
+      onRefresh={() => fetchSchedule(true)}
+    >
+      {isLoading ? (
+        <ScheduleSkeleton count={7} />
+      ) : isError ? (
+        /* S-MO-3: Pemisahan jujur Error State (jaringan / server 500) */
+        <EmptyState
+          variant="error"
+          title="Gagal Memuat Jadwal"
+          description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
+          actionLabel="Coba Lagi"
+          onAction={() => fetchSchedule(true)}
+        />
+      ) : schedules.length === 0 ? (
+        /* S-MO-3: True Empty State (memang belum ada jadwal) */
+        <EmptyState
+          title="Belum Ada Penugasan Shift"
+          description="Jadwal kerja Anda belum ditetapkan untuk pekan ini. Hubungi supervisor operasional jika ini tidak sesuai."
+          actionLabel="Muat Ulang"
+          onAction={() => fetchSchedule(true)}
+          icon={<Calender color={colors.primary} width={36} height={36} />}
+        />
+      ) : (
+        schedules.map((item, index) => {
+          // item.date format "YYYY-MM-DD" — ambil tanggal langsung
+          const dateNum = item.date ? item.date.split("-")[2] : "--";
+          const bg = item.is_today ? colors.primary : item.has_schedule ? item.shift!.color : colors.primarySoft;
+          // S-MO-5: Helper kontras WCAG AA (getAccessibleTextColor)
+          const textColor = item.is_today
+            ? colors.onGradient
+            : item.has_schedule
+            ? getAccessibleTextColor(item.shift?.color)
+            : colors.textMuted;
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchSchedule(true)}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {isLoading ? (
-          <ScheduleSkeleton count={7} />
-        ) : isError ? (
-          /* S-MO-3: Pemisahan jujur Error State (jaringan / server 500) */
-          <EmptyState
-            title="Gagal Memuat Jadwal"
-            description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
-            actionLabel="Coba Lagi"
-            onAction={() => fetchSchedule(true)}
-            icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
-          />
-        ) : schedules.length === 0 ? (
-          /* S-MO-3: True Empty State (memang belum ada jadwal) */
-          <EmptyState
-            title="Belum Ada Penugasan Shift"
-            description="Jadwal kerja Anda belum ditetapkan untuk pekan ini. Hubungi supervisor operasional jika ini tidak sesuai."
-            actionLabel="Muat Ulang"
-            onAction={() => fetchSchedule(true)}
-            icon={<Calender color={colors.primary} width={36} height={36} />}
-          />
-        ) : (
-          schedules.map((item, index) => {
-            // item.date format "YYYY-MM-DD" — ambil tanggal langsung
-            const dateNum = item.date ? item.date.split("-")[2] : "--";
-            const bg = item.is_today ? colors.primary : item.has_schedule ? item.shift!.color : colors.primarySoft;
-            // S-MO-5: Helper kontras WCAG AA (getAccessibleTextColor)
-            const textColor = item.is_today
-              ? colors.onGradient
-              : item.has_schedule
-              ? getAccessibleTextColor(item.shift?.color)
-              : colors.textMuted;
+          const isOvernight = Boolean(item.has_schedule && item.shift?.is_overnight);
+          const curDayShort = getDayShortName(item.date);
+          const nextDayShort = getNextDayShortName(item.date);
 
-            const isOvernight = Boolean(item.has_schedule && item.shift?.is_overnight);
-            const curDayShort = getDayShortName(item.date);
-            const nextDayShort = getNextDayShortName(item.date);
+          const timeRangeText = item.has_schedule
+            ? isOvernight
+              ? `${item.shift!.start_time.slice(0, 5)} (${curDayShort}) – ${item.shift!.end_time.slice(0, 5)} (${nextDayShort})`
+              : `${item.shift!.start_time.slice(0, 5)} - ${item.shift!.end_time.slice(0, 5)}`
+            : "Tidak ada jadwal";
 
-            const timeRangeText = item.has_schedule
-              ? isOvernight
-                ? `${item.shift!.start_time.slice(0, 5)} (${curDayShort}) – ${item.shift!.end_time.slice(0, 5)} (${nextDayShort})`
-                : `${item.shift!.start_time.slice(0, 5)} - ${item.shift!.end_time.slice(0, 5)}`
-              : "Tidak ada jadwal";
-
-            return (
-              <View
-                key={index}
-                style={[styles.scheduleCard, item.is_today && styles.todayCard]}
-              >
-                <View style={[styles.dateBox, { backgroundColor: bg }]}>
-                  <Text style={[styles.dateNumber, { color: textColor }]}>
-                    {dateNum}
-                  </Text>
-                  <Text style={[styles.dayName, { color: textColor }]}>
-                    {item.day_name}
-                  </Text>
-                </View>
-                <View style={styles.scheduleInfo}>
-                  {item.has_schedule ? (
-                    <>
-                      <View style={styles.shiftLabelRow}>
-                        <Text style={styles.shiftLabel}>{item.shift!.name}</Text>
-                        {isOvernight && (
-                          <View style={styles.overnightBadge}>
-                            <Text style={styles.overnightBadgeText}>🌙 Lintas Hari (+1)</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.timeText}>{timeRangeText}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.shiftLabel}>Libur</Text>
-                      <Text style={styles.timeText}>{timeRangeText}</Text>
-                    </>
-                  )}
-                </View>
-                {item.is_today && (
-                  <View style={styles.todayBadge}>
-                    <Text style={styles.todayText}>Hari Ini</Text>
-                  </View>
+          return (
+            <View
+              key={index}
+              style={[styles.scheduleCard, item.is_today && styles.todayCard]}
+            >
+              <View style={[styles.dateBox, { backgroundColor: bg }]}>
+                <Text style={[styles.dateNumber, { color: textColor }]}>
+                  {dateNum}
+                </Text>
+                <Text style={[styles.dayName, { color: textColor }]}>
+                  {item.day_name}
+                </Text>
+              </View>
+              <View style={styles.scheduleInfo}>
+                {item.has_schedule ? (
+                  <>
+                    <View style={styles.shiftLabelRow}>
+                      <Text style={styles.shiftLabel}>{item.shift!.name}</Text>
+                      {isOvernight && (
+                        <View style={styles.overnightBadge}>
+                          <Ionicons name="moon" size={11} color={colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={styles.overnightBadgeText}>Lintas Hari (+1)</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.timeText}>{timeRangeText}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.shiftLabel}>Libur</Text>
+                    <Text style={styles.timeText}>{timeRangeText}</Text>
+                  </>
                 )}
               </View>
-            );
-          })
-        )}
-        <View style={{ height: 100 }} />
-      </ScrollView>
-    </View>
+              {item.is_today && (
+                <View style={styles.todayBadge}>
+                  <Text style={styles.todayText}>Hari Ini</Text>
+                </View>
+              )}
+            </View>
+          );
+        })
+      )}
+    </ScreenContainer>
   );
 }
 
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: c.primarySoft,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: c.onGradient,
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  loadingText: {
-    textAlign: "center",
-    color: c.textSecondary,
-    marginTop: 40,
-    fontSize: 14,
-  },
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyText: {
-    color: c.textSecondary,
-    fontSize: 14,
-  },
   scheduleCard: {
     backgroundColor: c.card,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     padding: 16,
     marginBottom: 12,
     flexDirection: "row",
@@ -258,9 +206,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   shiftLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: c.text,
+    color: c.textStrong,
   },
   overnightBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: c.surface,
     borderColor: c.primary,
     borderWidth: 1,
@@ -281,7 +231,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   todayText: {
     fontSize: 11,

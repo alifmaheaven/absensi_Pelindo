@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useMemo } from "react";
@@ -75,7 +75,7 @@ export default function EarlyCheckoutModal({
 
               {/* Amber Clock Icon in warningSoft circle */}
               <View style={styles.iconCircle}>
-                <Feather name="clock" size={32} color={colors.warning} />
+                <Ionicons name="time-outline" size={32} color={colors.warning} />
               </View>
 
               {/* Title */}
@@ -97,7 +97,7 @@ export default function EarlyCheckoutModal({
 
               {/* Consequences Note */}
               <View style={styles.noteBox}>
-                <Feather name="alert-triangle" size={16} color={colors.warning} style={styles.noteIcon} />
+                <Ionicons name="warning-outline" size={16} color={colors.warning} style={styles.noteIcon} />
                 <Text style={styles.noteText}>
                   Kepulangan lebih awal akan tercatat pada riwayat kehadiran dan
                   mungkin memerlukan verifikasi atau persetujuan atasan.
@@ -196,7 +196,7 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.surface,
       borderColor: c.border,
       borderWidth: 1,
-      borderRadius: 14,
+      borderRadius: 16,
       paddingVertical: 14,
       paddingHorizontal: 16,
       alignItems: "center",
@@ -243,6 +243,7 @@ const makeStyles = (c: ThemeColors) =>
       overflow: "hidden",
     },
     gradientBtn: {
+      minHeight: 48,
       paddingVertical: 14,
       alignItems: "center",
       justifyContent: "center",
@@ -254,6 +255,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     secondaryButton: {
       width: "100%",
+      minHeight: 48,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: "center",

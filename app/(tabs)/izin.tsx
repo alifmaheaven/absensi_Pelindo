@@ -16,15 +16,17 @@ import { IAttendance, IAttendanceEvidGroupId, THttpErrorResult } from "@/types";
 import { DocumentCheck, InfoOutlineRounded } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import EmptyState from "@/components/ui/EmptyState";
-import { LinearGradient } from "expo-linear-gradient";
+import ScreenContainer from "@/components/ui/ScreenContainer";
+import StandardSkeleton from "@/components/ui/StandardSkeleton";
+import StatusBadge, { StatusBadgeTone } from "@/components/ui/StatusBadge";
+import InteractiveButton from "@/components/ui/InteractiveButton";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState , useMemo } from "react";
+import { useCallback, useState, useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
   Image,
   Modal,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,16 +39,19 @@ import { IMAGE_BASE_PATH } from "@/constants";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const getStatusColor = (status: string, c: ThemeColors) => {
-  switch (status) {
-    case "Disetujui":
-      return c.success;
-    case "Pending":
-      return c.warning;
-    case "Ditolak":
-      return c.danger;
+const getStatusTone = (status: string): StatusBadgeTone => {
+  switch (status.toLowerCase()) {
+    case "disetujui":
+    case "approved":
+      return "success";
+    case "pending":
+    case "menunggu":
+      return "warning";
+    case "ditolak":
+    case "rejected":
+      return "danger";
     default:
-      return c.textMuted;
+      return "neutral";
   }
 };
 
@@ -333,7 +338,7 @@ export default function IzinScreen() {
   let content: React.ReactNode;
 
   if (isLoading && !refreshing) {
-    content = <IzinSkeleton />;
+    content = <StandardSkeleton type="card-list" count={4} />;
   } else if (isError) {
     content = (
       <EmptyState
@@ -387,13 +392,11 @@ export default function IzinScreen() {
                 {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
               </Text>
               {item.type === "leave_request" && item.status === "Pending" && (
-                <Text style={styles.pendingDot}>⏳</Text>
+                <Ionicons name="time-outline" size={14} color={colors.warning} />
               )}
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status, colors) }]}>
-                <Text style={styles.statusText}>{item.status}</Text>
-              </View>
+              <StatusBadge label={item.status} tone={getStatusTone(item.status)} size="small" />
               {canDelete ? (
                 <TouchableOpacity
                   onPress={(e) => {
@@ -401,7 +404,7 @@ export default function IzinScreen() {
                     confirmDelete(item);
                   }}
                   style={styles.cardDeleteBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   disabled={deletingId === item.id}
                 >
                   {deletingId === item.id ? (
@@ -418,10 +421,16 @@ export default function IzinScreen() {
             </View>
           </View>
           <View style={styles.izinDetails}>
-            <Text style={styles.izinDate}>📅 {dateLabel}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.izinDate}>{dateLabel}</Text>
+            </View>
           </View>
           {item.reason ? (
-            <Text style={styles.reasonText} numberOfLines={2}>💬 {item.reason}</Text>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 8 }}>
+              <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} style={{ marginTop: 2 }} />
+              <Text style={styles.reasonText} numberOfLines={2}>{item.reason}</Text>
+            </View>
           ) : null}
         </TouchableOpacity>
       );
@@ -429,47 +438,27 @@ export default function IzinScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={["#1e90ff", "#4fc3f7"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Izin/Cuti</Text>
-        <Text style={styles.headerSubtitle}>Kelola pengajuan izin Anda</Text>
-      </LinearGradient>
+    <ScreenContainer
+      title="Izin / Cuti"
+      subtitle="Kelola pengajuan izin dan cuti kerja"
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        fetchAll();
+      }}
+    >
+      {/* Apply Button */}
+      <InteractiveButton
+        title="Ajukan Izin / Cuti"
+        icon={<Ionicons name="add" size={20} color={colors.onGradient} style={{ marginRight: 6 }} />}
+        onPress={() => router.push("/(no-tabs)/leave/create")}
+        style={{ marginBottom: 20 }}
+      />
 
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchAll();
-            }}
-            colors={[colors.primary]}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {/* Apply Button */}
-        <TouchableOpacity
-          style={styles.applyButton}
-          onPress={() => router.push("/(no-tabs)/leave/create")}
-        >
-          <Text style={styles.applyButtonText}>+ Ajukan Izin/Cuti</Text>
-        </TouchableOpacity>
+      {/* History */}
+      <Text style={styles.sectionTitle}>Riwayat Pengajuan</Text>
 
-        {/* History */}
-        <Text style={styles.sectionTitle}>Riwayat Pengajuan</Text>
-
-        {content}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      {content}
 
       {/* Detail Modal */}
       <Modal
@@ -502,9 +491,7 @@ export default function IzinScreen() {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Status</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(detailItem.status, colors) }]}>
-                    <Text style={styles.statusText}>{detailItem.status}</Text>
-                  </View>
+                  <StatusBadge label={detailItem.status} tone={getStatusTone(detailItem.status)} size="medium" />
                 </View>
                 {detailItem.reason ? (
                   <View style={styles.detailRow}>
@@ -551,8 +538,9 @@ export default function IzinScreen() {
                             <TouchableOpacity
                               style={styles.removeBtn}
                               onPress={() => removeImage(i, imageUploadService)}
+                              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             >
-                              <Text style={styles.removeBtnText}>✕</Text>
+                              <Ionicons name="close" size={14} color="#fff" />
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -656,74 +644,23 @@ export default function IzinScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </View>
+    </ScreenContainer>
   );
 }
 
-const IzinSkeleton = () => {
-  const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  return (
-    <>
-      {[1, 2, 3].map((_, i) => (
-        <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonRow}>
-            <View style={styles.skeletonTitle} />
-            <View style={styles.skeletonBadge} />
-          </View>
-          <View style={styles.skeletonLine} />
-        </View>
-      ))}
-    </>
-  );
-};
-
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: c.primarySoft,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: c.onGradient,
-    marginBottom: 5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  applyButton: {
-    backgroundColor: c.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  applyButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: c.onGradient,
-  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: c.text,
+    color: c.textStrong,
     marginBottom: 12,
   },
   izinCard: {
     backgroundColor: c.card,
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -740,17 +677,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   izinType: {
     fontSize: 15,
     fontWeight: "600",
-    color: c.text,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: c.textMuted,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "600",
+    color: c.textStrong,
   },
   izinDetails: {
     flexDirection: "row",
@@ -764,71 +691,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   reasonText: {
     fontSize: 12,
     color: c.textSecondary,
-    marginTop: 8,
     lineHeight: 18,
+    flex: 1,
   },
-  pendingDot: {
-    fontSize: 14,
-  },
-
-  skeletonCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-
-  skeletonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  skeletonTitle: {
-    width: "50%",
-    height: 14,
-    borderRadius: 8,
-    backgroundColor: c.border,
-  },
-
-  skeletonBadge: {
-    width: 60,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: c.border,
-  },
-
-  skeletonLine: {
-    width: "40%",
-    height: 12,
-    borderRadius: 8,
-    backgroundColor: c.border,
-  },
-
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-
-  emptyIcon: {
-    fontSize: 42,
-    marginBottom: 12,
-  },
-
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: c.text,
-    marginBottom: 6,
-  },
-
-  emptySubtitle: {
-    fontSize: 13,
-    color: c.textSecondary,
-    textAlign: "center",
-  },
-
   // Detail modal
   modalOverlay: {
     flex: 1,
@@ -837,8 +702,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   modalContent: {
     backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 24,
     paddingBottom: 40,
     maxHeight: "85%",

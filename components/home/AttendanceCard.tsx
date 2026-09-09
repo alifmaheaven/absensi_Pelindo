@@ -27,8 +27,6 @@ export function mapTimeToColor(
   container: string;
   button: string;
 } {
-  const isDark = theme ? (theme.background === "#121212" || theme.surface === "#1e1e1e") : false;
-
   // Netral mengikuti tema
   const neutral = theme
     ? { text: theme.text, container: theme.surface, button: theme.primary }
@@ -80,20 +78,20 @@ export function mapTimeToColor(
   const diffMs = targetTime.getTime() - scheduledTime.getTime();
 
   // 3. Bandingkan waktu
-  // Late / Early (Peringatan/Bahaya) -> dangerSoft, teks kontras tinggi (Light: 7.16:1, Dark: 16.18:1)
-  // On-time (Baik) -> successSoft, teks kontras tinggi (Light: 6.34:1, Dark: 13.98:1)
+  // Late / Early (Peringatan/Bahaya) -> dangerSoft, token theme.danger
+  // On-time (Baik) -> successSoft, token theme.success
   const isLate = type === "checkin" ? diffMs > graceMs : diffMs < -graceMs;
   if (isLate) {
     return {
-      text: isDark ? "#FFFFFF" : "#991B1B",
+      text: theme ? theme.danger : "#991B1B",
       container: theme ? theme.dangerSoft : "#FFE9E9",
-      button: isDark ? "#DC2626" : "#B30000",
+      button: theme ? theme.danger : "#DC2626",
     };
   } else {
     return {
-      text: isDark ? "#FFFFFF" : "#166534",
+      text: theme ? theme.success : "#166534",
       container: theme ? theme.successSoft : "#E8F5E9",
-      button: "#0D7A53",
+      button: theme ? theme.success : "#0D7A53",
     };
   }
 }
@@ -121,16 +119,15 @@ export default function AttendanceCard({
   isOverdue,
 }: AttendanceCardProps) {
   const theme = useThemeColors();
-  const isDark = theme ? (theme.background === "#121212" || theme.surface === "#1e1e1e") : false;
   const colors = mapTimeToColor(time, type, shift, theme, shiftDate);
   const formattedTime = getHourMinute(time);
 
   // Default styles based on type (fallback if time is null/empty)
   // Khusus overdue pada checkout belum selesai: tampilkan styling alert
   const isOverdueAlert = isOverdue && type === "checkout" && !time;
-  const backgroundColor = time ? colors.container : isOverdueAlert ? (theme ? theme.dangerSoft : "#FFE9E9") : theme.surface;
-  const textColor = time ? colors.text : isOverdueAlert ? (isDark ? "#FFFFFF" : "#991B1B") : theme.text;
-  const buttonColor = time ? colors.button : isOverdueAlert ? (isDark ? "#DC2626" : "#B30000") : theme.primary;
+  const backgroundColor = time ? colors.container : isOverdueAlert ? theme.dangerSoft : theme.surface;
+  const textColor = time ? colors.text : isOverdueAlert ? theme.danger : theme.text;
+  const buttonColor = time ? colors.button : isOverdueAlert ? theme.danger : theme.primary;
 
   const cardTitle = type === "checkin" ? "Check in" : "Check out";
 

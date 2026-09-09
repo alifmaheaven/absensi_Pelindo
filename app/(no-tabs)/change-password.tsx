@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function ChangePasswordScreen() {
   const colors = useThemeColors();
@@ -95,7 +96,7 @@ export default function ChangePasswordScreen() {
           {/* Icon */}
           <View style={styles.iconSection}>
             <View style={styles.iconContainer}>
-              <Text style={{ fontSize: 36 }}>🔒</Text>
+              <Ionicons name="lock-closed" size={32} color={colors.primary} />
             </View>
             <Text style={styles.iconDescription}>
               Masukkan password baru Anda

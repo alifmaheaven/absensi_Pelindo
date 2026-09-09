@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
   Linking,
@@ -30,7 +30,7 @@ export default function NotificationPermissionBanner({
   return (
     <View style={styles.banner}>
       <View style={styles.iconWrap}>
-        <Feather name="bell-off" size={20} color={colors.warning} />
+        <Ionicons name="notifications-off-outline" size={20} color={colors.warning} />
       </View>
 
       <View style={styles.textWrap}>
@@ -42,6 +42,7 @@ export default function NotificationPermissionBanner({
           style={styles.settingButton}
           onPress={handleOpenSettings}
           activeOpacity={0.8}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Text style={styles.settingButtonText}>Buka Pengaturan</Text>
         </TouchableOpacity>
@@ -50,10 +51,10 @@ export default function NotificationPermissionBanner({
       <TouchableOpacity
         style={styles.closeButton}
         onPress={onDismiss}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         activeOpacity={0.7}
       >
-        <Feather name="x" size={18} color={colors.textSecondary} />
+        <Ionicons name="close" size={18} color={colors.textSecondary} />
       </TouchableOpacity>
     </View>
   );

@@ -1,6 +1,7 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState } from "react";
 import { View, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import NetInfo from "@react-native-community/netinfo";
 import { getPendingCount, getFailedAttendanceCount, startOfflineSync } from "@/lib/offlineQueue";
 
@@ -46,10 +47,14 @@ export default function OfflineBanner() {
           backgroundColor: colors.danger,
           paddingHorizontal: 16,
           paddingVertical: 8,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
+        <Ionicons name="warning" size={14} color={colors.onGradient} style={{ marginRight: 6 }} />
         <Text style={{ color: colors.onGradient, fontSize: 12, textAlign: "center", fontWeight: "600" }}>
-          {`⚠️ ${failedCount} data absensi offline gagal kirim. Bukti tersimpan, harap lapor atasan.`}
+          {`${failedCount} data absensi offline gagal kirim. Bukti tersimpan, harap lapor atasan.`}
         </Text>
       </View>
     );

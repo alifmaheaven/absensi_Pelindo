@@ -698,9 +698,12 @@ export default function TicketingCreateScreen() {
                     {!loadingImage && (
                       <TouchableOpacity
                         style={styles.removeImageButton}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         onPress={() => removeImage(index, imageUploadService)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Hapus foto"
                       >
-                        <Text style={styles.removeImageText}>✕</Text>
+                        <Ionicons name="close" size={14} color={colors.onGradient} />
                       </TouchableOpacity>
                     )}
                     {loadingImage && (
@@ -1008,9 +1011,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     top: 6,
     right: 6,
     backgroundColor: c.overlay,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,

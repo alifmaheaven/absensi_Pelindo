@@ -9,6 +9,7 @@ import {
   useMemo,
 } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckRounded, CloseRounded, InfoOutlineRounded } from "../icon";
 
 // Toast Component
@@ -23,7 +24,8 @@ interface ToastProps {
 
 export function Toast({ visible, message, type, onHide }: ToastProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-100)).current;
 
@@ -145,7 +147,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={{ showToast, hideToast }}>
       {children}
 
-      {/* 🔥 Toast GLOBAL */}
+      {/* Toast GLOBAL */}
       <Toast
         visible={toast.visible}
         message={toast.message}
@@ -164,11 +166,11 @@ export function useToast() {
   return ctx;
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets?: { top: number }) => StyleSheet.create({
   // Toast Styles
   toastContainer: {
     position: "absolute",
-    top: 50,
+    top: (insets?.top ?? 20) + 8,
     left: 20,
     right: 20,
     paddingHorizontal: 20,
@@ -176,7 +178,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",
-    zIndex: 9999,
+    zIndex: 99999,
     elevation: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },

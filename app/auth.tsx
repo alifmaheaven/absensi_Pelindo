@@ -153,9 +153,9 @@ export default function LoginScreen() {
         >
           {/* Login Form Container */}
           <View style={styles.formContainer}>
-            <Text style={styles.title}>Login to Continue</Text>
+            <Text style={styles.title}>Masuk ke Akun</Text>
             <Text style={styles.subtitle}>
-              Enter your email and password to continue
+              Masukkan email dan kata sandi untuk melanjutkan
             </Text>
 
             {/* Email Input */}
@@ -176,11 +176,11 @@ export default function LoginScreen() {
 
             {/* Password Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Password</Text>
+              <Text style={styles.inputLabel}>Kata Sandi</Text>
               <View style={{ justifyContent: "center" }}>
                 <TextInput
                   style={[styles.input, { paddingRight: 50 }]}
-                  placeholder="Masukkan password"
+                  placeholder="Masukkan kata sandi"
                   placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
@@ -188,8 +188,18 @@ export default function LoginScreen() {
                   maxLength={128}
                 />
                 <TouchableOpacity
-                  style={{ position: "absolute", right: 16 }}
+                  style={{
+                    position: "absolute",
+                    right: 4,
+                    minWidth: 44,
+                    minHeight: 44,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   onPress={() => setShowPassword(!showPassword)}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}
                 >
                   <Ionicons
                     name={showPassword ? "eye" : "eye-off"}
@@ -213,7 +223,13 @@ export default function LoginScreen() {
                     <Text style={{ color: colors.textMuted }}>Gagal memuat</Text>
                   )}
                 </View>
-                <TouchableOpacity onPress={fetchCaptcha} style={styles.refreshBtn}>
+                <TouchableOpacity
+                  onPress={fetchCaptcha}
+                  style={styles.refreshBtn}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Muat ulang captcha"
+                >
                   <Ionicons name="refresh" size={24} color={colors.primary} />
                 </TouchableOpacity>
               </View>
@@ -241,6 +257,7 @@ export default function LoginScreen() {
               <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setRememberMe(!rememberMe)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <View
                   style={[
@@ -248,13 +265,16 @@ export default function LoginScreen() {
                     rememberMe && styles.checkboxChecked,
                   ]}
                 >
-                  {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+                  {rememberMe && <Ionicons name="checkmark" size={14} color="#ffffff" />}
                 </View>
-                <Text style={styles.checkboxLabel}>Remember Me</Text>
+                <Text style={styles.checkboxLabel}>Ingat Saya</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={comingSoon}>
-                <Text style={styles.forgotPassword}>Forgot password</Text>
+              <TouchableOpacity
+                onPress={comingSoon}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.forgotPassword}>Lupa kata sandi</Text>
               </TouchableOpacity>
             </View>
 
@@ -263,19 +283,12 @@ export default function LoginScreen() {
               style={[styles.loginButton, loading && styles.loginButtonLoading]}
               onPress={handleLogin}
               disabled={loading}
+              accessibilityRole="button"
             >
               <Text style={styles.loginButtonText}>
-                {loading ? "Loading..." : "Masuk"}
+                {loading ? "Memuat..." : "Masuk"}
               </Text>
             </TouchableOpacity>
-
-            {/* Register Link */}
-            <View style={styles.registerContainer}>
-              <Text style={styles.registerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={comingSoon}>
-                <Text style={styles.registerLink}>register here</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -357,7 +370,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   svgBox: {
     flex: 1,
     height: 60,
-    backgroundColor: c.inputBg,
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: c.borderStrong,

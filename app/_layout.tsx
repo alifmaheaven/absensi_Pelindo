@@ -10,8 +10,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import "../lib/i18n";
-import { useColorScheme } from "react-native";
-import { lightTheme, darkTheme } from "@/lib/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Colors } from "@/constants/theme";
 import { getToken, saveToken } from "@/lib/storage";
 import API from "@/lib/axios";
 
@@ -22,19 +22,20 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  const deviceColorScheme = useColorScheme();
-  const isDark = deviceColorScheme === "dark";
-  const colorScheme = deviceColorScheme || "light";
+  const activeScheme = useColorScheme();
+  const isDark = activeScheme === "dark";
+  const activeColors = Colors[isDark ? "dark" : "light"];
+
   const navTheme = {
     ...DefaultTheme,
     dark: isDark,
     colors: {
       ...DefaultTheme.colors,
-      background: isDark ? darkTheme.background : lightTheme.background,
-      card: isDark ? darkTheme.card : lightTheme.card,
-      text: isDark ? darkTheme.text : lightTheme.text,
-      border: isDark ? darkTheme.border : lightTheme.border,
-      primary: isDark ? darkTheme.primary : lightTheme.primary,
+      background: activeColors.background,
+      card: activeColors.card,
+      text: activeColors.text,
+      border: activeColors.border,
+      primary: activeColors.primary,
     },
   };
 

@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded, ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { getTodayRoutines, startDailyRoutineLog, mapDailyRoutineError } from "@/services/dailyRoutine";
@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RoutineProgressCard from "@/components/daily-routine/RoutineProgressCard";
+import RoutineListSkeleton from "@/components/daily-routine/RoutineListSkeleton";
 import { formatRoutineFrequency } from "@/utils/dailyRoutineHelpers";
 
 interface IErrorState {
@@ -27,6 +28,7 @@ interface IErrorState {
 
 export default function DailyRoutineListScreen() {
   const colors = useThemeColors();
+  const isDark = useIsDarkTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
   const { showToast } = useToast();
@@ -180,42 +182,16 @@ export default function DailyRoutineListScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => fetchData(true)}
+            colors={[colors.primary]}
+            tintColor={isDark ? "#38bdf8" : colors.primary}
+          />
         }
       >
         {loading ? (
-          // Skeleton loader (M8 - P2)
-          <View style={styles.skeletonContainer}>
-            {/* Skeleton Ringkasan Progress */}
-            <View style={[styles.skeletonCard, { marginBottom: 4 }]}>
-              <View style={styles.skeletonHeaderRow}>
-                <View style={[styles.skeletonTitleBar, { width: "55%" }]} />
-                <View style={[styles.skeletonTextSmall, { width: 50 }]} />
-              </View>
-              <View style={[styles.skeletonTitleBar, { width: "40%", height: 14, marginBottom: 10 }]} />
-              <View style={[styles.skeletonDescBar, { height: 8, borderRadius: 4, marginBottom: 12 }]} />
-              <View style={styles.skeletonInfoRow}>
-                <View style={styles.skeletonTextSmall} />
-                <View style={styles.skeletonTextSmall} />
-              </View>
-            </View>
-            {[1, 2].map((k) => (
-              <View key={k} style={styles.skeletonCard}>
-                <View style={styles.skeletonHeaderRow}>
-                  <View style={styles.skeletonTitleBar} />
-                  <View style={styles.skeletonBadge} />
-                </View>
-                <View style={styles.skeletonDescBar} />
-                <View style={styles.skeletonDescBarShort} />
-                <View style={styles.skeletonDivider} />
-                <View style={styles.skeletonInfoRow}>
-                  <View style={styles.skeletonTextSmall} />
-                  <View style={styles.skeletonTextSmall} />
-                </View>
-                <View style={styles.skeletonButton} />
-              </View>
-            ))}
-          </View>
+          <RoutineListSkeleton />
         ) : (
           <View>
             {/* Kartu Progress Tugas Hari Ini (RPT-1: 123 §5 / FR-RPT-DR-07) */}
@@ -371,6 +347,7 @@ const makeStyles = (c: ThemeColors) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: c.background,
     },
     headerGradient: {
       height: 140,
@@ -380,21 +357,23 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingTop: 10,
     },
     headerTitle: {
       fontSize: 18,
-      fontWeight: "600",
+      fontWeight: "700",
       color: c.onGradient,
     },
     backButton: {
-      padding: 8,
-      borderRadius: 20,
+      minWidth: 44,
+      minHeight: 44,
+      justifyContent: "center",
+      alignItems: "center",
     },
     card: {
       flex: 1,
-      backgroundColor: c.surface,
+      backgroundColor: c.background,
       marginTop: -20,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
@@ -502,7 +481,9 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.successSoft,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 10,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: c.success,
     },
     completedBadgeText: {
       fontSize: 12,
@@ -513,7 +494,9 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.primarySoft,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 10,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: c.primary,
     },
     inProgressBadgeText: {
       fontSize: 12,
@@ -524,7 +507,9 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.warningSoft,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 10,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: c.warning,
     },
     pendingBadgeText: {
       fontSize: 12,
@@ -554,71 +539,5 @@ const makeStyles = (c: ThemeColors) =>
       color: c.onGradient,
       fontSize: 15,
       fontWeight: "700",
-    },
-
-    // Skeleton styles
-    skeletonContainer: {
-      gap: 16,
-      marginTop: 4,
-    },
-    skeletonCard: {
-      backgroundColor: c.card,
-      borderRadius: 16,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    skeletonHeaderRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: 12,
-    },
-    skeletonTitleBar: {
-      width: "55%",
-      height: 18,
-      borderRadius: 6,
-      backgroundColor: c.borderStrong,
-    },
-    skeletonBadge: {
-      width: 60,
-      height: 22,
-      borderRadius: 10,
-      backgroundColor: c.border,
-    },
-    skeletonDescBar: {
-      width: "90%",
-      height: 12,
-      borderRadius: 4,
-      backgroundColor: c.border,
-      marginBottom: 6,
-    },
-    skeletonDescBarShort: {
-      width: "60%",
-      height: 12,
-      borderRadius: 4,
-      backgroundColor: c.border,
-      marginBottom: 14,
-    },
-    skeletonDivider: {
-      height: 1,
-      backgroundColor: c.border,
-      marginBottom: 12,
-    },
-    skeletonInfoRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 16,
-    },
-    skeletonTextSmall: {
-      width: 80,
-      height: 12,
-      borderRadius: 4,
-      backgroundColor: c.border,
-    },
-    skeletonButton: {
-      height: 48,
-      borderRadius: 12,
-      backgroundColor: c.borderStrong,
     },
   });

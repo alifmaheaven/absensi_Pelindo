@@ -23,6 +23,7 @@ import { IAttendance, THttpErrorResult } from "@/types";
 import { parseWIBDate } from "@/utils/utils";
 import NetInfo from "@react-native-community/netinfo";
 import { queueOfflineCheckOut } from "@/lib/offlineQueue";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -410,7 +411,7 @@ export default function CheckoutScreen() {
               {!location ? (
                 permissionDenied ? (
                   <View style={styles.loadingContainer}>
-                    <Text style={styles.locationDeniedEmoji}>📍</Text>
+                    <Ionicons name="location-outline" size={40} color={colors.danger} style={{ marginBottom: 10 }} />
                     <Text style={styles.locationDeniedTitle}>
                       Izin lokasi diperlukan
                     </Text>
@@ -459,7 +460,7 @@ export default function CheckoutScreen() {
             {activeCheckin ? (
               <View style={[styles.locationOption, styles.locationOptionSelected]}>
                 <View style={styles.locationIconContainer}>
-                  <Text style={{ fontSize: 22 }}>📍</Text>
+                  <Ionicons name="location" size={20} color={colors.primary} />
                 </View>
                 <View style={styles.locationTextContainer}>
                   <Text style={styles.locationTitle}>{activeCheckin?.name || activeCheckin?.code || "Site"}</Text>
@@ -470,7 +471,7 @@ export default function CheckoutScreen() {
               </View>
             ) : (
               <View style={styles.emptyStateContainer}>
-                <Text style={styles.emptyStateEmoji}>📍</Text>
+                <Ionicons name="location-outline" size={32} color={colors.primary} style={{ marginBottom: 8 }} />
                 <Text style={styles.emptyStateText}>
                   Data check-in tidak ditemukan
                 </Text>
@@ -516,7 +517,8 @@ export default function CheckoutScreen() {
                       />
                     </TouchableOpacity>
                     <View style={styles.imageLockedBadge}>
-                      <Text style={styles.imageLockedText}>🔒 Check In</Text>
+                      <Ionicons name="lock-closed" size={10} color={colors.onGradient} style={{ marginRight: 3 }} />
+                      <Text style={styles.imageLockedText}>Check In</Text>
                     </View>
                   </View>
                 ))}
@@ -551,9 +553,12 @@ export default function CheckoutScreen() {
                       {!loadingImage && (
                         <TouchableOpacity
                           style={styles.removeImageButton}
+                          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                           onPress={() => removeImage(fullIndex, uploadService)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Hapus foto"
                         >
-                          <Text style={styles.removeImageText}>✕</Text>
+                          <Ionicons name="close" size={14} color={colors.onGradient} />
                         </TouchableOpacity>
                       )}
                       {loadingImage && (
@@ -681,8 +686,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24 },
   settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
-  locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: "rgba(255, 255, 255, 0.95)", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  locationOverlayText: { fontSize: 10, color: c.text, textAlign: "center", fontWeight: "600" },
+  locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
+  locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600" },
   sectionTitle: { fontSize: 15, fontWeight: "bold", color: c.textStrong, marginBottom: 10 },
   requiredSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   requiredBadge: { fontSize: 12, fontWeight: "700", color: c.danger },
@@ -699,11 +704,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
   imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: c.border },
   imagePreview: { width: "100%", height: "100%" },
-  imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(30, 144, 255, 0.88)", paddingVertical: 4, alignItems: "center", justifyContent: "center" },
+  imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(30, 144, 255, 0.88)", paddingVertical: 4, flexDirection: "row", alignItems: "center", justifyContent: "center" },
   imageLockedText: { color: c.onGradient, fontSize: 9, fontWeight: "700" },
   emptyEvidenceCard: { backgroundColor: c.inputBg, borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: c.border },
   emptyEvidenceText: { fontSize: 12, color: c.textMuted },
-  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: c.overlay, width: 24, height: 24, borderRadius: 12, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: c.onGradient },
+  removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: c.overlay, width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: c.onGradient },
   removeImageText: { color: c.onGradient, fontSize: 10, fontWeight: "bold" },
   uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: c.primary, borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: c.primarySoft },
   uploadButtonIcon: { marginRight: 8, fontSize: 18 },

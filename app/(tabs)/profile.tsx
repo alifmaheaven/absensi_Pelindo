@@ -1,4 +1,10 @@
-import { useThemeColors, useThemePreference, type ThemeColors, type ThemePreference } from "@/hooks/use-theme-color";
+import {
+  useThemeColors,
+  useThemePreference,
+  useIsDarkTheme,
+  type ThemeColors,
+  type ThemePreference,
+} from "@/hooks/use-theme-color";
 import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
@@ -8,9 +14,10 @@ import API from "@/lib/axios";
 import { getLatestVersion } from "@/services/version";
 import { getAttendanceMySummary, type IAttendanceMySummary } from "@/services/attendance";
 import Constants from "expo-constants";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useState, useMemo, useCallback } from "react";
+import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Alert,
@@ -49,16 +56,18 @@ const getWIBMonthDisplay = (date: Date = new Date()): string => {
 const THEME_OPTIONS: {
   key: ThemePreference;
   label: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
 }[] = [
-  { key: "system", label: "Sistem", icon: "📱" },
-  { key: "light", label: "Terang", icon: "☀️" },
-  { key: "dark", label: "Gelap", icon: "🌙" },
+  { key: "system", label: "Sistem", icon: "phone-portrait-outline" },
+  { key: "light", label: "Terang", icon: "sunny-outline" },
+  { key: "dark", label: "Gelap", icon: "moon-outline" },
 ];
 
 export default function ProfileScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { showToast } = useToast();
@@ -146,9 +155,24 @@ export default function ProfileScreen() {
   ];
 
   const menuItems = [
-    { icon: "👤", label: "Edit Profile", subtitle: "Ubah informasi akun", onPress: () => router.push("/(no-tabs)/edit-profile") },
-    { icon: "🔒", label: "Keamanan", subtitle: "Password dan keamanan", onPress: () => router.push("/(no-tabs)/change-password") },
-    { icon: "ℹ️", label: "Tentang Aplikasi", subtitle: `Versi ${APP_VERSION}`, onPress: () => setAboutModalVisible(true) },
+    {
+      icon: "person-outline" as keyof typeof Ionicons.glyphMap,
+      label: "Edit Profile",
+      subtitle: "Ubah informasi akun",
+      onPress: () => router.push("/(no-tabs)/edit-profile"),
+    },
+    {
+      icon: "lock-closed-outline" as keyof typeof Ionicons.glyphMap,
+      label: "Keamanan",
+      subtitle: "Password dan keamanan",
+      onPress: () => router.push("/(no-tabs)/change-password"),
+    },
+    {
+      icon: "information-circle-outline" as keyof typeof Ionicons.glyphMap,
+      label: "Tentang Aplikasi",
+      subtitle: `Versi ${APP_VERSION}`,
+      onPress: () => setAboutModalVisible(true),
+    },
   ];
 
   const handleCheckUpdate = async () => {
@@ -210,18 +234,13 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={["#1e90ff", "#4dabf7"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
+      <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <PersonFill color="#fff" {...styles.avatarIcon} />
+          <PersonFill color={colors.textStrong} {...styles.avatarIcon} />
         </View>
         <Text style={styles.userName}>{smartCapitalize(user?.name)}</Text>
         <Text style={styles.userEmail}>{user?.email}</Text>
-      </LinearGradient>
+      </View>
 
       <ScrollView
         style={styles.content}
@@ -230,6 +249,8 @@ export default function ProfileScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={isDark ? "#38bdf8" : colors.primary}
           />
         }
       >
@@ -278,20 +299,29 @@ export default function ProfileScreen() {
 
         <View style={styles.menuCard}>
           {menuItems.map((item, index) => (
-            <TouchableOpacity key={index} style={styles.menuItem} onPress={item.onPress}>
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+            <TouchableOpacity
+              key={index}
+              style={styles.menuItem}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuIconWrap}>
+                <Ionicons name={item.icon} size={20} color={colors.primary} />
+              </View>
               <View style={styles.menuContent}>
                 <Text style={styles.menuLabel}>{item.label}</Text>
                 <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
               </View>
-              <Text style={styles.menuArrow}>›</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           ))}
 
           {/* Baris / Segment Pilihan Tema */}
           <View style={styles.themeItem}>
             <View style={styles.themeRow}>
-              <Text style={styles.menuIcon}>🌓</Text>
+              <View style={styles.menuIconWrap}>
+                <Ionicons name="color-palette-outline" size={20} color={colors.primary} />
+              </View>
               <View style={styles.menuContent}>
                 <Text style={styles.menuLabel}>Tema</Text>
                 <Text style={styles.menuSubtitle}>
@@ -322,10 +352,15 @@ export default function ProfileScreen() {
                   >
                     {isSelected && (
                       <View style={styles.themeCheckBadge}>
-                        <Text style={styles.themeCheckText}>✓</Text>
+                        <Ionicons name="checkmark" size={10} color="#fff" />
                       </View>
                     )}
-                    <Text style={styles.themeSegmentIcon}>{opt.icon}</Text>
+                    <Ionicons
+                      name={opt.icon}
+                      size={20}
+                      color={isSelected ? colors.primary : colors.textSecondary}
+                      style={{ marginBottom: 4 }}
+                    />
                     <Text
                       style={[
                         styles.themeSegmentLabel,
@@ -341,8 +376,12 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutIcon}>🚪</Text>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Keluar</Text>
         </TouchableOpacity>
 
@@ -363,12 +402,14 @@ export default function ProfileScreen() {
 
             {/* App Icon */}
             <View style={styles.modalAppIcon}>
-              <Text style={styles.modalAppIconText}>📋</Text>
+              <Ionicons name="cube-outline" size={32} color={colors.primary} />
             </View>
 
             {/* App Name */}
-            <Text style={styles.modalAppName}>EOS Monitoring System</Text>
-            <Text style={styles.modalAppDesc}>Sistem monitoring dan manajemen daily routine operasional</Text>
+            <Text style={styles.modalAppName}>Portal Tiketing & Operasional Pelindo</Text>
+            <Text style={styles.modalAppDesc}>
+              Sistem monitoring presensi, tiket kendala, dan daily routine operasional
+            </Text>
 
             {/* Divider */}
             <View style={styles.modalDivider} />
@@ -389,8 +430,9 @@ export default function ProfileScreen() {
               style={[styles.modalUpdateButton, checkingUpdate && { opacity: 0.7 }]}
               onPress={handleCheckUpdate}
               disabled={checkingUpdate}
+              activeOpacity={0.8}
             >
-              <Text style={styles.modalUpdateIcon}>🔄</Text>
+              <Ionicons name="refresh-outline" size={18} color={colors.onGradient} style={{ marginRight: 8 }} />
               <Text style={styles.modalUpdateText}>
                 {checkingUpdate ? "Memeriksa..." : "Periksa Update"}
               </Text>
@@ -410,49 +452,56 @@ export default function ProfileScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: c.surface,
+    backgroundColor: c.background,
   },
   header: {
-    paddingTop: 60,
+    paddingTop: Math.max(insets.top + 16, 32),
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 24,
     alignItems: "center",
+    backgroundColor: c.card,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(255,255,255,0.3)",
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 12,
   },
   avatarIcon: {
-    width: 50,
-    height: 50,
+    width: 38,
+    height: 38,
   },
   userName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
-    color: c.onGradient,
-    marginBottom: 5,
+    color: c.textStrong,
+    marginBottom: 4,
   },
   userEmail: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    color: c.textSecondary,
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 16,
   },
   summaryCard: {
     backgroundColor: c.card,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -486,17 +535,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
     alignItems: "center",
     justifyContent: "center",
   },
   summaryChipCount: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "700",
     marginBottom: 2,
   },
   summaryChipLabel: {
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "500",
     textAlign: "center",
   },
   summaryErrorContainer: {
@@ -522,6 +573,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   menuCard: {
     backgroundColor: c.card,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     overflow: "hidden",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -536,26 +589,29 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: c.border,
   },
-  menuIcon: {
-    fontSize: 24,
-    marginRight: 15,
+  menuIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
   },
   menuContent: {
     flex: 1,
   },
   menuLabel: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: c.text,
+    fontSize: 15,
+    fontWeight: "600",
+    color: c.textStrong,
   },
   menuSubtitle: {
     fontSize: 12,
     color: c.textMuted,
     marginTop: 2,
-  },
-  menuArrow: {
-    fontSize: 24,
-    color: c.textFaint,
   },
   themeItem: {
     padding: 16,
@@ -586,10 +642,6 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderColor: c.primary,
     backgroundColor: c.primarySoft,
   },
-  themeSegmentIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
   themeSegmentLabel: {
     fontSize: 12,
     fontWeight: "500",
@@ -611,29 +663,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  themeCheckText: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: c.onGradient,
-    lineHeight: 12,
-  },
   logoutButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: c.card,
     marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: c.danger,
   },
-  logoutIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
   logoutText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: c.danger,
   },
@@ -646,8 +689,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   modalContainer: {
     backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 40,
@@ -669,20 +712,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  modalAppIconText: {
-    fontSize: 30,
-  },
   modalAppName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
     color: c.textStrong,
     marginBottom: 4,
+    textAlign: "center",
   },
   modalAppDesc: {
     fontSize: 13,
     color: c.textMuted,
     textAlign: "center",
     marginBottom: 16,
+    lineHeight: 18,
   },
   modalDivider: {
     width: "100%",
@@ -695,7 +737,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: c.border,
   },
@@ -706,7 +748,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   modalInfoValue: {
     fontSize: 14,
     fontWeight: "600",
-    color: c.text,
+    color: c.textStrong,
   },
   modalUpdateButton: {
     flexDirection: "row",
@@ -714,13 +756,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     backgroundColor: c.primary,
     width: "100%",
-    padding: 14,
+    minHeight: 48,
     borderRadius: 12,
     marginTop: 20,
-  },
-  modalUpdateIcon: {
-    fontSize: 16,
-    marginRight: 8,
   },
   modalUpdateText: {
     fontSize: 15,
@@ -730,6 +768,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   modalCloseButton: {
     marginTop: 12,
     padding: 10,
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalCloseText: {
     fontSize: 14,

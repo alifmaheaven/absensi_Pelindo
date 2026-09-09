@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import React, { useEffect, useMemo } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { HapticTab } from "@/components/haptic-tab";
@@ -13,26 +14,27 @@ import { SvgProps } from "react-native-svg";
 
 // Custom Tab Bar Icon Component
 function TabIcon({
-  icon,
+  icon: Icon,
   focused,
 }: {
   icon: (props: SvgProps) => React.JSX.Element;
   focused: boolean;
 }) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const Icon = icon;
   return (
-    <View
-      style={[styles.iconContainer, focused && styles.iconContainerFocused]}
-    >
-      <Icon color={"#fff"} />
+    <View style={{ alignItems: "center", justifyContent: "center", width: 28, height: 28 }}>
+      <Icon
+        color={focused ? colors.primary : colors.textSecondary}
+        width={22}
+        height={22}
+      />
     </View>
   );
 }
 
 export default function TabLayout() {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
   const { checking } = useAuthGuard("auth");
 
   // Must be before any early returns (React Rules of Hooks)
@@ -49,7 +51,7 @@ export default function TabLayout() {
     initAuth();
   }, []);
 
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
 
   if (checking) {
     return (
@@ -63,7 +65,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarInactiveTintColor: colors.textSecondary,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: styles.tabBar,
@@ -134,43 +136,31 @@ export default function TabLayout() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
-  tabBar: {
-    backgroundColor: c.tabBar,
-    borderTopWidth: 0,
-    elevation: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    height: 60,
-    paddingTop: 4,
-    paddingBottom: 4,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    position: 'absolute',
-    bottom: 10,
-    left: 0,
-    right: 0,
-  },
-  tabBarLabel: {
-    fontSize: 10,
-    fontWeight: "500",
-    marginVertical: 4,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    marginVertical: 2,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 12,
-    backgroundColor: c.textMuted,
-  },
-  iconContainerFocused: {
-    backgroundColor: c.primary,
-  },
-  icon: {
-    fontSize: 22,
-  },
-});
+const makeStyles = (c: ThemeColors, insets?: { bottom: number }) => {
+  const bottomInset = (insets?.bottom ?? 0) > 0 ? insets!.bottom : 10;
+  return StyleSheet.create({
+    tabBar: {
+      backgroundColor: c.tabBar,
+      borderTopWidth: 0,
+      elevation: 15,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      height: 60,
+      paddingTop: 4,
+      paddingBottom: 4,
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      position: "absolute",
+      bottom: bottomInset,
+      left: 0,
+      right: 0,
+    },
+    tabBarLabel: {
+      fontSize: 10,
+      fontWeight: "500",
+      marginVertical: 4,
+    },
+  });
+};

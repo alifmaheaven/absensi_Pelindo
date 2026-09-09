@@ -517,26 +517,26 @@ useFocusEffect(
               contentContainerStyle={styles.scrollContent}
             >
               {/* Select Location */}
-              <Text style={styles.sectionTitle}>Edit Ticket</Text>
+              <Text style={styles.sectionTitle}>Ubah Laporan Tiket</Text>
               <Text style={styles.sectionDescription}>
-                Edit your IT support ticket
+                Perbarui laporan kendala IT Anda
               </Text>
 
               <View
                 style={{
                   width: "100%",
-                  height: 1,
-                  backgroundColor: colors.border,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
                   marginVertical: 12,
                 }}
               />
 
               {/* Notes */}
-              <Text style={styles.sectionTitle}>Title</Text>
+              <Text style={styles.sectionTitle}>Judul Kendala</Text>
               <View style={styles.titleContainer}>
                 <TextInput
                   style={styles.titleInput}
-                  placeholder="Enter Problem Title"
+                  placeholder="Masukkan Judul Kendala"
                   placeholderTextColor={colors.textMuted}
                   value={title}
                   onChangeText={setTitle}
@@ -773,9 +773,12 @@ useFocusEffect(
                     {!loadingImage && (
                       <TouchableOpacity
                         style={styles.removeImageButton}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                         onPress={() => handleRemoveImage(index)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Hapus foto"
                       >
-                        <Text style={styles.removeImageText}>✕</Text>
+                        <Ionicons name="close" size={14} color={colors.onGradient} />
                       </TouchableOpacity>
                     )}
                     {loadingImage && (
@@ -996,8 +999,8 @@ useFocusEffect(
                                   <Text style={{ fontSize: 11, color: colors.primary }}>
                                     Balas <Text style={{ fontWeight: "700" }}>{replyTo!.userName}</Text>
                                   </Text>
-                                  <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 4 }}>
-                                    <Text style={{ fontSize: 14, color: colors.textMuted }}>✕</Text>
+                                  <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} style={{ marginLeft: 4 }}>
+                                    <Ionicons name="close" size={14} color={colors.textMuted} />
                                   </TouchableOpacity>
                                 </View>
                               ) : null}
@@ -1253,9 +1256,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     top: 6,
     right: 6,
     backgroundColor: c.overlay,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,

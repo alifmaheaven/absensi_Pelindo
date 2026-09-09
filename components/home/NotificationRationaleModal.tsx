@@ -1,5 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
   Modal,
@@ -34,7 +34,7 @@ export default function NotificationRationaleModal({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconCircle}>
-            <Feather name="bell" size={32} color={colors.primary} />
+            <Ionicons name="notifications-outline" size={32} color={colors.primary} />
           </View>
 
           <Text style={styles.title}>Aktifkan Pengingat Shift Kerja</Text>
@@ -87,7 +87,7 @@ const makeStyles = (c: ThemeColors) =>
       width: "100%",
       maxWidth: 360,
       backgroundColor: c.card,
-      borderRadius: 20,
+      borderRadius: 24,
       padding: 24,
       alignItems: "center",
       shadowColor: "#000",
@@ -129,6 +129,7 @@ const makeStyles = (c: ThemeColors) =>
       overflow: "hidden",
     },
     gradientBtn: {
+      minHeight: 48,
       paddingVertical: 12,
       alignItems: "center",
       justifyContent: "center",
@@ -140,6 +141,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     secondaryButton: {
       width: "100%",
+      minHeight: 48,
       paddingVertical: 12,
       borderRadius: 12,
       alignItems: "center",

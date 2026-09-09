@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import AttendanceCard from "@/components/home/AttendanceCard";
 import {
   Bell,
@@ -21,9 +21,10 @@ import {
   parseWIBDate,
   smartCapitalize,
 } from "@/utils/utils";
-import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
   Alert,
@@ -121,7 +122,9 @@ export function getWorkStatus(
 
 export default function HomeScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { user } = useAuthStore();
   const { showToast } = useToast();
@@ -729,292 +732,302 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[colors.primary, colors.background]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.gradient}
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={isDark ? "#38bdf8" : colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={{ paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-            />
-          }
-        >
-          {/* Top Bar */}
-          <View style={styles.topBar}>
-            <View>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.userName}>
-                Sir {smartCapitalize(user?.name)}
-              </Text>
-            </View>
-
-            <View style={styles.rightActions}>
-              {/* Notification */}
-              <TouchableOpacity
-                onPress={handleNotificationPress}
-                style={styles.notificationBtn}
-              >
-                <Bell color="#fff" />
-
-                {unreadCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              {/* Avatar */}
-              <TouchableOpacity
-                onPress={handleAvatarPress}
-                style={styles.avatar}
-              >
-                <PersonFill color="#fff" {...styles.avatarIcon} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* R-BL-11: Pill antrean offline */}
-          {pendingOfflineCount > 0 && (
-            <View style={styles.offlinePillContainer}>
-              <View style={styles.offlinePillTextRow}>
-                <Text style={styles.offlinePillIcon}>⏳</Text>
-                <Text style={styles.offlinePillText}>
-                  {pendingOfflineCount} absensi menunggu sinkronisasi
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.offlineSyncButton,
-                  isSyncingOffline && styles.offlineSyncButtonDisabled,
-                ]}
-                onPress={handleSyncOffline}
-                disabled={isSyncingOffline}
-                activeOpacity={0.8}
-              >
-                {isSyncingOffline ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.offlineSyncButtonText}>Sinkronkan</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Banner Peringatan Izin Notifikasi Nonaktif */}
-          {hasNotifPermission === false && !isNotifBannerDismissed && (
-            <NotificationPermissionBanner
-              onDismiss={() => setIsNotifBannerDismissed(true)}
-            />
-          )}
-
-          {/* Tips Card */}
-          <View style={styles.tipsCard}>
-            <View style={styles.tipsHeader}>
-              <Text style={styles.tipsIcon}>💪</Text>
-              <Text style={styles.tipsTitle}>Tips Hari Ini</Text>
-            </View>
-            <Text style={styles.tipsText}>
-              Jangan lupa untuk istirahat sejenak dan minum air putih secara
-              teratur. Produktivitas terbaik datang dari tubuh yang sehat!
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          <View>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>
+              Sir {smartCapitalize(user?.name)}
             </Text>
           </View>
 
-          {/* Ringkasan Card */}
-          <View style={styles.ringkasanCard}>
-            {/* Header Row */}
-            <View style={styles.ringkasanHeader}>
-              <View style={styles.ringkasanLabelContainer}>
-                <Text style={styles.ringkasanLabel}>Ringkasan</Text>
-              </View>
-              <Text style={styles.ringkasanDate}>
-                {formatDate(currentTime)}
+          <View style={styles.rightActions}>
+            {/* Notification */}
+            <TouchableOpacity
+              onPress={handleNotificationPress}
+              style={styles.notificationBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Bell color={colors.textStrong} />
+
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Avatar */}
+            <TouchableOpacity
+              onPress={handleAvatarPress}
+              style={styles.avatar}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <PersonFill color={colors.textStrong} {...styles.avatarIcon} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* R-BL-11: Pill antrean offline */}
+        {pendingOfflineCount > 0 && (
+          <View style={styles.offlinePillContainer}>
+            <View style={styles.offlinePillTextRow}>
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color={colors.warning}
+                style={styles.offlinePillIcon}
+              />
+              <Text style={styles.offlinePillText}>
+                {pendingOfflineCount} absensi menunggu sinkronisasi
               </Text>
-              <View style={styles.dayBadge}>
-                <Text style={styles.dayIcon}>
-                  <Calender width={20} height={20} color={colors.text} />
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.offlineSyncButton,
+                isSyncingOffline && styles.offlineSyncButtonDisabled,
+              ]}
+              onPress={handleSyncOffline}
+              disabled={isSyncingOffline}
+              activeOpacity={0.8}
+            >
+              {isSyncingOffline ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.offlineSyncButtonText}>Sinkronkan</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Banner Peringatan Izin Notifikasi Nonaktif */}
+        {hasNotifPermission === false && !isNotifBannerDismissed && (
+          <NotificationPermissionBanner
+            onDismiss={() => setIsNotifBannerDismissed(true)}
+          />
+        )}
+
+        {/* Ringkasan Card */}
+        <View style={styles.ringkasanCard}>
+          {/* Header Row */}
+          <View style={styles.ringkasanHeader}>
+            <View style={styles.ringkasanLabelContainer}>
+              <Text style={styles.ringkasanLabel}>Ringkasan</Text>
+            </View>
+            <Text style={styles.ringkasanDate}>
+              {formatDate(currentTime)}
+            </Text>
+            <View style={styles.dayBadge}>
+              <Text style={styles.dayIcon}>
+                <Calender width={20} height={20} color={colors.text} />
+              </Text>
+              <Text style={styles.dayText}>{getDayName(currentTime)}</Text>
+            </View>
+          </View>
+
+          {/* S-MO-4: Banner Shift Malam / Overdue / Pasca-Checkout */}
+          {overnightSessionInfo.isActive && overnightSessionInfo.isOverdue ? (
+            <View style={styles.overdueBanner}>
+              <View style={styles.bannerHeaderRow}>
+                <Ionicons
+                  name="warning"
+                  size={20}
+                  color={colors.danger}
+                  style={styles.bannerIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.overdueTitle}>
+                    WAKTU SHIFT TELAH BERAKHIR (OVERDUE)
+                  </Text>
+                  <Text style={styles.overdueSubtitle}>
+                    {overnightSessionInfo.shift?.name || "Shift Malam"} berakhir pukul{" "}
+                    {overnightSessionInfo.scheduledEndStr}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.bannerDetailBox}>
+                <Text style={styles.bannerDetailText}>
+                  Waktu Sekarang (WIB): {formatTime(currentTime)}
                 </Text>
-                <Text style={styles.dayText}>{getDayName(currentTime)}</Text>
+                <Text style={styles.bannerDetailText}>
+                  Keterlambatan Check Out: {overnightSessionInfo.overdueMinutes} Menit
+                </Text>
+              </View>
+              <Text style={styles.bannerNotice}>
+                Anda belum melakukan Check Out kepulangan. Segera selesaikan absensi agar jam kerja Anda tercatat utuh.
+              </Text>
+            </View>
+          ) : overnightSessionInfo.isActive ? (
+            <View style={styles.overnightBanner}>
+              <View style={styles.bannerHeaderRow}>
+                <Ionicons
+                  name="moon"
+                  size={20}
+                  color={colors.primary}
+                  style={styles.bannerIcon}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.overnightTitle}>
+                    SESI SHIFT MALAM BERJALAN
+                  </Text>
+                  <Text style={styles.overnightSubtitle}>
+                    {overnightSessionInfo.shift?.name || "Shift Malam"}:{" "}
+                    {overnightSessionInfo.shift?.start_time.slice(0, 5)} WIB (Kemarin) s.d.{" "}
+                    {overnightSessionInfo.shift?.end_time.slice(0, 5)} WIB (Pagi)
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.metricsGrid}>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricLabel}>Waktu Sekarang</Text>
+                  <Text style={styles.metricValue}>{formatTime(currentTime)}</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricLabel}>Durasi Berjalan</Text>
+                  <Text style={styles.metricValue}>{overnightSessionInfo.elapsedStr}</Text>
+                </View>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricLabel}>Sisa Waktu</Text>
+                  <Text style={styles.metricValue}>{overnightSessionInfo.remainingStr}</Text>
+                </View>
               </View>
             </View>
-
-            {/* S-MO-4: Banner Shift Malam / Overdue / Pasca-Checkout */}
-            {overnightSessionInfo.isActive && overnightSessionInfo.isOverdue ? (
-              <View style={styles.overdueBanner}>
-                <View style={styles.bannerHeaderRow}>
-                  <Text style={styles.bannerEmoji}>⚠️</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.overdueTitle}>
-                      WAKTU SHIFT TELAH BERAKHIR (OVERDUE)
-                    </Text>
-                    <Text style={styles.overdueSubtitle}>
-                      {overnightSessionInfo.shift?.name || "Shift Malam"} berakhir pukul{" "}
-                      {overnightSessionInfo.scheduledEndStr}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.bannerDetailBox}>
-                  <Text style={styles.bannerDetailText}>
-                    Waktu Sekarang (WIB): {formatTime(currentTime)}
-                  </Text>
-                  <Text style={styles.bannerDetailText}>
-                    Keterlambatan Check Out: {overnightSessionInfo.overdueMinutes} Menit
-                  </Text>
-                </View>
-                <Text style={styles.bannerNotice}>
-                  Anda belum melakukan Check Out kepulangan. Segera selesaikan absensi agar jam kerja Anda tercatat utuh.
-                </Text>
-              </View>
-            ) : overnightSessionInfo.isActive ? (
-              <View style={styles.overnightBanner}>
-                <View style={styles.bannerHeaderRow}>
-                  <Text style={styles.bannerEmoji}>🌙</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.overnightTitle}>
-                      SESI SHIFT MALAM BERJALAN
-                    </Text>
-                    <Text style={styles.overnightSubtitle}>
-                      {overnightSessionInfo.shift?.name || "Shift Malam"}:{" "}
-                      {overnightSessionInfo.shift?.start_time.slice(0, 5)} WIB (Kemarin) s.d.{" "}
-                      {overnightSessionInfo.shift?.end_time.slice(0, 5)} WIB (Pagi)
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Waktu Sekarang</Text>
-                    <Text style={styles.metricValue}>{formatTime(currentTime)}</Text>
-                  </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Durasi Berjalan</Text>
-                    <Text style={styles.metricValue}>{overnightSessionInfo.elapsedStr}</Text>
-                  </View>
-                  <View style={styles.metricItem}>
-                    <Text style={styles.metricLabel}>Sisa Waktu</Text>
-                    <Text style={styles.metricValue}>{overnightSessionInfo.remainingStr}</Text>
-                  </View>
-                </View>
-              </View>
-            ) : overnightSessionInfo.isCompleted ? (
-              <View style={styles.completedBanner}>
+          ) : overnightSessionInfo.isCompleted ? (
+            <View style={styles.completedBanner}>
+              <View style={styles.bannerHeaderRow}>
+                <CheckRounded
+                  width={18}
+                  height={18}
+                  color={colors.success}
+                  style={styles.bannerIcon}
+                />
                 <Text style={styles.completedTitle}>
-                  ✅ Shift Malam Selesai
-                </Text>
-                <Text style={styles.completedSubtitle}>
-                  Checked out pukul {overnightSessionInfo.completedCheckoutTime} WIB. Sesi dinas malam Anda telah tuntas dilaporkan.
+                  Shift Malam Selesai
                 </Text>
               </View>
-            ) : null}
-
-            {/* Clock Section */}
-            <View style={styles.clockSection}>
-              <View style={styles.clockIconRow}>
-                <Text style={styles.clockEmoji}>
-                  <ClockOutline width={20} height={20} color={colors.primary} />
-                </Text>
-                <Text style={styles.clockSmall}>{formatTime(currentTime)}</Text>
-              </View>
-              <Text style={styles.digitalClock}>{formatTime(currentTime)}</Text>
-            </View>
-
-            {/* Attendance Cards */}
-            <View style={styles.attendanceRow}>
-              <AttendanceCard
-                type="checkin"
-                time={activeCheckin?.checkin}
-                subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", currentShift, shiftDateForStatus)}
-                shift={currentShift}
-                shiftDate={shiftDateForStatus}
-                badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
-                onPress={() => {
-                  if (submittingRef.current) return;
-                  if (activeCheckin?.checkin) {
-                    showToast("Anda sudah check in", "info");
-                    return;
-                  }
-                  submittingRef.current = true;
-                  router.push("/(no-tabs)/checkin");
-                  setTimeout(() => {
-                    submittingRef.current = false;
-                  }, 1500);
-                }}
-              />
-
-              <AttendanceCard
-                type="checkout"
-                time={activeCheckin?.checkout}
-                subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", currentShift, shiftDateForStatus)}
-                shift={currentShift}
-                shiftDate={shiftDateForStatus}
-                isOverdue={overnightSessionInfo.isOverdue}
-                badgeText={
-                  activeCheckin?.checkout
-                    ? "Checked Out"
-                    : overnightSessionInfo.isOverdue
-                    ? "Check Out Sekarang"
-                    : "Check Out"
-                }
-                onPress={handleCheckoutPress}
-              />
-            </View>
-
-            {overnightSessionInfo.isActive && !overnightSessionInfo.isOverdue && (
-              <Text style={styles.overnightNote}>
-                Catatan: Anda dapat melakukan check-out saat shift selesai (mulai {graceStartStr} WIB).
+              <Text style={styles.completedSubtitle}>
+                Checked out pukul {overnightSessionInfo.completedCheckoutTime} WIB. Sesi dinas malam Anda telah tuntas dilaporkan.
               </Text>
-            )}
-          </View>
-
-          {/* Akses Cepat */}
-          <View style={styles.aksesCard}>
-            <Text style={styles.sectionTitle}>Akses Cepat</Text>
-
-            <View style={styles.aksesGrid}>
-              {aksesMenuItems.map((item, index) => {
-                const Icon = item.icon;
-
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.aksesItem,
-                      { backgroundColor: item.containerColor },
-                    ]}
-                    onPress={item.onPress}
-                    activeOpacity={0.8}
-                  >
-                    <View
-                      style={[
-                        styles.aksesIconContainer,
-                        { backgroundColor: item.color },
-                      ]}
-                    >
-                      <Icon color="#fff" />
-                    </View>
-
-                    <View style={styles.aksesTextContainer}>
-                      <Text style={styles.aksesLabel} numberOfLines={1}>{item.label}</Text>
-                      {item.subtext ? (
-                        <Text style={styles.aksesSubtext} numberOfLines={1}>{item.subtext}</Text>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
             </View>
+          ) : null}
+
+          {/* Clock Section */}
+          <View style={styles.clockSection}>
+            <View style={styles.clockIconRow}>
+              <Text style={styles.clockEmoji}>
+                <ClockOutline width={20} height={20} color={colors.primary} />
+              </Text>
+              <Text style={styles.clockSmall}>{formatTime(currentTime)}</Text>
+            </View>
+            <Text style={styles.digitalClock}>{formatTime(currentTime)}</Text>
           </View>
 
-          <View style={{ height: 100 }} />
-        </ScrollView>
-      </LinearGradient>
+          {/* Attendance Cards */}
+          <View style={styles.attendanceRow}>
+            <AttendanceCard
+              type="checkin"
+              time={activeCheckin?.checkin}
+              subtitle={getWorkStatus(activeCheckin?.checkin, "checkin", currentShift, shiftDateForStatus)}
+              shift={currentShift}
+              shiftDate={shiftDateForStatus}
+              badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
+              onPress={() => {
+                if (submittingRef.current) return;
+                if (activeCheckin?.checkin) {
+                  showToast("Anda sudah check in", "info");
+                  return;
+                }
+                submittingRef.current = true;
+                router.push("/(no-tabs)/checkin");
+                setTimeout(() => {
+                  submittingRef.current = false;
+                }, 1500);
+              }}
+            />
+
+            <AttendanceCard
+              type="checkout"
+              time={activeCheckin?.checkout}
+              subtitle={getWorkStatus(activeCheckin?.checkout, "checkout", currentShift, shiftDateForStatus)}
+              shift={currentShift}
+              shiftDate={shiftDateForStatus}
+              isOverdue={overnightSessionInfo.isOverdue}
+              badgeText={
+                activeCheckin?.checkout
+                  ? "Checked Out"
+                  : overnightSessionInfo.isOverdue
+                  ? "Check Out Sekarang"
+                  : "Check Out"
+              }
+              onPress={handleCheckoutPress}
+            />
+          </View>
+
+          {overnightSessionInfo.isActive && !overnightSessionInfo.isOverdue && (
+            <Text style={styles.overnightNote}>
+              Catatan: Anda dapat melakukan check-out saat shift selesai (mulai {graceStartStr} WIB).
+            </Text>
+          )}
+        </View>
+
+        {/* Akses Cepat */}
+        <View style={styles.aksesCard}>
+          <Text style={styles.sectionTitle}>Akses Cepat</Text>
+
+          <View style={styles.aksesGrid}>
+            {aksesMenuItems.map((item, index) => {
+              const Icon = item.icon;
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.aksesItem,
+                    { backgroundColor: item.containerColor },
+                  ]}
+                  onPress={item.onPress}
+                  activeOpacity={0.8}
+                >
+                  <View
+                    style={[
+                      styles.aksesIconContainer,
+                      { backgroundColor: item.color },
+                    ]}
+                  >
+                    <Icon color="#fff" />
+                  </View>
+
+                  <View style={styles.aksesTextContainer}>
+                    <Text style={styles.aksesLabel} numberOfLines={1}>{item.label}</Text>
+                    {item.subtext ? (
+                      <Text style={styles.aksesSubtext} numberOfLines={1}>{item.subtext}</Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
       <EarlyCheckoutModal
         visible={showEarlyCheckoutModal}
@@ -1046,18 +1059,15 @@ export default function HomeScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: c.background,
   },
-  gradient: {
-    flex: 1,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: Math.max(insets.top + 12, 24),
   },
   topBar: {
     flexDirection: "row",
@@ -1068,26 +1078,26 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   greeting: {
     fontSize: 22,
     fontWeight: "bold",
-    color: c.onGradient,
+    color: c.textStrong,
     marginBottom: 2,
   },
   userName: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.9)",
+    color: c.textSecondary,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "rgba(163, 163, 163, 0.9)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: c.surface,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "rgba(163, 163, 163, 0.9)",
+    borderWidth: 1,
+    borderColor: c.border,
   },
   avatarIcon: {
-    width: 25,
-    height: 25,
+    width: 22,
+    height: 22,
   },
   // R-BL-11: Pill antrean offline
   offlinePillContainer: {
@@ -1114,7 +1124,6 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginRight: 10,
   },
   offlinePillIcon: {
-    fontSize: 16,
     marginRight: 8,
   },
   offlinePillText: {
@@ -1131,6 +1140,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     minWidth: 80,
+    minHeight: 36,
   },
   offlineSyncButtonDisabled: {
     opacity: 0.6,
@@ -1140,61 +1150,29 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
-  // Tips Card
-  tipsCard: {
-    backgroundColor: c.primary, // Biru seperti di gambar
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tipsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  tipsIcon: {
-    fontSize: 16,
-    marginRight: 8,
-    color: "#FFEB3B", // Kuning untuk icon lampu
-  },
-  tipsTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: c.onGradient,
-  },
-  tipsText: {
-    fontSize: 12,
-    color: c.onGradient,
-    lineHeight: 18,
-    opacity: 0.9,
-  },
   // Ringkasan Card
   ringkasanCard: {
     backgroundColor: c.card,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 4,
-    marginBottom: 24,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 20,
   },
   ringkasanHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   ringkasanLabelContainer: {
     flexDirection: "row",
     alignItems: "center",
   },
-
   ringkasanLabel: {
     fontSize: 16,
     fontWeight: "bold",
@@ -1214,7 +1192,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.surface,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   dayIcon: {
     fontSize: 12,
@@ -1228,7 +1208,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // S-MO-4: Overnight & Overdue Banners
   overnightBanner: {
     backgroundColor: c.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: c.primary,
     borderRadius: 16,
     padding: 14,
@@ -1236,7 +1216,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   overdueBanner: {
     backgroundColor: c.dangerSoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: c.danger,
     borderRadius: 16,
     padding: 14,
@@ -1244,7 +1224,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   completedBanner: {
     backgroundColor: c.successSoft,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: c.success,
     borderRadius: 16,
     padding: 14,
@@ -1255,9 +1235,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  bannerEmoji: {
-    fontSize: 20,
-    marginRight: 10,
+  bannerIcon: {
+    marginRight: 8,
   },
   overnightTitle: {
     fontSize: 13,
@@ -1324,7 +1303,6 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: c.success,
-    marginBottom: 4,
   },
   completedSubtitle: {
     fontSize: 12,
@@ -1341,16 +1319,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // Clock Section
   clockSection: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
     backgroundColor: c.surface,
     borderRadius: 16,
-    paddingVertical: 20,
+    paddingVertical: 16,
     paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: c.border,
   },
   clockIconRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 5,
+    marginBottom: 4,
   },
   clockEmoji: {
     fontSize: 14,
@@ -1389,12 +1369,14 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: c.border,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    flexDirection: "row", // Menyesuaikan gambar yang horizontal
+    flexDirection: "row",
     gap: 10,
   },
   aksesIconContainer: {
@@ -1420,31 +1402,33 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   aksesCard: {
     backgroundColor: c.card,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: c.border,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-
   rightActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-
   notificationBtn: {
     marginRight: 12,
     position: "relative",
-    padding: 6, // tap area lebih nyaman
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 100,
+    width: 44,
+    height: 44,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
   },
-
   notificationBadge: {
     position: "absolute",
     top: 2,
@@ -1457,9 +1441,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 3,
   },
-
   notificationBadgeText: {
-    color: c.onGradient,
+    color: "#fff",
     fontSize: 10,
     fontWeight: "bold",
   },

@@ -71,8 +71,8 @@ async function executeSyncShiftNotifications(schedules: IWeekScheduleItem[]) {
 
   isSyncing = true;
   try {
-    const hasPermission = await requestNotificationPermissions();
-    if (!hasPermission) {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") {
       if (__DEV__) console.debug("[ShiftReminder] Permission not granted; skipping schedule.");
       return;
     }

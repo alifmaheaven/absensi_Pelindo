@@ -411,11 +411,11 @@ const TicketingScreen = () => {
           ListEmptyComponent={!loading ? (
             isError ? (
               <EmptyState
+                variant="error"
                 title="Gagal Memuat Tiket"
                 description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
                 actionLabel="Coba Lagi"
                 onAction={handleRefresh}
-                icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
               />
             ) : (
               <EmptyState

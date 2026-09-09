@@ -15,10 +15,15 @@ import { getUnreadCount } from "@/services/notification";
 import { useAuthStore } from "@/stores/auth";
 import { wsClient } from "@/lib/websocket";
 import { IAttendance } from "@/types";
-import { getTodayDateString, parseWIBDate, smartCapitalize } from "@/utils/utils";
+import {
+  calculateEarlyCheckoutStatus,
+  getTodayDateString,
+  parseWIBDate,
+  smartCapitalize,
+} from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useFocusEffect } from "expo-router";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -31,10 +36,15 @@ import {
   View,
 } from "react-native";
 import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
-import { syncShiftNotifications } from "@/services/notification-scheduler";
+import { syncShiftNotifications, requestNotificationPermissions } from "@/services/notification-scheduler";
 import { TIMEZONE } from "@/constants";
 import type { IScheduleToday, Ishift } from "@/types";
 import { getPendingCount, syncQueuedRequests } from "@/lib/offlineQueue";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import NotificationRationaleModal from "@/components/home/NotificationRationaleModal";
+import NotificationPermissionBanner from "@/components/home/NotificationPermissionBanner";
+import EarlyCheckoutModal from "@/components/ui/EarlyCheckoutModal";
 
 export function getWorkStatus(
   datetime?: string | null,
@@ -137,6 +147,64 @@ export default function HomeScreen() {
   // R-BL-11: Antrean absensi offline
   const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [isSyncingOffline, setIsSyncingOffline] = useState(false);
+
+  // Modal & notifikasi state
+  const [showEarlyCheckoutModal, setShowEarlyCheckoutModal] = useState(false);
+  const [showRationaleModal, setShowRationaleModal] = useState(false);
+  const [hasNotifPermission, setHasNotifPermission] = useState<boolean | null>(null);
+  const [isNotifBannerDismissed, setIsNotifBannerDismissed] = useState(false);
+  const submittingRef = useRef(false);
+
+  const checkNotificationPermission = useCallback(async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setHasNotifPermission(status === "granted");
+    } catch {
+      setHasNotifPermission(false);
+    }
+  }, []);
+
+  const checkNotificationRationale = useCallback(async () => {
+    try {
+      const shown = await AsyncStorage.getItem("@notif_rationale_shown");
+      const { status } = await Notifications.getPermissionsAsync();
+      setHasNotifPermission(status === "granted");
+
+      if (!shown) {
+        setShowRationaleModal(true);
+      }
+    } catch {
+      // fallback safe
+    }
+  }, []);
+
+  useEffect(() => {
+    checkNotificationRationale();
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        checkNotificationPermission();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [checkNotificationRationale, checkNotificationPermission]);
+
+  const handleAcceptNotification = async () => {
+    setShowRationaleModal(false);
+    await AsyncStorage.setItem("@notif_rationale_shown", "true");
+    const granted = await requestNotificationPermissions();
+    setHasNotifPermission(granted);
+  };
+
+  const handleDismissRationale = async () => {
+    setShowRationaleModal(false);
+    await AsyncStorage.setItem("@notif_rationale_shown", "true");
+    const { status } = await Notifications.getPermissionsAsync();
+    setHasNotifPermission(status === "granted");
+  };
 
   const refreshPendingCount = useCallback(async () => {
     try {
@@ -385,7 +453,69 @@ export default function HomeScreen() {
     return `${String(gh).padStart(2, "0")}:${String(gm).padStart(2, "0")}`;
   }, [overnightSessionInfo.shift]);
 
+  // Deteksi pulang-awal terpadu untuk semua shift (overnight maupun normal siang)
+  const earlyCheckoutInfo = useMemo(() => {
+    // 1. Sesi absensi aktif harus ada dan belum check-out
+    if (!activeCheckin?.checkin || activeCheckin?.checkout) {
+      return {
+        isEarly: false,
+        shiftName: "",
+        shiftEndTime: "",
+        deficitText: undefined as string | undefined,
+      };
+    }
+
+    // 2. Jika sesi overnight aktif: pertahankan logika & format teks existing tanpa regresi
+    if (overnightSessionInfo.isActive) {
+      const shiftName = overnightSessionInfo.shift?.name || "Shift Malam";
+      const shiftEndTime = overnightSessionInfo.shift?.end_time?.slice(0, 5) || "06:00";
+      const deficitText = overnightSessionInfo.remainingStr.startsWith("~")
+        ? `${overnightSessionInfo.remainingStr.replace("~", "").trim()} Lebih Cepat`
+        : undefined;
+
+      return {
+        isEarly: overnightSessionInfo.isEarlyCheckout,
+        shiftName,
+        shiftEndTime,
+        deficitText,
+      };
+    }
+
+    // 3. Shift normal siang / non-overnight dari todaySchedule / currentShift
+    const shift = currentShift;
+    if (!shift || !shift.end_time) {
+      // Tanpa jadwal -> langsung checkout tanpa modal
+      return {
+        isEarly: false,
+        shiftName: "",
+        shiftEndTime: "",
+        deficitText: undefined as string | undefined,
+      };
+    }
+
+    const checkinDay = activeCheckin.checkin.split(" ")[0];
+    const shiftDate = shiftDateForStatus || checkinDay || getTodayDateString();
+
+    const status = calculateEarlyCheckoutStatus({
+      currentTime,
+      checkinTime: activeCheckin.checkin,
+      checkoutTime: activeCheckin.checkout,
+      shift,
+      shiftDate,
+    });
+
+    return {
+      isEarly: status.isEarly,
+      shiftName: status.shiftName,
+      shiftEndTime: status.shiftEndTime,
+      deficitText: status.deficitText,
+    };
+  }, [activeCheckin, overnightSessionInfo, currentShift, shiftDateForStatus, currentTime]);
+
   const handleCheckoutPress = () => {
+    // Guard anti double-trigger
+    if (submittingRef.current) return;
+
     if (!activeCheckin?.checkin) {
       showToast("Anda belum check in", "info");
       return;
@@ -395,27 +525,17 @@ export default function HomeScreen() {
       return;
     }
 
-    // Keputusan D87 Opsi A: Modal konfirmasi pulang-awal jika belum jam normal
-    if (overnightSessionInfo.isActive && overnightSessionInfo.isEarlyCheckout) {
-      const shiftName = overnightSessionInfo.shift?.name || "Shift Malam";
-      const endHour = overnightSessionInfo.shift?.end_time?.slice(0, 5) || "06:00";
-      const currentHour = formatTime(currentTime).slice(0, 5);
-
-      Alert.alert(
-        "Pulang Lebih Awal?",
-        `Jadwal ${shiftName} Anda berakhir pukul ${endHour} WIB.\n\nApakah Anda yakin ingin melakukan Check Out sekarang pada pukul ${currentHour} WIB?`,
-        [
-          { text: "Batal", style: "cancel" },
-          {
-            text: "Ya, Lanjut Check Out",
-            onPress: () => router.push("/(no-tabs)/checkout"),
-          },
-        ]
-      );
+    // Keputusan D87 Opsi A: Modal konfirmasi pulang-awal jika belum jam normal (semua shift)
+    if (earlyCheckoutInfo.isEarly) {
+      setShowEarlyCheckoutModal(true);
       return;
     }
 
+    submittingRef.current = true;
     router.push("/(no-tabs)/checkout");
+    setTimeout(() => {
+      submittingRef.current = false;
+    }, 1500);
   };
 
   const fetchSchedule = async () => {
@@ -481,6 +601,7 @@ export default function HomeScreen() {
   // (handles initial mount, returning from checkin/checkout, and tab switch)
   useFocusEffect(
     useCallback(() => {
+      submittingRef.current = false;
       fetchAttendance();
       fetchSchedule();
       fetchUnreadCount();
@@ -688,6 +809,13 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/* Banner Peringatan Izin Notifikasi Nonaktif */}
+          {hasNotifPermission === false && !isNotifBannerDismissed && (
+            <NotificationPermissionBanner
+              onDismiss={() => setIsNotifBannerDismissed(true)}
+            />
+          )}
+
           {/* Tips Card */}
           <View style={styles.tipsCard}>
             <View style={styles.tipsHeader}>
@@ -807,11 +935,16 @@ export default function HomeScreen() {
                 shiftDate={shiftDateForStatus}
                 badgeText={activeCheckin?.checkin ? "Checked In" : "Check In"}
                 onPress={() => {
+                  if (submittingRef.current) return;
                   if (activeCheckin?.checkin) {
                     showToast("Anda sudah check in", "info");
                     return;
                   }
+                  submittingRef.current = true;
                   router.push("/(no-tabs)/checkin");
+                  setTimeout(() => {
+                    submittingRef.current = false;
+                  }, 1500);
                 }}
               />
 
@@ -882,6 +1015,33 @@ export default function HomeScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </LinearGradient>
+
+      <EarlyCheckoutModal
+        visible={showEarlyCheckoutModal}
+        onClose={() => {
+          setShowEarlyCheckoutModal(false);
+          submittingRef.current = false;
+        }}
+        onConfirmCheckout={() => {
+          if (submittingRef.current) return;
+          submittingRef.current = true;
+          setShowEarlyCheckoutModal(false);
+          router.push("/(no-tabs)/checkout");
+          setTimeout(() => {
+            submittingRef.current = false;
+          }, 1500);
+        }}
+        shiftName={earlyCheckoutInfo.shiftName || "Shift Kerja"}
+        shiftEndTime={earlyCheckoutInfo.shiftEndTime || "17:00"}
+        currentTime={formatTime(currentTime).slice(0, 5)}
+        deficitText={earlyCheckoutInfo.deficitText}
+      />
+
+      <NotificationRationaleModal
+        visible={showRationaleModal}
+        onAccept={handleAcceptNotification}
+        onDismiss={handleDismissRationale}
+      />
     </View>
   );
 }

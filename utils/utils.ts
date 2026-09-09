@@ -168,3 +168,106 @@ export const compressImage = async (
 //   maxWidth: 1280,
 //   quality: 0.5,
 // });
+
+export interface EarlyCheckoutStatus {
+  isEarly: boolean;
+  scheduledEndMs: number | null;
+  shiftName: string;
+  shiftEndTime: string;
+  deficitMinutes: number;
+  deficitText?: string;
+}
+
+/**
+ * Deteksi apakah checkout saat ini termasuk pulang lebih awal (early checkout)
+ * berdasarkan shift aktif, toleransi pulang awal (grace_early), dan jam sekarang.
+ * Bekerja untuk shift normal (siang) maupun shift malam.
+ */
+export function calculateEarlyCheckoutStatus(params: {
+  currentTime: Date;
+  checkinTime?: string | null;
+  checkoutTime?: string | null;
+  shift?: {
+    name?: string;
+    start_time: string;
+    end_time: string;
+    grace_early?: number;
+    is_overnight?: boolean;
+  } | null;
+  shiftDate?: string | null;
+}): EarlyCheckoutStatus {
+  const defaultResult: EarlyCheckoutStatus = {
+    isEarly: false,
+    scheduledEndMs: null,
+    shiftName: params.shift?.name || "Shift Kerja",
+    shiftEndTime: params.shift?.end_time ? params.shift.end_time.slice(0, 5) : "",
+    deficitMinutes: 0,
+    deficitText: undefined,
+  };
+
+  // Jika belum checkin atau sudah checkout, bukan early checkout
+  if (!params.checkinTime || params.checkoutTime) {
+    return defaultResult;
+  }
+
+  // Jika tidak ada shift yang terjadwal
+  if (!params.shift || !params.shift.end_time) {
+    return defaultResult;
+  }
+
+  const { shift, currentTime } = params;
+  const shiftName = shift.name || "Shift Kerja";
+  const shiftEndTime = shift.end_time.slice(0, 5);
+
+  const [eh, em] = shift.end_time.split(":").map(Number);
+  const [sh] = (shift.start_time || "08:00").split(":").map(Number);
+
+  // Tentukan tanggal dasar shift (WIB)
+  const shiftDateStr =
+    params.shiftDate ||
+    (params.checkinTime ? params.checkinTime.split(" ")[0] : getTodayDateString());
+
+  const formattedEndTime =
+    shift.end_time.length === 5 ? `${shift.end_time}:00` : shift.end_time;
+  const parsedEnd = parseWIBDate(`${shiftDateStr} ${formattedEndTime}`);
+  const scheduledEndDate = parsedEnd ? new Date(parsedEnd) : new Date(currentTime);
+
+  // Jika shift overnight atau end_time < start_time, tanggal berakhir adalah H+1
+  if (shift.is_overnight || eh < sh) {
+    scheduledEndDate.setTime(scheduledEndDate.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const nowMs = currentTime.getTime();
+  const scheduledEndMs = scheduledEndDate.getTime();
+  const graceEarly = shift.grace_early ?? 15;
+  const graceEarlyMs = graceEarly * 60 * 1000;
+
+  // Sesuai aturan: nowMs < scheduledEndMs - graceEarly*60000
+  const isEarly = nowMs < scheduledEndMs - graceEarlyMs;
+
+  let deficitMinutes = 0;
+  let deficitText: string | undefined;
+
+  if (nowMs < scheduledEndMs) {
+    const remMs = scheduledEndMs - nowMs;
+    const remHours = Math.floor(remMs / 3600000);
+    const remMinutes = Math.floor((remMs % 3600000) / 60000);
+    deficitMinutes = Math.floor(remMs / 60000);
+    deficitText =
+      remHours > 0
+        ? remMinutes > 0
+          ? `${remHours} Jam ${remMinutes} Menit Lebih Cepat`
+          : `${remHours} Jam Lebih Cepat`
+        : `${remMinutes} Menit Lebih Cepat`;
+  }
+
+  return {
+    isEarly,
+    scheduledEndMs,
+    shiftName,
+    shiftEndTime,
+    deficitMinutes,
+    deficitText,
+  };
+}
+

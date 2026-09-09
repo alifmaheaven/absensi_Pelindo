@@ -117,6 +117,7 @@ export default function IzinScreen() {
         setDetailEvidence(evs);
       } catch (e) {
         console.error("Error fetching evidence:", e);
+        showToast("Gagal memuat lampiran", "error");
       }
     }
     setDetailLoading(false);
@@ -336,13 +337,13 @@ export default function IzinScreen() {
   } else if (isError) {
     content = (
       <EmptyState
+        variant="error"
         title="Gagal Memuat Pengajuan"
         description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
         actionLabel="Coba Lagi"
         onAction={() => {
           fetchAll();
         }}
-        icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
       />
     );
   } else if (mergedData.length === 0) {

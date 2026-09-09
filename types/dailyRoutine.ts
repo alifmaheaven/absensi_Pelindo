@@ -1,9 +1,12 @@
+export type EvidenceType = "none" | "photo" | "file" | "both";
+
 export interface IDailyRoutineItem {
   id: string;
   daily_routine_id: string;
   name: string;
   description: string;
   is_photo_required: boolean;
+  evidence_type?: EvidenceType;
   sort_order: number;
 }
 
@@ -14,6 +17,7 @@ export interface IDailyRoutineDeviceItem {
   device_id: string;
   device_name?: string;
   is_photo_required: boolean;
+  evidence_type?: EvidenceType;
 }
 
 export interface IDailyRoutine {
@@ -23,6 +27,8 @@ export interface IDailyRoutine {
   site_id: string;
   company_id: string;
   is_active: boolean;
+  frequency?: "daily" | "weekly";
+  work_days?: number[] | null;
   items: IDailyRoutineItem[];
   device_items?: IDailyRoutineDeviceItem[];
 }
@@ -65,5 +71,6 @@ export interface IDailyRoutineSubmitItem {
   device_id?: string | null;
   is_checked: boolean;
   evidence_file?: string;
+  evidence_type?: EvidenceType;
   notes?: string;
 }

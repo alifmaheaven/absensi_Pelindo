@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   StyleSheet,
   Text,
@@ -8,9 +9,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { CheckRounded, ImageIcon } from "@/components/icon";
+import { CheckRounded, DocumentCheck, ImageIcon } from "@/components/icon";
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { IDailyRoutineItem } from "@/types";
+import {
+  EvidenceType,
+  formatFileSize,
+  getEvidenceRequirementLabel,
+  resolveEvidenceType,
+} from "@/utils/dailyRoutineHelpers";
 
 export interface IItemState {
   daily_routine_item_id: string;
@@ -20,17 +27,25 @@ export interface IItemState {
   notes: string;
   local_uri: string | null;
   upload_failed?: boolean;
+  file_name?: string | null;
+  file_size?: number | null;
+  file_type?: "image" | "pdf" | string | null;
 }
 
-interface ChecklistItemCardProps {
+export interface ChecklistItemCardProps {
   item: IDailyRoutineItem;
   state: IItemState;
-  requiresPhoto: boolean;
+  evidenceType?: EvidenceType;
+  requiresPhoto?: boolean;
   isReadOnly: boolean;
-  loadingImage: boolean;
+  loadingImage?: boolean;
+  loadingEvidence?: boolean;
   onToggle: () => void;
-  onPickImage: () => void;
+  onPickPhoto?: () => void;
+  onPickImage?: () => void;
+  onPickDocument?: () => void;
   onRetryUpload: () => void;
+  onRemoveEvidence?: () => void;
   onPreviewImage: (uri: string) => void;
   onChangeNotes: (text: string) => void;
   getImageUrl: (file: string) => string;
@@ -39,12 +54,17 @@ interface ChecklistItemCardProps {
 export default function ChecklistItemCard({
   item,
   state,
+  evidenceType,
   requiresPhoto,
   isReadOnly,
   loadingImage,
+  loadingEvidence,
   onToggle,
+  onPickPhoto,
   onPickImage,
+  onPickDocument,
   onRetryUpload,
+  onRemoveEvidence,
   onPreviewImage,
   onChangeNotes,
   getImageUrl,
@@ -52,7 +72,74 @@ export default function ChecklistItemCard({
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const activePhotoUri = state.local_uri || (state.evidence_file ? getImageUrl(state.evidence_file) : null);
+  const isLoading = loadingEvidence ?? loadingImage ?? false;
+  const handlePickPhoto = onPickPhoto || onPickImage || (() => {});
+  const handlePickDocument = onPickDocument || (() => {});
+
+  const effectiveEvidenceType = resolveEvidenceType(
+    evidenceType ?? item.evidence_type,
+    requiresPhoto ?? item.is_photo_required
+  );
+
+  const requirementLabel = getEvidenceRequirementLabel(
+    effectiveEvidenceType,
+    requiresPhoto ?? item.is_photo_required
+  );
+
+  const activePhotoUri =
+    state.local_uri ||
+    (state.evidence_file ? getImageUrl(state.evidence_file) : null);
+
+  const hasEvidence = Boolean(state.evidence_file || state.local_uri);
+
+  const isPdf =
+    state.file_type === "pdf" ||
+    (state.file_name ? state.file_name.toLowerCase().endsWith(".pdf") : false) ||
+    (state.evidence_file
+      ? state.evidence_file.toLowerCase().endsWith(".pdf")
+      : false);
+
+  const fileNameDisplay =
+    state.file_name ||
+    (state.evidence_file
+      ? state.evidence_file.split("/").pop() || "Lampiran Bukti"
+      : "Lampiran Bukti");
+
+  const fileSizeDisplay = state.file_size ? formatFileSize(state.file_size) : "";
+
+  const handleReplacePress = () => {
+    if (isReadOnly) return;
+    if (effectiveEvidenceType === "photo") {
+      handlePickPhoto();
+    } else if (effectiveEvidenceType === "file") {
+      handlePickDocument();
+    } else {
+      // Both photo or file
+      Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
+        { text: "Batal", style: "cancel" },
+        { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
+        { text: "Pilih Berkas Dokumen", onPress: handlePickDocument },
+      ]);
+    }
+  };
+
+  const handleRemovePress = () => {
+    if (isReadOnly) return;
+    Alert.alert(
+      "Hapus Bukti",
+      "Apakah Anda yakin ingin menghapus lampiran bukti ini?",
+      [
+        { text: "Batal", style: "cancel" },
+        {
+          text: "Hapus",
+          style: "destructive",
+          onPress: () => {
+            if (onRemoveEvidence) onRemoveEvidence();
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View
@@ -61,33 +148,68 @@ export default function ChecklistItemCard({
         state.is_checked && styles.checklistItemChecked,
       ]}
     >
-      {/* Checkbox Row */}
-      <TouchableOpacity
-        style={styles.checkboxRow}
-        onPress={isReadOnly ? undefined : onToggle}
-        activeOpacity={isReadOnly ? 1 : 0.7}
-        disabled={isReadOnly}
-      >
-        <View
-          style={[
-            styles.checkbox,
-            state.is_checked && styles.checkboxChecked,
-            isReadOnly && styles.checkboxReadOnly,
-          ]}
+      {/* Checkbox Row — Touch target >= 44px (hitSlop 12 on 24x24 box = 48px) */}
+      <View style={styles.checkboxRow}>
+        <TouchableOpacity
+          style={styles.checkboxTouchTarget}
+          onPress={isReadOnly ? undefined : onToggle}
+          activeOpacity={isReadOnly ? 1 : 0.7}
+          disabled={isReadOnly}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: state.is_checked }}
         >
-          {state.is_checked && (
-            <CheckRounded width={16} height={16} color="#fff" />
-          )}
-        </View>
-        <View style={styles.checkboxTextContainer}>
-          <Text
+          <View
             style={[
-              styles.checkboxLabel,
-              state.is_checked && styles.checkboxLabelChecked,
+              styles.checkbox,
+              state.is_checked && styles.checkboxChecked,
+              isReadOnly && styles.checkboxReadOnly,
             ]}
           >
-            {item.name}
-          </Text>
+            {state.is_checked && (
+              <CheckRounded width={16} height={16} color="#fff" />
+            )}
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.checkboxTextContainer}
+          onPress={isReadOnly ? undefined : onToggle}
+          activeOpacity={isReadOnly ? 1 : 0.7}
+          disabled={isReadOnly}
+        >
+          <View style={styles.labelHeaderRow}>
+            <Text
+              style={[
+                styles.checkboxLabel,
+                state.is_checked && styles.checkboxLabelChecked,
+              ]}
+            >
+              {item.name}
+            </Text>
+            {requirementLabel && (
+              <View
+                style={[
+                  styles.requirementBadge,
+                  effectiveEvidenceType === "photo" && styles.badgePhoto,
+                  effectiveEvidenceType === "file" && styles.badgeFile,
+                  effectiveEvidenceType === "both" && styles.badgeBoth,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.requirementBadgeText,
+                    effectiveEvidenceType === "photo" && styles.badgeTextPhoto,
+                    effectiveEvidenceType === "file" && styles.badgeTextFile,
+                    effectiveEvidenceType === "both" && styles.badgeTextBoth,
+                  ]}
+                >
+                  {requirementLabel}
+                </Text>
+              </View>
+            )}
+          </View>
+
           {item.description ? (
             <Text
               style={[
@@ -98,125 +220,302 @@ export default function ChecklistItemCard({
               {item.description}
             </Text>
           ) : null}
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
 
-      {/* Photo Section (M3, M7, M8) */}
-      {requiresPhoto && (
-        <View style={styles.photoSection}>
-          {state.evidence_file ? (
-            // Successfully uploaded photo
-            <View style={styles.photoPreviewContainer}>
-              <TouchableOpacity
-                onPress={() => activePhotoUri && onPreviewImage(activePhotoUri)}
-                activeOpacity={0.8}
-              >
-                <Image
-                  source={{ uri: activePhotoUri! }}
-                  style={styles.photoPreview}
-                />
-              </TouchableOpacity>
-              {!isReadOnly && (
-                <TouchableOpacity
-                  style={styles.retakeButton}
-                  onPress={onPickImage}
-                  disabled={loadingImage}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.retakeButtonText}>Foto Ulang</Text>
-                </TouchableOpacity>
+      {/* Reveal-on-check Section (Only visible when checked or in read-only checked) */}
+      {state.is_checked && (
+        <View style={styles.revealedSection}>
+          {/* Evidence Panel (if evidence required) */}
+          {effectiveEvidenceType !== "none" && (
+            <View style={styles.evidenceSection}>
+              {hasEvidence ? (
+                state.upload_failed && state.local_uri ? (
+                  // Upload failed state
+                  <View style={styles.evidenceFailedBox}>
+                    <View style={styles.thumbnailWrapper}>
+                      {isPdf ? (
+                        <View style={styles.pdfThumbnailFailed}>
+                          <DocumentCheck width={28} height={28} color={colors.danger} />
+                          <Text style={styles.pdfBadgeTextFailed}>PDF</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() =>
+                            activePhotoUri && onPreviewImage(activePhotoUri)
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Image
+                            source={{ uri: activePhotoUri! }}
+                            style={[
+                              styles.evidenceThumbnail,
+                              styles.evidenceThumbnailFailed,
+                            ]}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <View style={styles.evidenceInfoCol}>
+                      <View style={styles.failedBadge}>
+                        <Text style={styles.failedBadgeText}>Gagal Upload</Text>
+                      </View>
+                      <Text style={styles.fileNameText} numberOfLines={1}>
+                        {fileNameDisplay}
+                      </Text>
+                      {fileSizeDisplay ? (
+                        <Text style={styles.fileSizeText}>({fileSizeDisplay})</Text>
+                      ) : null}
+
+                      {!isReadOnly && (
+                        <View style={styles.actionBtnRow}>
+                          <TouchableOpacity
+                            style={styles.retryButton}
+                            onPress={onRetryUpload}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButtonSecondary}
+                            onPress={handleReplacePress}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionButtonSecondaryText}>Ganti</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButtonDanger}
+                            onPress={handleRemovePress}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionButtonDangerText}>Hapus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ) : (
+                  // Successfully attached evidence preview
+                  <View style={styles.evidenceAttachedBox}>
+                    <View style={styles.thumbnailWrapper}>
+                      {isPdf ? (
+                        <View style={styles.pdfThumbnail}>
+                          <DocumentCheck width={30} height={30} color={colors.primary} />
+                          <Text style={styles.pdfBadgeText}>PDF</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() =>
+                            activePhotoUri && onPreviewImage(activePhotoUri)
+                          }
+                          activeOpacity={0.8}
+                        >
+                          <Image
+                            source={{ uri: activePhotoUri! }}
+                            style={styles.evidenceThumbnail}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <View style={styles.evidenceInfoCol}>
+                      <View style={styles.attachedStatusRow}>
+                        <CheckRounded width={14} height={14} color={colors.success} />
+                        <Text style={styles.attachedStatusText}>Bukti terlampir</Text>
+                      </View>
+                      <Text style={styles.fileNameText} numberOfLines={1}>
+                        {fileNameDisplay} {fileSizeDisplay ? `(${fileSizeDisplay})` : ""}
+                      </Text>
+
+                      {!isReadOnly && (
+                        <View style={styles.actionBtnRow}>
+                          <TouchableOpacity
+                            style={styles.actionButtonPrimary}
+                            onPress={handleReplacePress}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionButtonPrimaryText}>Ganti</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButtonDanger}
+                            onPress={handleRemovePress}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.actionButtonDangerText}>Hapus</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )
+              ) : (
+                // No evidence attached yet: render pickers according to evidence_type
+                !isReadOnly ? (
+                  <View style={styles.pickerSection}>
+                    {effectiveEvidenceType === "photo" && (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerButton,
+                          styles.pickerButtonPhoto,
+                          isLoading && { opacity: 0.6 },
+                        ]}
+                        onPress={handlePickPhoto}
+                        disabled={isLoading}
+                        activeOpacity={0.8}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <>
+                            <ImageIcon
+                              color={colors.primary}
+                              width={18}
+                              height={18}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text style={styles.pickerButtonPhotoText}>
+                              Ambil Foto
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {effectiveEvidenceType === "file" && (
+                      <TouchableOpacity
+                        style={[
+                          styles.pickerButton,
+                          styles.pickerButtonFile,
+                          isLoading && { opacity: 0.6 },
+                        ]}
+                        onPress={handlePickDocument}
+                        disabled={isLoading}
+                        activeOpacity={0.8}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color={colors.textSecondary} />
+                        ) : (
+                          <>
+                            <DocumentCheck
+                              color={colors.textSecondary}
+                              width={18}
+                              height={18}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Text style={styles.pickerButtonFileText}>
+                              Pilih Berkas Dokumen (PDF/JPG/PNG)
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+
+                    {effectiveEvidenceType === "both" && (
+                      <View style={styles.bothPickerContainer}>
+                        <Text style={styles.bothPickerHint}>
+                          Pilih salah satu bukti pelaksanaan *:
+                        </Text>
+                        <View style={styles.bothButtonsRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonPhoto,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickPhoto}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator size="small" color={colors.primary} />
+                            ) : (
+                              <>
+                                <ImageIcon
+                                  color={colors.primary}
+                                  width={16}
+                                  height={16}
+                                  style={{ marginRight: 6 }}
+                                />
+                                <Text style={styles.pickerButtonPhotoText}>
+                                  Ambil Foto
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+
+                          <Text style={styles.orSeparatorText}>atau</Text>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonFile,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickDocument}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator size="small" color={colors.textSecondary} />
+                            ) : (
+                              <>
+                                <DocumentCheck
+                                  color={colors.textSecondary}
+                                  width={16}
+                                  height={16}
+                                  style={{ marginRight: 6 }}
+                                />
+                                <Text style={styles.pickerButtonFileText}>
+                                  Pilih Berkas
+                                </Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <Text style={styles.noEvidenceText}>Tidak ada bukti terlampir</Text>
+                )
               )}
             </View>
-          ) : state.upload_failed && state.local_uri ? (
-            // Upload failed — local URI preserved, retry action available (M7)
-            <View style={styles.photoFailedContainer}>
-              <TouchableOpacity
-                onPress={() => onPreviewImage(state.local_uri!)}
-                activeOpacity={0.8}
-              >
-                <Image
-                  source={{ uri: state.local_uri }}
-                  style={[styles.photoPreview, styles.photoPreviewFailed]}
-                />
-              </TouchableOpacity>
-              <View style={styles.failedActionGroup}>
-                <View style={styles.failedBadge}>
-                  <Text style={styles.failedBadgeText}>Gagal Upload</Text>
-                </View>
-                {!isReadOnly && (
-                  <View style={styles.failedBtnRow}>
-                    <TouchableOpacity
-                      style={styles.retryButton}
-                      onPress={onRetryUpload}
-                      disabled={loadingImage}
-                      activeOpacity={0.8}
-                    >
-                      {loadingImage ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.retakeButtonSecondary}
-                      onPress={onPickImage}
-                      disabled={loadingImage}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.retakeButtonSecondaryText}>Ambil Ulang</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-          ) : (
-            // No photo yet
-            !isReadOnly ? (
-              <TouchableOpacity
-                style={[
-                  styles.uploadPhotoButton,
-                  loadingImage && { opacity: 0.6 },
-                ]}
-                onPress={onPickImage}
-                disabled={loadingImage}
-                activeOpacity={0.8}
-              >
-                {loadingImage ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : (
-                  <>
-                    <ImageIcon color={colors.textMuted} style={{ marginRight: 8 }} />
-                    <Text style={styles.uploadPhotoText}>Ambil Foto</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.noPhotoText}>Tidak ada foto bukti</Text>
-            )
           )}
-        </View>
-      )}
 
-      {/* Notes Section (M2: present on both device and flat items) */}
-      {isReadOnly ? (
-        state.notes ? (
-          <View style={styles.notesContainerReadOnly}>
-            <Text style={styles.notesReadOnlyLabel}>Catatan:</Text>
-            <Text style={styles.notesReadOnlyText}>{state.notes}</Text>
-          </View>
-        ) : null
-      ) : (
-        <View style={styles.notesContainer}>
-          <TextInput
-            style={styles.notesInput}
-            placeholder="Catatan (opsional)"
-            placeholderTextColor={colors.textMuted}
-            value={state.notes}
-            onChangeText={onChangeNotes}
-            multiline
-            numberOfLines={2}
-            textAlignVertical="top"
-          />
+          {/* Notes Section */}
+          {isReadOnly ? (
+            state.notes ? (
+              <View style={styles.notesContainerReadOnly}>
+                <Text style={styles.notesReadOnlyLabel}>Catatan:</Text>
+                <Text style={styles.notesReadOnlyText}>{state.notes}</Text>
+              </View>
+            ) : null
+          ) : (
+            <View style={styles.notesContainer}>
+              <TextInput
+                style={styles.notesInput}
+                placeholder="Catatan tambahan (opsional)"
+                placeholderTextColor={colors.textMuted}
+                value={state.notes}
+                onChangeText={onChangeNotes}
+                multiline
+                numberOfLines={2}
+                textAlignVertical="top"
+              />
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -242,6 +541,9 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "flex-start",
       gap: 12,
     },
+    checkboxTouchTarget: {
+      paddingTop: 2,
+    },
     checkbox: {
       width: 24,
       height: 24,
@@ -250,7 +552,6 @@ const makeStyles = (c: ThemeColors) =>
       borderColor: c.borderStrong,
       justifyContent: "center",
       alignItems: "center",
-      marginTop: 2,
       backgroundColor: c.surface,
     },
     checkboxChecked: {
@@ -263,10 +564,18 @@ const makeStyles = (c: ThemeColors) =>
     checkboxTextContainer: {
       flex: 1,
     },
+    labelHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 6,
+    },
     checkboxLabel: {
       fontSize: 15,
       fontWeight: "600",
       color: c.textStrong,
+      flex: 1,
     },
     checkboxLabelChecked: {
       color: c.textStrong,
@@ -275,120 +584,269 @@ const makeStyles = (c: ThemeColors) =>
     checkboxDescription: {
       fontSize: 13,
       color: c.textSecondary,
-      marginTop: 2,
+      marginTop: 3,
       lineHeight: 18,
     },
     textMuted: {
       color: c.textSecondary,
     },
 
-    // Photo
-    photoSection: {
-      marginTop: 12,
-      marginLeft: 36,
+    // Requirement Badge before checked
+    requirementBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+      borderWidth: 1,
     },
-    photoPreviewContainer: {
+    badgePhoto: {
+      backgroundColor: c.primarySoft,
+      borderColor: c.primary,
+    },
+    badgeFile: {
+      backgroundColor: c.surface,
+      borderColor: c.borderStrong,
+    },
+    badgeBoth: {
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      borderColor: c.success,
+    },
+    requirementBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    badgeTextPhoto: {
+      color: c.primary,
+    },
+    badgeTextFile: {
+      color: c.textSecondary,
+    },
+    badgeTextBoth: {
+      color: c.success,
+    },
+
+    // Revealed Section
+    revealedSection: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+
+    // Evidence Section
+    evidenceSection: {
+      marginBottom: 8,
+    },
+    evidenceAttachedBox: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-    },
-    photoPreview: {
-      width: 80,
-      height: 80,
+      backgroundColor: c.surface,
       borderRadius: 12,
-      backgroundColor: c.border,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: c.border,
     },
-    photoPreviewFailed: {
+    evidenceFailedBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: c.dangerSoft,
+      borderRadius: 12,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: c.danger,
+    },
+    thumbnailWrapper: {
+      width: 64,
+      height: 64,
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: c.border,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    evidenceThumbnail: {
+      width: 64,
+      height: 64,
+      borderRadius: 10,
+    },
+    evidenceThumbnailFailed: {
       borderWidth: 2,
       borderColor: c.danger,
     },
-    photoFailedContainer: {
+    pdfThumbnail: {
+      width: 64,
+      height: 64,
+      borderRadius: 10,
+      backgroundColor: c.primarySoft,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    pdfThumbnailFailed: {
+      width: 64,
+      height: 64,
+      borderRadius: 10,
+      backgroundColor: c.dangerSoft,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    pdfBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: c.primary,
+      marginTop: 2,
+    },
+    pdfBadgeTextFailed: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: c.danger,
+      marginTop: 2,
+    },
+    evidenceInfoCol: {
+      flex: 1,
+      gap: 4,
+    },
+    attachedStatusRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
-    },
-    failedActionGroup: {
-      flex: 1,
       gap: 6,
     },
-    failedBadge: {
-      backgroundColor: c.dangerSoft,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: c.danger,
-      alignSelf: "flex-start",
+    attachedStatusText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: c.success,
     },
-    failedBadgeText: {
-      fontSize: 11,
+    fileNameText: {
+      fontSize: 12.5,
+      color: c.textStrong,
+      fontWeight: "600",
+    },
+    fileSizeText: {
+      fontSize: 11.5,
+      color: c.textSecondary,
+    },
+    actionBtnRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginTop: 4,
+    },
+    actionButtonPrimary: {
+      minHeight: 44,
+      minWidth: 44,
+      paddingHorizontal: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    actionButtonPrimaryText: {
+      fontSize: 12.5,
+      fontWeight: "700",
+      color: c.primary,
+    },
+    actionButtonSecondary: {
+      minHeight: 44,
+      minWidth: 44,
+      paddingHorizontal: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    actionButtonSecondaryText: {
+      fontSize: 12.5,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    actionButtonDanger: {
+      minHeight: 44,
+      minWidth: 44,
+      paddingHorizontal: 8,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    actionButtonDangerText: {
+      fontSize: 12.5,
       fontWeight: "700",
       color: c.danger,
     },
-    failedBtnRow: {
-      flexDirection: "row",
-      gap: 8,
-      alignItems: "center",
-    },
     retryButton: {
       backgroundColor: c.warning,
+      minHeight: 44,
       paddingHorizontal: 12,
-      paddingVertical: 7,
       borderRadius: 8,
-      alignItems: "center",
       justifyContent: "center",
-      minWidth: 72,
+      alignItems: "center",
     },
     retryButtonText: {
       fontSize: 12,
       fontWeight: "700",
       color: "#ffffff",
     },
-    retakeButton: {
-      backgroundColor: c.primary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
+    failedBadge: {
+      backgroundColor: c.dangerSoft,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      alignSelf: "flex-start",
     },
-    retakeButtonText: {
-      fontSize: 13,
+    failedBadgeText: {
+      fontSize: 10.5,
       fontWeight: "700",
-      color: "#ffffff",
+      color: c.danger,
     },
-    retakeButtonSecondary: {
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.borderStrong,
-      paddingHorizontal: 10,
-      paddingVertical: 7,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
+
+    // Pickers
+    pickerSection: {
+      gap: 8,
     },
-    retakeButtonSecondaryText: {
-      fontSize: 12,
-      fontWeight: "600",
-      color: c.textSecondary,
-    },
-    uploadPhotoButton: {
+    pickerButton: {
+      minHeight: 44,
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1.5,
-      borderColor: c.borderStrong,
-      borderRadius: 12,
-      padding: 12,
-      borderStyle: "dashed",
-      backgroundColor: c.inputBg,
     },
-    uploadPhotoText: {
+    pickerButtonPhoto: {
+      backgroundColor: c.primarySoft,
+      borderColor: c.primary,
+    },
+    pickerButtonPhotoText: {
       fontSize: 13,
-      color: c.textSecondary,
-      fontWeight: "600",
+      fontWeight: "700",
+      color: c.primary,
     },
-    noPhotoText: {
+    pickerButtonFile: {
+      backgroundColor: c.surface,
+      borderColor: c.borderStrong,
+    },
+    pickerButtonFileText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    bothPickerContainer: {
+      gap: 8,
+    },
+    bothPickerHint: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    bothButtonsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    bothBtn: {
+      flex: 1,
+    },
+    orSeparatorText: {
+      fontSize: 12,
+      color: c.textSecondary,
+      fontWeight: "500",
+    },
+    noEvidenceText: {
       fontSize: 12,
       color: c.textMuted,
       fontStyle: "italic",
@@ -396,8 +854,7 @@ const makeStyles = (c: ThemeColors) =>
 
     // Notes
     notesContainer: {
-      marginTop: 10,
-      marginLeft: 36,
+      marginTop: 6,
     },
     notesInput: {
       backgroundColor: c.inputBg,
@@ -407,11 +864,10 @@ const makeStyles = (c: ThemeColors) =>
       padding: 10,
       fontSize: 13,
       color: c.text,
-      minHeight: 40,
+      minHeight: 44,
     },
     notesContainerReadOnly: {
-      marginTop: 8,
-      marginLeft: 36,
+      marginTop: 6,
       backgroundColor: c.surface,
       borderRadius: 8,
       padding: 10,

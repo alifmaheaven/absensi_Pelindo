@@ -18,6 +18,7 @@ import {
 } from "@/types";
 import { compressImage } from "@/utils/utils";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -26,18 +27,29 @@ import ChecklistItemCard, { IItemState } from "@/components/daily-routine/Checkl
 import RoutineDetailSkeleton from "@/components/daily-routine/RoutineDetailSkeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  formatRoutineFrequency,
+  resolveEvidenceType,
+  validateEvidenceFile,
+} from "@/utils/dailyRoutineHelpers";
+import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Linking,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface IDeviceGroup {
   device_id: string;
@@ -182,20 +194,27 @@ export default function DailyRoutineDetailScreen() {
           group.items.forEach((item) => {
             const stateKey = `${group.device_id}::${item.id}`;
             const existingLogItem = logItemLookup[stateKey] || logItemLookupByItem[item.id];
+            const existingFile =
+              existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id
+                ? existingLogItem?.evidence_file || null
+                : null;
+            const isPdf = existingFile ? existingFile.toLowerCase().endsWith(".pdf") : false;
+            const existingFileName = existingFile ? existingFile.split("/").pop() : null;
+
             states[stateKey] = {
               daily_routine_item_id: item.id,
               device_id: group.device_id,
               is_checked: existingLogItem?.is_checked || false,
-              evidence_file:
-                existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id
-                  ? existingLogItem?.evidence_file || null
-                  : null,
+              evidence_file: existingFile,
               notes:
                 existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id
                   ? existingLogItem?.notes || ""
                   : "",
               local_uri: null,
               upload_failed: false,
+              file_name: existingFileName,
+              file_size: null,
+              file_type: isPdf ? "pdf" : "image",
             };
           });
         });
@@ -206,13 +225,20 @@ export default function DailyRoutineDetailScreen() {
         (routineDetail.items || []).forEach((item: IDailyRoutineItem) => {
           const stateKey = `::${item.id}`;
           const existingLogItem = logItemLookup[stateKey] || logItemLookupByItem[item.id];
+          const existingFile = existingLogItem?.evidence_file || null;
+          const isPdf = existingFile ? existingFile.toLowerCase().endsWith(".pdf") : false;
+          const existingFileName = existingFile ? existingFile.split("/").pop() : null;
+
           states[stateKey] = {
             daily_routine_item_id: item.id,
             is_checked: existingLogItem?.is_checked || false,
-            evidence_file: existingLogItem?.evidence_file || null,
+            evidence_file: existingFile,
             notes: existingLogItem?.notes || "",
             local_uri: null,
             upload_failed: false,
+            file_name: existingFileName,
+            file_size: null,
+            file_type: isPdf ? "pdf" : "image",
           };
         });
       }
@@ -233,6 +259,9 @@ export default function DailyRoutineDetailScreen() {
                   evidence_file: draftItem.evidence_file ?? states[key].evidence_file,
                   local_uri: draftItem.local_uri ?? states[key].local_uri,
                   upload_failed: draftItem.upload_failed ?? states[key].upload_failed,
+                  file_name: draftItem.file_name ?? states[key].file_name,
+                  file_size: draftItem.file_size ?? states[key].file_size,
+                  file_type: draftItem.file_type ?? states[key].file_type,
                 };
               }
             });
@@ -295,7 +324,43 @@ export default function DailyRoutineDetailScreen() {
   const handleCheckToggle = (stateKey: string) => {
     if (isReadOnly) return;
     const item = itemStates[stateKey];
-    if (item) updateItemState(stateKey, { is_checked: !item.is_checked });
+    if (!item) return;
+
+    if (item.is_checked) {
+      const hasEvidence = Boolean(item.evidence_file || item.local_uri);
+      if (hasEvidence) {
+        Alert.alert(
+          "Batalkan Centang",
+          "Batalkan centang akan menghapus lampiran bukti item ini. Lanjutkan?",
+          [
+            { text: "Pertahankan Centang", style: "cancel" },
+            {
+              text: "Hapus Bukti",
+              style: "destructive",
+              onPress: () => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                updateItemState(stateKey, {
+                  is_checked: false,
+                  evidence_file: null,
+                  local_uri: null,
+                  upload_failed: false,
+                  file_name: null,
+                  file_size: null,
+                  file_type: null,
+                });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      updateItemState(stateKey, { is_checked: false });
+    } else {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      updateItemState(stateKey, { is_checked: true });
+    }
   };
 
   const handlePickImage = async (stateKey: string) => {
@@ -304,7 +369,6 @@ export default function DailyRoutineDetailScreen() {
     setLoadingImageKey(stateKey);
 
     try {
-      // M1: Fix izin kamera (let status dan update status dari requestCameraPermissionsAsync)
       let { status } = await ImagePicker.getCameraPermissionsAsync();
 
       if (status === ImagePicker.PermissionStatus.UNDETERMINED) {
@@ -341,18 +405,35 @@ export default function DailyRoutineDetailScreen() {
         return;
       }
 
-      const compressed = await compressImage(result.assets[0], {
+      const rawAsset = result.assets[0];
+
+      const compressed = await compressImage(rawAsset, {
         maxWidth: IMAGE_MAX_WIDTH,
         quality: IMAGE_QUALITY,
       });
 
-      const localUri = compressed?.uri || result.assets[0].uri;
+      const localUri = compressed?.uri || rawAsset.uri;
+      const fileName = `daily-routine-${Date.now()}.jpg`;
+      const fileSize = rawAsset.fileSize || null;
 
-      // M7: Coba upload ke server, simpan URI lokal + flag retry bila gagal
+      // Validasi klien sebelum upload (NFR-07)
+      const validation = validateEvidenceFile({
+        size: fileSize,
+        name: fileName,
+        mimeType: "image/jpeg",
+        uri: localUri,
+      });
+
+      if (!validation.valid) {
+        showToast(validation.error || "Berkas foto tidak valid", "error");
+        setLoadingImageKey(null);
+        return;
+      }
+
       try {
         const uploadRes = await uploadDailyRoutineTemp({
           uri: localUri,
-          name: `daily-routine-${Date.now()}.jpg`,
+          name: fileName,
           type: "image/jpeg",
         } as any);
 
@@ -361,19 +442,127 @@ export default function DailyRoutineDetailScreen() {
           evidence_file: serverPath,
           local_uri: localUri,
           upload_failed: false,
+          file_name: fileName,
+          file_size: fileSize,
+          file_type: "image",
         });
+        showToast("Foto berhasil diunggah!", "success");
       } catch (uploadErr) {
         console.warn("Upload gagal saat ambil foto, disimpan lokal:", uploadErr);
         updateItemState(stateKey, {
           evidence_file: null,
           local_uri: localUri,
           upload_failed: true,
+          file_name: fileName,
+          file_size: fileSize,
+          file_type: "image",
         });
         showToast("Foto disimpan di draft. Gagal upload ke server, ketuk Coba Lagi.", "info");
       }
     } catch (error) {
       console.error("Pick image error:", error);
       showToast("Gagal mengambil gambar", "error");
+    } finally {
+      setLoadingImageKey(null);
+    }
+  };
+
+  const handlePickDocument = async (stateKey: string) => {
+    if (isReadOnly) return;
+
+    setLoadingImageKey(stateKey);
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled || !result.assets?.[0]) {
+        setLoadingImageKey(null);
+        return;
+      }
+
+      const asset = result.assets[0];
+
+      // Validasi klien sebelum upload (NFR-07: maks 5MB, JPG/PNG/WEBP/PDF)
+      const validation = validateEvidenceFile({
+        size: asset.size,
+        name: asset.name,
+        mimeType: asset.mimeType,
+        uri: asset.uri,
+      });
+
+      if (!validation.valid) {
+        showToast(validation.error || "Berkas tidak valid", "error");
+        setLoadingImageKey(null);
+        return;
+      }
+
+      const isPdf =
+        asset.mimeType?.includes("pdf") ||
+        asset.name.toLowerCase().endsWith(".pdf");
+
+      let localUri = asset.uri;
+
+      if (!isPdf && asset.mimeType?.startsWith("image/")) {
+        try {
+          const compressed = await compressImage(
+            {
+              uri: asset.uri,
+              width: 0,
+              height: 0,
+            } as any,
+            {
+              maxWidth: IMAGE_MAX_WIDTH,
+              quality: IMAGE_QUALITY,
+            }
+          );
+          if (compressed?.uri) {
+            localUri = compressed.uri;
+          }
+        } catch {
+          // Fallback to original URI if compress fails
+        }
+      }
+
+      const fileName = asset.name || `doc-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+      const fileSize = asset.size || null;
+      const mimeType = asset.mimeType || (isPdf ? "application/pdf" : "image/jpeg");
+
+      try {
+        const uploadRes = await uploadDailyRoutineTemp({
+          uri: localUri,
+          name: fileName,
+          type: mimeType,
+        } as any);
+
+        const serverPath = uploadRes.data?.[0]?.path ?? "";
+        updateItemState(stateKey, {
+          evidence_file: serverPath,
+          local_uri: localUri,
+          upload_failed: false,
+          file_name: fileName,
+          file_size: fileSize,
+          file_type: isPdf ? "pdf" : "image",
+        });
+        showToast("Berkas berhasil diunggah!", "success");
+      } catch (uploadErr) {
+        console.warn("Upload berkas gagal, disimpan di draft:", uploadErr);
+        updateItemState(stateKey, {
+          evidence_file: null,
+          local_uri: localUri,
+          upload_failed: true,
+          file_name: fileName,
+          file_size: fileSize,
+          file_type: isPdf ? "pdf" : "image",
+        });
+        showToast("Berkas disimpan di draft. Gagal upload ke server, ketuk Coba Lagi.", "info");
+      }
+    } catch (err) {
+      console.error("Pick document error:", err);
+      showToast("Gagal memilih berkas", "error");
     } finally {
       setLoadingImageKey(null);
     }
@@ -386,10 +575,18 @@ export default function DailyRoutineDetailScreen() {
 
     setLoadingImageKey(stateKey);
     try {
+      const isPdf =
+        itemState.file_type === "pdf" ||
+        (itemState.file_name ? itemState.file_name.toLowerCase().endsWith(".pdf") : false);
+      const mimeType = isPdf ? "application/pdf" : "image/jpeg";
+      const fileName =
+        itemState.file_name ||
+        `daily-routine-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+
       const uploadRes = await uploadDailyRoutineTemp({
         uri: itemState.local_uri,
-        name: `daily-routine-${Date.now()}.jpg`,
-        type: "image/jpeg",
+        name: fileName,
+        type: mimeType,
       } as any);
 
       const serverPath = uploadRes.data?.[0]?.path ?? "";
@@ -397,13 +594,25 @@ export default function DailyRoutineDetailScreen() {
         evidence_file: serverPath,
         upload_failed: false,
       });
-      showToast("Foto berhasil diunggah!", "success");
+      showToast("Bukti berhasil diunggah!", "success");
     } catch (err: any) {
       console.error("Retry upload error:", err);
-      showToast(err?.message || "Gagal mengunggah foto. Periksa koneksi internet.", "error");
+      showToast(err?.message || "Gagal mengunggah bukti. Periksa koneksi internet.", "error");
     } finally {
       setLoadingImageKey(null);
     }
+  };
+
+  const handleRemoveEvidence = (stateKey: string) => {
+    if (isReadOnly) return;
+    updateItemState(stateKey, {
+      evidence_file: null,
+      local_uri: null,
+      upload_failed: false,
+      file_name: null,
+      file_size: null,
+      file_type: null,
+    });
   };
 
   const handleSubmit = async () => {
@@ -432,18 +641,18 @@ export default function DailyRoutineDetailScreen() {
 
     const states = Object.values(itemStates);
 
-    // M7: Periksa apakah ada foto yang gagal diunggah
+    // M7: Periksa apakah ada bukti yang gagal diunggah
     const failedItem = states.find((s) => s.is_checked && s.upload_failed);
     if (failedItem) {
       const rItem = routine?.items.find((ri) => ri.id === failedItem.daily_routine_item_id);
       showToast(
-        `Foto untuk "${rItem?.name || "Item"}" belum terunggah ke server. Silakan ketuk Coba Lagi pada foto.`,
+        `Bukti untuk "${rItem?.name || "Item"}" belum terunggah ke server. Silakan ketuk Coba Lagi pada bukti.`,
         "error"
       );
       return;
     }
 
-    // M3: Validasi foto-wajib per item & per device
+    // Validasi bukti wajib per item & per device (ADR-132-04)
     for (const item of states) {
       if (!item.is_checked) continue;
       const routineItem = routine?.items.find(
@@ -454,12 +663,20 @@ export default function DailyRoutineDetailScreen() {
           di.device_id === item.device_id &&
           di.daily_routine_item_id === item.daily_routine_item_id
       );
-      const requiresPhoto =
-        deviceConf?.is_photo_required ?? routineItem?.is_photo_required ?? false;
+      const effectiveEvidence = resolveEvidenceType(
+        deviceConf?.evidence_type ?? routineItem?.evidence_type,
+        deviceConf?.is_photo_required ?? routineItem?.is_photo_required ?? false
+      );
 
-      if (requiresPhoto && !item.evidence_file) {
+      if (effectiveEvidence !== "none" && !item.evidence_file) {
+        const labels: Record<string, string> = {
+          photo: "bukti foto",
+          file: "bukti berkas",
+          both: "bukti foto atau berkas",
+        };
+        const labelText = labels[effectiveEvidence] || "bukti";
         showToast(
-          `"${routineItem?.name || "Item"}" membutuhkan foto bukti`,
+          `"${routineItem?.name || "Item"}" membutuhkan ${labelText}`,
           "error"
         );
         return;
@@ -603,6 +820,27 @@ export default function DailyRoutineDetailScreen() {
                 )}
 
                 {/* Routine Info */}
+                <View style={styles.frequencyBadgeRow}>
+                  <View
+                    style={[
+                      styles.frequencyBadge,
+                      routine?.frequency === "weekly"
+                        ? styles.frequencyBadgeWeekly
+                        : styles.frequencyBadgeDaily,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.frequencyBadgeText,
+                        routine?.frequency === "weekly"
+                          ? styles.frequencyBadgeWeeklyText
+                          : styles.frequencyBadgeDailyText,
+                      ]}
+                    >
+                      {formatRoutineFrequency(routine?.frequency, routine?.work_days)}
+                    </Text>
+                  </View>
+                </View>
                 <Text style={styles.sectionTitle}>{routine?.name}</Text>
                 {routine?.description ? (
                   <Text style={styles.sectionDescription}>{routine.description}</Text>
@@ -711,17 +949,23 @@ export default function DailyRoutineDetailScreen() {
                                 item.is_photo_required ??
                                 false;
 
+                              const evidenceType =
+                                deviceConf?.evidence_type ?? item.evidence_type;
+
                               return (
                                 <ChecklistItemCard
                                   key={item.id}
                                   item={item}
                                   state={state}
+                                  evidenceType={evidenceType}
                                   requiresPhoto={requiresPhoto}
                                   isReadOnly={isReadOnly}
-                                  loadingImage={loadingImageKey === stateKey}
+                                  loadingEvidence={loadingImageKey === stateKey}
                                   onToggle={() => handleCheckToggle(stateKey)}
-                                  onPickImage={() => handlePickImage(stateKey)}
+                                  onPickPhoto={() => handlePickImage(stateKey)}
+                                  onPickDocument={() => handlePickDocument(stateKey)}
                                   onRetryUpload={() => handleRetryUpload(stateKey)}
+                                  onRemoveEvidence={() => handleRemoveEvidence(stateKey)}
                                   onPreviewImage={(uri) => setPreviewImage(uri)}
                                   onChangeNotes={(text) =>
                                     updateItemState(stateKey, { notes: text })
@@ -742,18 +986,22 @@ export default function DailyRoutineDetailScreen() {
                       const state = itemStates[stateKey];
                       if (!state) return null;
                       const requiresPhoto = item.is_photo_required ?? false;
+                      const evidenceType = item.evidence_type;
 
                       return (
                         <ChecklistItemCard
                           key={item.id}
                           item={item}
                           state={state}
+                          evidenceType={evidenceType}
                           requiresPhoto={requiresPhoto}
                           isReadOnly={isReadOnly}
-                          loadingImage={loadingImageKey === stateKey}
+                          loadingEvidence={loadingImageKey === stateKey}
                           onToggle={() => handleCheckToggle(stateKey)}
-                          onPickImage={() => handlePickImage(stateKey)}
+                          onPickPhoto={() => handlePickImage(stateKey)}
+                          onPickDocument={() => handlePickDocument(stateKey)}
                           onRetryUpload={() => handleRetryUpload(stateKey)}
+                          onRemoveEvidence={() => handleRemoveEvidence(stateKey)}
                           onPreviewImage={(uri) => setPreviewImage(uri)}
                           onChangeNotes={(text) =>
                             updateItemState(stateKey, { notes: text })
@@ -850,6 +1098,40 @@ const makeStyles = (c: ThemeColors) =>
     scrollContent: {
       padding: 20,
       paddingTop: 25,
+    },
+    frequencyBadgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    frequencyBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      alignSelf: "flex-start",
+    },
+    frequencyBadgeText: {
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    frequencyBadgeDaily: {
+      backgroundColor: c.surface,
+      borderColor: c.borderStrong,
+    },
+    frequencyBadgeDailyText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    frequencyBadgeWeekly: {
+      backgroundColor: c.primarySoft,
+      borderColor: c.primary,
+    },
+    frequencyBadgeWeeklyText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: c.primary,
     },
     sectionTitle: {
       fontSize: 16,

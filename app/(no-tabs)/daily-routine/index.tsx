@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import RoutineProgressCard from "@/components/daily-routine/RoutineProgressCard";
+import { formatRoutineFrequency } from "@/utils/dailyRoutineHelpers";
 
 interface IErrorState {
   type: "not_checked_in" | "not_found" | "forbidden" | "network_or_server";
@@ -243,12 +244,41 @@ export default function DailyRoutineListScreen() {
                 (li) => li.is_checked
               ).length;
 
+              const isWeekly = routine.frequency === "weekly";
+              const frequencyBadgeText = formatRoutineFrequency(
+                routine.frequency,
+                routine.work_days
+              );
+
               return (
                 <View key={routine.id || index} style={styles.routineCard}>
                   <View style={styles.routineHeader}>
-                    <Text style={styles.routineName} numberOfLines={2}>
-                      {routine.name}
-                    </Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <View style={styles.badgeRow}>
+                        <View
+                          style={[
+                            styles.frequencyBadge,
+                            isWeekly
+                              ? styles.frequencyBadgeWeekly
+                              : styles.frequencyBadgeDaily,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.frequencyBadgeText,
+                              isWeekly
+                                ? styles.frequencyBadgeWeeklyText
+                                : styles.frequencyBadgeDailyText,
+                            ]}
+                          >
+                            {frequencyBadgeText}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.routineName} numberOfLines={2}>
+                        {routine.name}
+                      </Text>
+                    </View>
                     {isCompleted && (
                       <View style={styles.completedBadge}>
                         <Text style={styles.completedBadgeText}>Selesai</Text>
@@ -385,15 +415,48 @@ const makeStyles = (c: ThemeColors) =>
     routineHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
+      alignItems: "flex-start",
       marginBottom: 8,
+    },
+    badgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 6,
+    },
+    frequencyBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 6,
+      borderWidth: 1,
+      alignSelf: "flex-start",
+    },
+    frequencyBadgeText: {
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    frequencyBadgeDaily: {
+      backgroundColor: c.surface,
+      borderColor: c.borderStrong,
+    },
+    frequencyBadgeDailyText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    frequencyBadgeWeekly: {
+      backgroundColor: c.primarySoft,
+      borderColor: c.primary,
+    },
+    frequencyBadgeWeeklyText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: c.primary,
     },
     routineName: {
       fontSize: 17,
       fontWeight: "700",
       color: c.textStrong,
-      flex: 1,
-      marginRight: 8,
+      lineHeight: 22,
     },
     routineDescription: {
       fontSize: 13,

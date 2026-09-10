@@ -18,6 +18,7 @@ import { IAttendance } from "@/types";
 import {
   calculateEarlyCheckoutStatus,
   formatHourMinute,
+  getCompletedShiftBannerInfo,
   getTodayDateString,
   parseWIBDate,
   resolveAttendanceSession,
@@ -126,7 +127,7 @@ export default function HomeScreen() {
   const colors = useThemeColors();
   const isDark = useIsDarkTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
+  const styles = useMemo(() => makeStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { user } = useAuthStore();
   const { showToast } = useToast();
@@ -258,6 +259,15 @@ export default function HomeScreen() {
   const recentlyCompletedSession = sessionResolution.recentlyCompletedSession;
   const isExpiredSession = sessionResolution.isExpiredSession;
   const expiredSession = sessionResolution.expiredSession;
+
+  // Laporan 257 / UX BLOCKER-01: Copy banner pasca-checkout berbasis cut-off hari operasional (04:00 WIB)
+  const completedBannerInfo = useMemo(() => {
+    if (!recentlyCompletedSession || activeSession) return null;
+    return getCompletedShiftBannerInfo({
+      session: recentlyCompletedSession,
+      currentTime,
+    });
+  }, [recentlyCompletedSession, activeSession, currentTime]);
 
   // Evaluasi sesi shift malam (overnight session), overdue, dan status pulang awal (S-MO-4)
   const overnightSessionInfo = useMemo(() => {
@@ -645,7 +655,10 @@ export default function HomeScreen() {
       containerColor: colors.warningSoft,
       onPress: () => {
         if (!activeSession?.checkin && !recentlyCompletedSession?.checkin) {
-          showToast("Anda belum check in", "info");
+          showToast(
+            "Akses menu memerlukan presensi aktif. Silakan lakukan check-in terlebih dahulu.",
+            "warning"
+          );
           return;
         }
         router.push("/(no-tabs)/ticketing");
@@ -659,7 +672,10 @@ export default function HomeScreen() {
       containerColor: colors.successSoft,
       onPress: () => {
         if (!activeSession?.checkin && !recentlyCompletedSession?.checkin) {
-          showToast("Anda belum check in", "info");
+          showToast(
+            "Akses menu memerlukan presensi aktif. Silakan lakukan check-in terlebih dahulu.",
+            "warning"
+          );
           return;
         }
         router.push("/(no-tabs)/daily-routine");
@@ -737,7 +753,7 @@ export default function HomeScreen() {
               <Ionicons
                 name="time-outline"
                 size={16}
-                color={colors.warning}
+                color={isDark ? colors.warning : "#92400e"}
                 style={styles.offlinePillIcon}
               />
               <Text style={styles.offlinePillText}>
@@ -817,7 +833,68 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* S-MO-4: Banner Shift Malam / Overdue / Pasca-Checkout */}
+          {/* Clock Section */}
+          <View style={styles.clockSection}>
+            <View style={styles.clockIconRow}>
+              <Text style={styles.clockEmoji}>
+                <ClockOutline width={20} height={20} color={colors.primary} />
+              </Text>
+              <Text style={styles.clockSmall}>{formatTime(currentTime)}</Text>
+            </View>
+            <Text style={styles.digitalClock}>{formatTime(currentTime)}</Text>
+          </View>
+
+          {/* Attendance Cards */}
+          <View style={styles.attendanceRow}>
+            <AttendanceCard
+              type="checkin"
+              time={activeSession?.checkin}
+              subtitle={getWorkStatus(activeSession?.checkin, "checkin", currentShift, shiftDateForStatus)}
+              shift={currentShift}
+              shiftDate={shiftDateForStatus}
+              badgeText={activeSession?.checkin ? "Checked In" : "Check In"}
+              onPress={() => {
+                if (submittingRef.current) return;
+                if (activeSession?.checkin) {
+                  showToast(
+                    "Sesi dinas masih aktif. Silakan lakukan check-out terlebih dahulu sebelum memulai sesi baru.",
+                    "warning"
+                  );
+                  return;
+                }
+                submittingRef.current = true;
+                router.push("/(no-tabs)/checkin");
+                setTimeout(() => {
+                  submittingRef.current = false;
+                }, 1500);
+              }}
+            />
+
+            <AttendanceCard
+              type="checkout"
+              time={activeSession?.checkout}
+              subtitle={getWorkStatus(activeSession?.checkout, "checkout", currentShift, shiftDateForStatus)}
+              shift={currentShift}
+              shiftDate={shiftDateForStatus}
+              isOverdue={overnightSessionInfo.isOverdue}
+              badgeText={
+                activeSession?.checkout
+                  ? "Checked Out"
+                  : overnightSessionInfo.isOverdue
+                  ? "Check Out Sekarang"
+                  : "Check Out"
+              }
+              onPress={handleCheckoutPress}
+            />
+          </View>
+
+          {overnightSessionInfo.isActive && !overnightSessionInfo.isOverdue && (
+            <Text style={styles.overnightNote}>
+              Catatan: Anda dapat melakukan check-out saat shift selesai (mulai {graceStartStr} WIB).
+            </Text>
+          )}
+
+          {/* S-MO-4 / Laporan 257: Zona Banner Status & Riwayat (relokasi ke bawah kartu presensi untuk zero-CLS) */}
           {overnightSessionInfo.isActive && overnightSessionInfo.isOverdue ? (
             <View style={styles.overdueBanner}>
               <View style={styles.bannerHeaderRow}>
@@ -829,11 +906,11 @@ export default function HomeScreen() {
                 />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.overdueTitle}>
-                    WAKTU SHIFT TELAH BERAKHIR (OVERDUE)
+                    Waktu Shift Telah Selesai
                   </Text>
                   <Text style={styles.overdueSubtitle}>
-                    {overnightSessionInfo.shift?.name || "Shift Malam"} berakhir pukul{" "}
-                    {overnightSessionInfo.scheduledEndStr}
+                    {overnightSessionInfo.shift?.name || "Shift Malam"} berakhir pada pukul{" "}
+                    {overnightSessionInfo.shift?.end_time ? overnightSessionInfo.shift.end_time.slice(0, 5) : "--:--"} WIB
                   </Text>
                 </View>
               </View>
@@ -842,11 +919,11 @@ export default function HomeScreen() {
                   Waktu Sekarang (WIB): {formatTime(currentTime)}
                 </Text>
                 <Text style={styles.bannerDetailText}>
-                  Keterlambatan Check Out: {overnightSessionInfo.overdueMinutes} Menit
+                  Waktu berlalu sejak jadwal selesai: {overnightSessionInfo.overdueMinutes} menit
                 </Text>
               </View>
               <Text style={styles.bannerNotice}>
-                Anda belum melakukan Check Out kepulangan. Segera selesaikan absensi agar jam kerja Anda tercatat utuh.
+                Silakan lakukan check-out sekarang agar jam kerja Anda tercatat lengkap di sistem.
               </Text>
             </View>
           ) : overnightSessionInfo.isActive ? (
@@ -884,7 +961,7 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-          ) : recentlyCompletedSession && !activeSession ? (
+          ) : completedBannerInfo ? (
             <View style={styles.completedBanner}>
               <View style={styles.bannerHeaderRow}>
                 <CheckRounded
@@ -894,11 +971,11 @@ export default function HomeScreen() {
                   style={styles.bannerIcon}
                 />
                 <Text style={styles.completedTitle}>
-                  Sesi Dinas Selesai
+                  {completedBannerInfo.title}
                 </Text>
               </View>
               <Text style={styles.completedSubtitle}>
-                Sesi sebelumnya: masuk {formatHourMinute(recentlyCompletedSession.checkin)}, keluar {formatHourMinute(recentlyCompletedSession.checkout)} WIB — Selesai.
+                {completedBannerInfo.subtitle}
               </Text>
             </View>
           ) : isExpiredSession && expiredSession && !activeSession ? (
@@ -907,76 +984,18 @@ export default function HomeScreen() {
                 <Ionicons
                   name="alert-circle"
                   size={18}
-                  color={colors.warning}
+                  color={isDark ? colors.warning : "#92400e"}
                   style={styles.bannerIcon}
                 />
                 <Text style={styles.expiredTitle}>
-                  Sesi Sebelumnya Kadaluarsa
+                  Sesi Dinas Terlewati
                 </Text>
               </View>
               <Text style={styles.expiredSubtitle}>
-                Sesi presensi masuk ({formatHourMinute(expiredSession.checkin)} WIB) telah melebihi batas 18 jam tanpa check-out. Anda dapat melakukan check-in baru.
+                Presensi masuk kemarin ({formatHourMinute(expiredSession.checkin)} WIB) belum di-checkout hingga batas 18 jam. Silakan lakukan check-in baru dan laporkan jam pulang kemarin kepada pengawas.
               </Text>
             </View>
           ) : null}
-
-          {/* Clock Section */}
-          <View style={styles.clockSection}>
-            <View style={styles.clockIconRow}>
-              <Text style={styles.clockEmoji}>
-                <ClockOutline width={20} height={20} color={colors.primary} />
-              </Text>
-              <Text style={styles.clockSmall}>{formatTime(currentTime)}</Text>
-            </View>
-            <Text style={styles.digitalClock}>{formatTime(currentTime)}</Text>
-          </View>
-
-          {/* Attendance Cards */}
-          <View style={styles.attendanceRow}>
-            <AttendanceCard
-              type="checkin"
-              time={activeSession?.checkin}
-              subtitle={getWorkStatus(activeSession?.checkin, "checkin", currentShift, shiftDateForStatus)}
-              shift={currentShift}
-              shiftDate={shiftDateForStatus}
-              badgeText={activeSession?.checkin ? "Checked In" : "Check In"}
-              onPress={() => {
-                if (submittingRef.current) return;
-                if (activeSession?.checkin) {
-                  showToast("Anda masih dalam sesi dinas, silakan check-out dulu", "info");
-                  return;
-                }
-                submittingRef.current = true;
-                router.push("/(no-tabs)/checkin");
-                setTimeout(() => {
-                  submittingRef.current = false;
-                }, 1500);
-              }}
-            />
-
-            <AttendanceCard
-              type="checkout"
-              time={activeSession?.checkout}
-              subtitle={getWorkStatus(activeSession?.checkout, "checkout", currentShift, shiftDateForStatus)}
-              shift={currentShift}
-              shiftDate={shiftDateForStatus}
-              isOverdue={overnightSessionInfo.isOverdue}
-              badgeText={
-                activeSession?.checkout
-                  ? "Checked Out"
-                  : overnightSessionInfo.isOverdue
-                  ? "Check Out Sekarang"
-                  : "Check Out"
-              }
-              onPress={handleCheckoutPress}
-            />
-          </View>
-
-          {overnightSessionInfo.isActive && !overnightSessionInfo.isOverdue && (
-            <Text style={styles.overnightNote}>
-              Catatan: Anda dapat melakukan check-out saat shift selesai (mulai {graceStartStr} WIB).
-            </Text>
-          )}
         </View>
 
         {/* Akses Cepat */}
@@ -1051,7 +1070,7 @@ export default function HomeScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: c.background,
@@ -1098,7 +1117,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: c.warningSoft,
     borderWidth: 1,
-    borderColor: c.warning,
+    borderColor: isDark ? "#b45309" : "#d97706",
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1218,14 +1237,14 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  // S-MO-4: Overnight, Overdue, Completed, & Expired Banners
+  // S-MO-4 / Laporan 257: Overnight, Overdue, Completed, & Expired Banners
   overnightBanner: {
     backgroundColor: c.surface,
     borderWidth: 1,
     borderColor: c.primary,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginTop: 14,
   },
   overdueBanner: {
     backgroundColor: c.dangerSoft,
@@ -1233,7 +1252,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     borderColor: c.danger,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginTop: 14,
   },
   completedBanner: {
     backgroundColor: c.successSoft,
@@ -1241,20 +1260,20 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     borderColor: c.success,
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginTop: 14,
   },
   expiredBanner: {
     backgroundColor: c.warningSoft,
     borderWidth: 1,
-    borderColor: c.warning,
+    borderColor: isDark ? "#b45309" : "#d97706",
     borderRadius: 16,
     padding: 14,
-    marginBottom: 16,
+    marginTop: 14,
   },
   expiredTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: c.warning,
+    color: isDark ? c.warning : "#92400e",
     letterSpacing: 0.5,
   },
   expiredSubtitle: {
@@ -1294,7 +1313,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     marginTop: 2,
   },
   bannerDetailBox: {
-    backgroundColor: "rgba(0,0,0,0.05)",
+    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
     borderRadius: 8,
     padding: 8,
     marginVertical: 6,
@@ -1314,7 +1333,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginTop: 6,
-    backgroundColor: "rgba(0,0,0,0.03)",
+    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
     borderRadius: 10,
     padding: 8,
   },

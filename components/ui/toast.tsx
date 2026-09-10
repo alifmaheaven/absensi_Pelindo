@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckRounded, CloseRounded, InfoOutlineRounded } from "../icon";
 
 // Toast Component
-type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "info" | "warning";
 
 interface ToastProps {
   visible: boolean;
@@ -74,6 +74,8 @@ export function Toast({ visible, message, type, onHide }: ToastProps) {
         return c.success;
       case "error":
         return c.danger;
+      case "warning":
+        return c.warning;
       case "info":
         return c.primary;
       default:
@@ -87,6 +89,8 @@ export function Toast({ visible, message, type, onHide }: ToastProps) {
         return <CheckRounded {...styles.toastIcon} />;
       case "error":
         return <CloseRounded {...styles.toastIcon} />;
+      case "warning":
+        return <InfoOutlineRounded {...styles.toastIcon} />;
       case "info":
         return <InfoOutlineRounded {...styles.toastIcon} />;
       default:

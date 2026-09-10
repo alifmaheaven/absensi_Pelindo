@@ -9,6 +9,9 @@ import {
   getTodayDateString,
   formatHourMinute,
   resolveAttendanceSession,
+  getOperationalDateWIB,
+  getCompletedShiftBannerInfo,
+  OPERATIONAL_DAY_CUTOFF_HOURS,
 } from "../utils/utils";
 import type { IAttendance, IScheduleToday } from "../types";
 
@@ -524,4 +527,116 @@ describe("Utils Pure Functions Test Suite", () => {
       expect(result.recentlyCompletedSession?.id).toBe("att-night-done");
     });
   });
+
+  describe("getOperationalDateWIB (ADR-245 Cut-off 04:00 WIB)", () => {
+    it("menghitung jam 00:00:00 s.d. 03:59:59 WIB sebagai hari operasional kemarin (H-1)", () => {
+      expect(getOperationalDateWIB("2026-09-10 00:00:00")).toBe("2026-09-09");
+      expect(getOperationalDateWIB("2026-09-10 01:30:00")).toBe("2026-09-09");
+      expect(getOperationalDateWIB("2026-09-10 03:59:59")).toBe("2026-09-09");
+    });
+
+    it("menghitung jam 04:00:00 s.d. 23:59:59 WIB sebagai hari operasional hari ini (H)", () => {
+      expect(getOperationalDateWIB("2026-09-10 04:00:00")).toBe("2026-09-10");
+      expect(getOperationalDateWIB("2026-09-10 12:00:00")).toBe("2026-09-10");
+      expect(getOperationalDateWIB("2026-09-10 23:59:59")).toBe("2026-09-10");
+    });
+
+    it("mendukung objek Date arbitrer secara timezone-aware", () => {
+      const midnightDate = parseWIBDate("2026-09-10 02:00:00")!;
+      expect(getOperationalDateWIB(midnightDate)).toBe("2026-09-09");
+
+      const morningDate = parseWIBDate("2026-09-10 08:30:00")!;
+      expect(getOperationalDateWIB(morningDate)).toBe("2026-09-10");
+    });
+  });
+
+  describe("getCompletedShiftBannerInfo (UX BLOCKER-01 & Audit 256)", () => {
+    it("menampilkan 'Shift Telah Selesai' jika masih dalam hari operasional berjalan (<04:00 WIB)", () => {
+      // Skenario: Teknisi shift siang checkout 00:05 dini hari, cek app pukul 02:00 (< 04:00 WIB)
+      const session = {
+        checkin: "2026-09-09 14:49:37",
+        checkout: "2026-09-10 00:05:31",
+      };
+      const currentTime = parseWIBDate("2026-09-10 02:00:00")!;
+
+      const banner = getCompletedShiftBannerInfo({
+        session,
+        currentTime,
+      });
+
+      expect(banner.title).toBe("Shift Telah Selesai");
+      expect(banner.subtitle).toBe(
+        "Masuk 14:49 WIB, keluar 00:05 WIB. Hari operasional baru dimulai pukul 04:00 WIB."
+      );
+      expect(banner.isNewOperationalDay).toBe(false);
+    });
+
+    it("menampilkan 'Riwayat Shift Kemarin' jika hari operasional sudah berganti (>=04:00 WIB)", () => {
+      // Skenario: Teknisi shift sore kemarin membuka aplikasi jam 14:00 siang hari ini untuk dinas baru
+      const session = {
+        checkin: "2026-09-09 14:49:37",
+        checkout: "2026-09-10 00:05:31",
+      };
+      const currentTime = parseWIBDate("2026-09-10 14:00:00")!;
+
+      const banner = getCompletedShiftBannerInfo({
+        session,
+        currentTime,
+      });
+
+      expect(banner.title).toBe("Riwayat Shift Kemarin");
+      expect(banner.subtitle).toBe(
+        "Selesai: masuk 14:49 WIB, keluar 00:05 WIB. Anda dapat melakukan check-in untuk jadwal hari ini."
+      );
+      expect(banner.isNewOperationalDay).toBe(true);
+    });
+
+    it("menangani shift reguler siang yang selesai hari ini lalu dicek sebelum cut-off 04:00 WIB esoknya", () => {
+      const session = {
+        checkin: "2026-09-10 08:00:00",
+        checkout: "2026-09-10 17:00:00",
+      };
+      const currentTime = parseWIBDate("2026-09-10 17:30:00")!;
+
+      const banner = getCompletedShiftBannerInfo({
+        session,
+        currentTime,
+      });
+
+      expect(banner.title).toBe("Shift Telah Selesai");
+      expect(banner.subtitle).toBe(
+        "Masuk 08:00 WIB, keluar 17:00 WIB. Hari operasional baru dimulai pukul 04:00 WIB."
+      );
+      expect(banner.isNewOperationalDay).toBe(false);
+    });
+
+    it("menangani shift reguler kemarin yang dicek keesokan paginya (>=04:00 WIB)", () => {
+      const session = {
+        checkin: "2026-09-10 08:00:00",
+        checkout: "2026-09-10 17:00:00",
+      };
+      const currentTime = parseWIBDate("2026-09-11 06:00:00")!;
+
+      const banner = getCompletedShiftBannerInfo({
+        session,
+        currentTime,
+      });
+
+      expect(banner.title).toBe("Riwayat Shift Kemarin");
+      expect(banner.subtitle).toBe(
+        "Selesai: masuk 08:00 WIB, keluar 17:00 WIB. Anda dapat melakukan check-in untuk jadwal hari ini."
+      );
+      expect(banner.isNewOperationalDay).toBe(true);
+    });
+
+    it("menangani parameter null/kosong secara aman tanpa error", () => {
+      const banner = getCompletedShiftBannerInfo({
+        session: null,
+      });
+      expect(banner.title).toBe("Riwayat Shift Kemarin");
+      expect(banner.subtitle).toContain("masuk --:-- WIB, keluar --:--");
+      expect(banner.isNewOperationalDay).toBe(true);
+    });
+  });
 });
+

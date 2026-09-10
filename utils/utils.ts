@@ -415,3 +415,71 @@ export function resolveAttendanceSession(params: {
   };
 }
 
+/**
+ * Konstanta cut-off hari operasional dalam jam (ADR-245).
+ * Pergantian hari operasional resmi pada pukul 04:00 WIB.
+ */
+export const OPERATIONAL_DAY_CUTOFF_HOURS = 4;
+
+/**
+ * Menghitung tanggal hari operasional WIB ("YYYY-MM-DD") dengan batas cut-off 04:00 WIB (ADR-245).
+ * - Waktu 00:00:00 s.d. 03:59:59 WIB dihitung sebagai tanggal operasional kemarin (H-1).
+ * - Waktu 04:00:00 s.d. 23:59:59 WIB dihitung sebagai tanggal operasional hari kalender berjalan (H).
+ * Menerima Date, string timestamp ("YYYY-MM-DD HH:mm:ss" naive WIB atau ISO), atau default waktu sekarang.
+ */
+export function getOperationalDateWIB(dateOrStr: Date | string = new Date()): string {
+  let d: Date;
+  if (typeof dateOrStr === "string") {
+    const parsed = parseWIBDate(dateOrStr);
+    d = parsed || new Date(dateOrStr);
+  } else {
+    d = dateOrStr;
+  }
+  const shifted = new Date(d.getTime() - OPERATIONAL_DAY_CUTOFF_HOURS * 60 * 60 * 1000);
+  return getWIBDateString(shifted);
+}
+
+export interface CompletedShiftBannerInfo {
+  title: string;
+  subtitle: string;
+  isNewOperationalDay: boolean;
+}
+
+/**
+ * Menghasilkan judul dan teks penjelasan banner pasca-checkout (Recently Completed Session)
+ * berdasarkan perbandingan hari operasional sesi terhadap waktu sekarang (cut-off 04:00 WIB).
+ * Mengeliminasi ambiguitas kata "Selesai" dan memberikan panduan tindakan presensi hari ini (Audit 256).
+ */
+export function getCompletedShiftBannerInfo(params: {
+  session?: { checkin?: string | null; checkout?: string | null } | null;
+  currentTime?: Date;
+}): CompletedShiftBannerInfo {
+  const currentTime = params.currentTime || new Date();
+  const session = params.session;
+
+  const checkinStr = formatHourMinute(session?.checkin);
+  const checkoutStr = formatHourMinute(session?.checkout);
+
+  // Hari operasional sesi ditentukan oleh checkin (atau checkout bila checkin kosong)
+  const sessionTimestamp = session?.checkin || session?.checkout;
+  const sessionOpDate = sessionTimestamp ? getOperationalDateWIB(sessionTimestamp) : null;
+  const currentOpDate = getOperationalDateWIB(currentTime);
+
+  // Jika hari operasional saat ini sudah berganti (>= 04:00 WIB relatif terhadap sesi)
+  const isNewOperationalDay = !sessionOpDate || currentOpDate !== sessionOpDate;
+
+  if (isNewOperationalDay) {
+    return {
+      title: "Riwayat Shift Kemarin",
+      subtitle: `Selesai: masuk ${checkinStr} WIB, keluar ${checkoutStr} WIB. Anda dapat melakukan check-in untuk jadwal hari ini.`,
+      isNewOperationalDay: true,
+    };
+  }
+
+  return {
+    title: "Shift Telah Selesai",
+    subtitle: `Masuk ${checkinStr} WIB, keluar ${checkoutStr} WIB. Hari operasional baru dimulai pukul 04:00 WIB.`,
+    isNewOperationalDay: false,
+  };
+}
+

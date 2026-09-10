@@ -455,7 +455,7 @@ export default function LeaveScreen() {
             <View style={styles.notesContainer}>
               <TextInput
                 style={styles.notesInput}
-                placeholder="Add any notes here"
+                placeholder="Tambahkan catatan di sini"
                 placeholderTextColor={colors.textMuted}
                 multiline
                 numberOfLines={4}

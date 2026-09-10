@@ -1,6 +1,7 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { useToast } from "@/components/ui/toast";
+import InteractiveButton from "@/components/ui/InteractiveButton";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { useRequest } from "@/hooks/use-request";
 import { saveToken } from "@/lib/storage";
@@ -279,16 +280,13 @@ export default function LoginScreen() {
             </View>
 
             {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginButton, loading && styles.loginButtonLoading]}
+            <InteractiveButton
+              title="Masuk"
               onPress={handleLogin}
+              loading={loading}
               disabled={loading}
-              accessibilityRole="button"
-            >
-              <Text style={styles.loginButtonText}>
-                {loading ? "Memuat..." : "Masuk"}
-              </Text>
-            </TouchableOpacity>
+              style={styles.loginButton}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -428,19 +426,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.primary,
   },
   loginButton: {
-    backgroundColor: c.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
     marginBottom: 24,
-  },
-  loginButtonLoading: {
-    opacity: 0.7,
-  },
-  loginButtonText: {
-    color: c.onGradient,
-    fontSize: 16,
-    fontWeight: "600",
   },
   registerContainer: {
     flexDirection: "row",

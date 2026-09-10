@@ -14,6 +14,7 @@ export type StatusBadgeTone =
   | "success"
   | "warning"
   | "danger"
+  | "info"
   | "neutral";
 
 export interface StatusBadgeProps {
@@ -55,6 +56,12 @@ export default function StatusBadge({
           backgroundColor: colors.dangerSoft,
           borderColor: colors.danger,
           color: colors.danger,
+        };
+      case "info":
+        return {
+          backgroundColor: colors.primarySoft,
+          borderColor: colors.primary,
+          color: colors.primary,
         };
       case "primary":
         return {

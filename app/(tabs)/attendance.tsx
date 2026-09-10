@@ -8,6 +8,7 @@ import {
 } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -124,11 +125,11 @@ export default function AttendanceTabScreen() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardCode}>{item.code || "-"}</Text>
-        <View style={[styles.statusBadge, item.checkout ? styles.statusDone : styles.statusActive]}>
-          <Text style={[styles.statusText, item.checkout ? styles.statusTextDone : styles.statusTextActive]}>
-            {item.checkout ? "Selesai" : "Aktif"}
-          </Text>
-        </View>
+        <StatusBadge
+          label={item.checkout ? "Selesai" : "Aktif"}
+          tone={item.checkout ? "success" : "primary"}
+          size="small"
+        />
       </View>
       <View style={styles.cardBody}>
         <View style={styles.timeRow}>
@@ -219,12 +220,6 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: c.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: c.border },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   cardCode: { fontSize: 14, fontWeight: "700", color: c.textStrong },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
-  statusActive: { backgroundColor: c.primarySoft },
-  statusDone: { backgroundColor: c.successSoft },
-  statusText: { fontSize: 11, fontWeight: "600" },
-  statusTextActive: { color: c.primary },
-  statusTextDone: { color: c.success },
   cardBody: { marginBottom: 8 },
   timeRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
   timeBlock: { flex: 1, gap: 2 },

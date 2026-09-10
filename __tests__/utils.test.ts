@@ -5,7 +5,12 @@ import {
   parseUTCDate,
   getAccessibleTextColor,
   calculateEarlyCheckoutStatus,
+  getWIBDateString,
+  getTodayDateString,
+  formatHourMinute,
+  resolveAttendanceSession,
 } from "../utils/utils";
+import type { IAttendance, IScheduleToday } from "../types";
 
 describe("Utils Pure Functions Test Suite", () => {
   describe("getDistanceInMeters (Haversine)", () => {
@@ -283,6 +288,240 @@ describe("Utils Pure Functions Test Suite", () => {
         shift: null,
       });
       expect(noShift.isEarly).toBe(false);
+    });
+  });
+
+  describe("getWIBDateString and formatHourMinute", () => {
+    it("formats WIB date string correctly", () => {
+      const date = parseWIBDate("2026-09-10 14:30:00")!;
+      expect(getWIBDateString(date)).toBe("2026-09-10");
+    });
+
+    it("formats hour minute correctly", () => {
+      expect(formatHourMinute("2026-09-10 14:49:37")).toBe("14:49");
+      expect(formatHourMinute("2026-09-10 00:05:31")).toBe("00:05");
+      expect(formatHourMinute("")).toBe("--:--");
+      expect(formatHourMinute(null)).toBe("--:--");
+      expect(formatHourMinute(undefined)).toBe("--:--");
+    });
+  });
+
+  describe("resolveAttendanceSession (Defect 243 Remediation)", () => {
+    // Helper untuk membuat dummy record attendance
+    const makeAtt = (
+      id: string,
+      checkin: string | null,
+      checkout: string | null
+    ): IAttendance =>
+      ({
+        id,
+        checkin,
+        checkout,
+        user_id: "user-1",
+        company_id: "comp-1",
+        contract_id: "cont-1",
+        site_id: "site-1",
+        evidence_group_id: "eg-1",
+        code: `CHK-${id}`,
+        name: "attendance",
+        description: "",
+        longitude: 106.8,
+        latitude: -6.2,
+        checkout_longitude: null,
+        checkout_latitude: null,
+        created_at: checkin || "2026-09-10 08:00:00",
+        updated_at: checkin || "2026-09-10 08:00:00",
+        deleted_at: null,
+        attendance_status_id: "ATST001",
+        x1: null,
+        x2: null,
+        x3: null,
+        x4: null,
+        x5: null,
+        x6: null,
+        x7: null,
+        x8: null,
+        x9: null,
+        x10: null,
+        x11: null,
+        x12: null,
+        x13: null,
+        x14: null,
+        x15: null,
+        x16: null,
+        x17: null,
+        x18: null,
+        x19: null,
+        x20: null,
+      } as IAttendance);
+
+    it("kasus (a): checkout kosong dalam rentang wajar -> aktif", () => {
+      const att = makeAtt("att-1", "2026-09-10 08:00:00", null);
+      const currentTime = parseWIBDate("2026-09-10 10:00:00")!; // 2 jam lalu
+
+      const result = resolveAttendanceSession({
+        checkInData: [att],
+        currentTime,
+      });
+
+      expect(result.activeSession).not.toBeNull();
+      expect(result.activeSession?.id).toBe("att-1");
+      expect(result.recentlyCompletedSession).toBeNull();
+      expect(result.isExpiredSession).toBe(false);
+      expect(result.expiredSession).toBeNull();
+    });
+
+    it("kasus (b): sesi kemarin checkout 00:05 hari ini -> TIDAK aktif, masuk recent", () => {
+      // Skenario Riandesta & Sabila (Defect 243):
+      // Check-in kemarin 14:49:37, check-out hari ini 00:05:31.
+      // Jam 14:00 hari ini teknisi membuka aplikasi untuk dinas baru.
+      const attCrossMidnight = makeAtt(
+        "att-cross-midnight",
+        "2026-09-09 14:49:37",
+        "2026-09-10 00:05:31"
+      );
+      const currentTime = parseWIBDate("2026-09-10 14:00:00")!;
+
+      const result = resolveAttendanceSession({
+        checkInData: [attCrossMidnight],
+        currentTime,
+      });
+
+      // Kritis: TIDAK boleh dianggap aktif agar tombol check-in tidak terkunci!
+      expect(result.activeSession).toBeNull();
+      // Masuk ke recentlyCompletedSession untuk informasi di banner
+      expect(result.recentlyCompletedSession).not.toBeNull();
+      expect(result.recentlyCompletedSession?.id).toBe("att-cross-midnight");
+      expect(result.isExpiredSession).toBe(false);
+    });
+
+    it("kasus (c): dua sesi lama -> tetap tidak aktif dan tidak recent", () => {
+      const attOld1 = makeAtt("att-old-1", "2026-09-08 08:00:00", "2026-09-08 17:00:00");
+      const attOld2 = makeAtt("att-old-2", "2026-09-07 08:00:00", "2026-09-07 17:00:00");
+      const currentTime = parseWIBDate("2026-09-10 12:00:00")!;
+
+      const result = resolveAttendanceSession({
+        checkInData: [attOld1, attOld2],
+        currentTime,
+      });
+
+      expect(result.activeSession).toBeNull();
+      expect(result.recentlyCompletedSession).toBeNull();
+      expect(result.isExpiredSession).toBe(false);
+      expect(result.expiredSession).toBeNull();
+    });
+
+    it("kasus (d): sesi aktif > 18 jam -> dianggap kadaluarsa (tidak memblokir) dan dilaporkan", () => {
+      // User lupa checkout kemarin (check-in 22 jam lalu)
+      const attStale = makeAtt("att-stale", "2026-09-09 12:00:00", null);
+      const currentTime = parseWIBDate("2026-09-10 10:00:00")!; // 22 jam kemudian
+
+      const result = resolveAttendanceSession({
+        checkInData: [attStale],
+        currentTime,
+      });
+
+      // Tidak memblokir: activeSession harus NULL!
+      expect(result.activeSession).toBeNull();
+      // Dilaporkan sebagai kadaluarsa
+      expect(result.isExpiredSession).toBe(true);
+      expect(result.expiredSession?.id).toBe("att-stale");
+    });
+
+    it("menangani active_overnight_session dari jadwal server secara akurat", () => {
+      const serverSchedule: IScheduleToday = {
+        has_schedule: true,
+        shift: {
+          id: "shift-malam",
+          code: "SHIFT-MALAM",
+          name: "Shift Malam",
+          start_time: "23:00:00",
+          end_time: "07:00:00",
+          grace_late: 15,
+          grace_early: 15,
+          is_overnight: true,
+          color: "#5B21B6",
+        },
+        status: "on_time",
+        scheduled_start: "2026-09-09 23:00:00",
+        scheduled_end: "2026-09-10 07:00:00",
+        message: "",
+        active_overnight_session: {
+          shift: {
+            id: "shift-malam",
+            code: "SHIFT-MALAM",
+            name: "Shift Malam",
+            start_time: "23:00:00",
+            end_time: "07:00:00",
+            grace_late: 15,
+            grace_early: 15,
+            is_overnight: true,
+            color: "#5B21B6",
+          },
+          attendance: {
+            id: "att-night-1",
+            checkin: "2026-09-09 23:00:00",
+            checkout: null,
+            site_id: "site-1",
+          },
+          is_overdue: false,
+        },
+      };
+
+      const currentTime = parseWIBDate("2026-09-10 03:00:00")!; // 4 jam setelah checkin
+
+      const result = resolveAttendanceSession({
+        checkInData: [],
+        todaySchedule: serverSchedule,
+        currentTime,
+      });
+
+      expect(result.activeSession).not.toBeNull();
+      expect(result.activeSession?.id).toBe("att-night-1");
+      expect(result.isExpiredSession).toBe(false);
+    });
+
+    it("tidak menganggap active_overnight_session aktif jika sudah ada checkout", () => {
+      const serverSchedule: IScheduleToday = {
+        has_schedule: true,
+        shift: null,
+        status: "on_time",
+        scheduled_start: null,
+        scheduled_end: null,
+        message: "",
+        active_overnight_session: {
+          shift: {
+            id: "shift-malam",
+            code: "SHIFT-MALAM",
+            name: "Shift Malam",
+            start_time: "23:00:00",
+            end_time: "07:00:00",
+            grace_late: 15,
+            grace_early: 15,
+            is_overnight: true,
+            color: "#5B21B6",
+          },
+          attendance: {
+            id: "att-night-done",
+            checkin: "2026-09-09 23:00:00",
+            checkout: "2026-09-10 07:05:00",
+            site_id: "site-1",
+          },
+          is_overdue: false,
+        },
+      };
+
+      const attCompleted = makeAtt("att-night-done", "2026-09-09 23:00:00", "2026-09-10 07:05:00");
+      const currentTime = parseWIBDate("2026-09-10 14:00:00")!;
+
+      const result = resolveAttendanceSession({
+        checkInData: [attCompleted],
+        todaySchedule: serverSchedule,
+        currentTime,
+      });
+
+      expect(result.activeSession).toBeNull();
+      expect(result.recentlyCompletedSession?.id).toBe("att-night-done");
     });
   });
 });

@@ -1,5 +1,6 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import { ImagePickerAsset } from "expo-image-picker";
+import type { IAttendance, IScheduleToday } from "../types";
 
 export const smartCapitalize = (name?: string) => {
   if (!name) return "";
@@ -36,13 +37,33 @@ export const getDistanceInMeters = (
  * dengan `created_at` backend format "2026-08-09 10:47:12" (bagian tanggal
  * = `split(" ")[0]`).
  */
-export function getTodayDateString(): string {
+/**
+ * Tanggal dalam zona WIB (Asia/Jakarta) sebagai "YYYY-MM-DD".
+ * Mendukung injeksi Date arbitrary untuk simulasi/testing.
+ */
+export function getWIBDateString(date: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jakarta",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(date);
+}
+
+export function getTodayDateString(): string {
+  return getWIBDateString(new Date());
+}
+
+/**
+ * Format string datetime WIB ("YYYY-MM-DD HH:MM[:SS]") ke "HH:MM".
+ * Fallback aman ke "--:--" bila null/empty.
+ */
+export function formatHourMinute(datetime?: string | null): string {
+  if (!datetime) return "--:--";
+  const timePart = datetime.split(" ")[1];
+  if (!timePart) return "--:--";
+  const parts = timePart.split(":");
+  return `${parts[0] || "--"}:${parts[1] || "--"}`;
 }
 
 /**
@@ -268,6 +289,129 @@ export function calculateEarlyCheckoutStatus(params: {
     shiftEndTime,
     deficitMinutes,
     deficitText,
+  };
+}
+
+export interface AttendanceSessionResolution {
+  activeSession: IAttendance | null;
+  recentlyCompletedSession: IAttendance | null;
+  isExpiredSession: boolean;
+  expiredSession: IAttendance | null;
+}
+
+/**
+ * Resolusi sesi presensi aktif dan riwayat sesi baru selesai (Laporan 248).
+ *
+ * Aturan Bisnis (Observer Adjudication):
+ * 1. Sesi aktif HANYA baris presensi dengan checkout NULL/kosong dan checkin <= 18 jam lalu.
+ *    Baris dengan checkout terisi TIDAK PERNAH dianggap sesi aktif.
+ * 2. Baris dengan checkout terisi (mis. sesi kemarin yang checkout lewat tengah malam / 00:05 hari ini)
+ *    masuk ke recentlyCompletedSession untuk informasi dan TIDAK memblokir check-in.
+ * 3. Sesi dengan checkout kosong tetapi checkin > 18 jam lalu dianggap kadaluarsa (isExpiredSession: true)
+ *    dan TIDAK memblokir check-in hari ini.
+ */
+export function resolveAttendanceSession(params: {
+  checkInData?: IAttendance[] | null;
+  todaySchedule?: IScheduleToday | null;
+  currentTime?: Date;
+  maxActiveHours?: number;
+}): AttendanceSessionResolution {
+  const currentTime = params.currentTime || new Date();
+  const maxActiveHours = params.maxActiveHours ?? 18;
+  const targetDateStr = getWIBDateString(currentTime);
+
+  let activeSession: IAttendance | null = null;
+  let recentlyCompletedSession: IAttendance | null = null;
+  let isExpiredSession = false;
+  let expiredSession: IAttendance | null = null;
+
+  const { checkInData, todaySchedule } = params;
+
+  // 1. Cek sesi overnight aktif dari todaySchedule.active_overnight_session (kontrak backend §B.1)
+  if (todaySchedule?.active_overnight_session) {
+    const overnight = todaySchedule.active_overnight_session;
+    const isOvernightCheckoutFilled = Boolean(overnight.attendance?.checkout);
+    const checkinStr = overnight.attendance?.checkin || overnight.checkin;
+    const attId = overnight.attendance?.id ?? overnight.attendance_id;
+
+    // Sesi aktif HANYA bila checkout kosong
+    if (!isOvernightCheckoutFilled && checkinStr) {
+      const checkinDate = parseWIBDate(checkinStr);
+      if (checkinDate) {
+        const elapsedHours = (currentTime.getTime() - checkinDate.getTime()) / (1000 * 60 * 60);
+        if (elapsedHours >= 0 && elapsedHours <= maxActiveHours) {
+          const matched = checkInData?.find(
+            (c) => (attId && c.id === attId) || (checkinStr && c.checkin === checkinStr)
+          );
+          if (matched && !matched.checkout) {
+            activeSession = matched;
+          } else if (!matched) {
+            activeSession = {
+              id: attId || "overnight-active",
+              checkin: checkinStr,
+              checkout: null,
+              site_id: overnight.attendance?.site_id ?? null,
+              user_id: "",
+              created_at: checkinStr,
+            } as IAttendance;
+          }
+        } else if (elapsedHours > maxActiveHours) {
+          isExpiredSession = true;
+          expiredSession = {
+            id: attId || "overnight-expired",
+            checkin: checkinStr,
+            checkout: null,
+            site_id: overnight.attendance?.site_id ?? null,
+            user_id: "",
+            created_at: checkinStr,
+          } as IAttendance;
+        }
+      }
+    }
+  }
+
+  // 2. Evaluasi checkInData lokal jika belum ada activeSession
+  if (!activeSession && checkInData?.length) {
+    const latestUnfinished = checkInData.find((c) => Boolean(c.checkin && !c.checkout));
+    if (latestUnfinished?.checkin) {
+      const checkinDate = parseWIBDate(latestUnfinished.checkin);
+      if (checkinDate) {
+        const elapsedHours = (currentTime.getTime() - checkinDate.getTime()) / (1000 * 60 * 60);
+        if (elapsedHours >= 0 && elapsedHours <= maxActiveHours) {
+          activeSession = latestUnfinished;
+        } else if (elapsedHours > maxActiveHours) {
+          isExpiredSession = true;
+          expiredSession = latestUnfinished;
+        }
+      }
+    }
+  }
+
+  // 3. Evaluasi sesi yang baru selesai (recently completed session)
+  // Baris dengan checkout terisi yang selesai hari ini WIB atau <= maxActiveHours lalu
+  if (checkInData?.length) {
+    const completedCandidate = checkInData.find((c) => Boolean(c.checkin && c.checkout));
+    if (completedCandidate?.checkout) {
+      const checkoutDay = completedCandidate.checkout.split(" ")[0];
+      const checkoutDate = parseWIBDate(completedCandidate.checkout);
+
+      if (checkoutDay === targetDateStr) {
+        recentlyCompletedSession = completedCandidate;
+      } else if (checkoutDate) {
+        const checkoutElapsedHours =
+          (currentTime.getTime() - checkoutDate.getTime()) / (1000 * 60 * 60);
+        if (checkoutElapsedHours >= 0 && checkoutElapsedHours <= maxActiveHours) {
+          recentlyCompletedSession = completedCandidate;
+        }
+      }
+    }
+  }
+
+  return {
+    activeSession,
+    recentlyCompletedSession,
+    isExpiredSession,
+    expiredSession,
   };
 }
 

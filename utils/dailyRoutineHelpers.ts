@@ -36,7 +36,8 @@ export function validateEvidenceFile(
     mimeType?: string | null;
     uri?: string | null;
   } | null,
-  evidenceType?: EvidenceType | string | null
+  evidenceType?: EvidenceType | string | null,
+  isPhotoRequired?: boolean
 ): FileValidationResult {
   if (!file) {
     return { valid: false, error: "Berkas tidak valid." };
@@ -83,7 +84,12 @@ export function validateEvidenceFile(
   ].some((m) => mime.startsWith(m));
   const isImage = isImageExt || isImageMime;
 
-  const resolved = evidenceType ? resolveEvidenceType(evidenceType) : null;
+  let resolved: EvidenceType | null = null;
+  if (evidenceType !== undefined && evidenceType !== null) {
+    resolved = resolveEvidenceType(evidenceType, isPhotoRequired);
+  } else if (isPhotoRequired !== undefined) {
+    resolved = resolveEvidenceType(evidenceType, isPhotoRequired);
+  }
 
   // OD-4: 'photo' dan 'both' HANYA gambar (PDF ditolak!)
   if (resolved === "photo" || resolved === "both") {
@@ -419,24 +425,40 @@ export function isRoutineActiveToday(
 }
 
 /**
- * Resolusi tipe bukti checklist dengan fallback backward-compatibility (ADR-132-04).
+ * Resolusi tipe bukti checklist dengan fallback backward-compatibility (ADR-132-04, OD-4).
+ * - Vocabulary sah di DB: 'none' | 'photo' | 'file' | 'both'.
+ * - Nilai ilegal/tidak dikenal (mis. 'unknown', 'document', 'garbage') fail-safe ke 'photo' (kebijakan paling restriktif).
+ * - Nilai eksplisit 'none' tetap berarti tidak butuh bukti (tidak diubah menjadi 'photo').
+ * - Bila field benar-benar absen (undefined/null), gunakan fallback legacy is_photo_required.
  */
 export function resolveEvidenceType(
   evidence_type?: string | null,
   is_photo_required?: boolean
 ): EvidenceType {
-  if (
-    evidence_type === "none" ||
-    evidence_type === "photo" ||
-    evidence_type === "file" ||
-    evidence_type === "both"
-  ) {
-    return evidence_type;
+  // Genuinely absent (omitted or null) -> fall back to legacy is_photo_required
+  if (evidence_type === undefined || evidence_type === null) {
+    return is_photo_required ? "photo" : "none";
   }
-  if (is_photo_required) {
+
+  const normalized =
+    typeof evidence_type === "string" ? evidence_type.trim().toLowerCase() : "";
+
+  if (normalized === "none") {
+    return "none";
+  }
+  if (normalized === "photo") {
     return "photo";
   }
-  return "none";
+  if (normalized === "file") {
+    return "file";
+  }
+  if (normalized === "both") {
+    return "both";
+  }
+
+  // Field present but unrecognised/illegal (e.g. 'document', 'unknown', 'garbage')
+  // Fail safe to most restrictive real policy (OD-4): 'photo'
+  return "photo";
 }
 
 /**

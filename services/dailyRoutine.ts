@@ -7,6 +7,7 @@ import {
   IDailyRoutine,
   IDailyRoutineSubmitItem,
 } from "@/types";
+import { EvidenceType, resolveEvidenceType } from "@/utils/dailyRoutineHelpers";
 
 export async function getTodayRoutines(): Promise<Response<ITodayRoutinesAllResponse>> {
   const res = await axios.get("/daily-routine/today/all");
@@ -108,9 +109,17 @@ export async function submitDailyRoutineLog(
   return res.data;
 }
 
-export async function uploadDailyRoutineTemp(file: any): Promise<Response<{ path: string; link: string }[]>> {
+export async function uploadDailyRoutineTemp(
+  file: any,
+  evidence_type?: EvidenceType | string
+): Promise<Response<{ path: string; link: string }[]>> {
   const formData = new FormData();
   formData.append("files", file);
+  const resolvedType =
+    evidence_type !== undefined && evidence_type !== null
+      ? resolveEvidenceType(evidence_type)
+      : "photo";
+  formData.append("evidence_type", resolvedType);
   const res = await axios.post("/daily-routine/upload", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

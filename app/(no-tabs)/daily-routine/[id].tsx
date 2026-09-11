@@ -590,11 +590,14 @@ export default function DailyRoutineDetailScreen() {
       updateItemState(stateKey, syncEvidenceState(updatedFiles));
 
       try {
-        const uploadRes = await uploadDailyRoutineTemp({
-          uri: resolved.uri,
-          name: resolved.name,
-          type: resolved.mimeType,
-        } as any);
+        const uploadRes = await uploadDailyRoutineTemp(
+          {
+            uri: resolved.uri,
+            name: resolved.name,
+            type: resolved.mimeType,
+          } as any,
+          effectiveType
+        );
 
         const serverPath = uploadRes.data?.[0]?.path ?? "";
         const finalFiles = updatedFiles.map((f) =>
@@ -734,11 +737,14 @@ export default function DailyRoutineDetailScreen() {
         updateItemState(stateKey, syncEvidenceState(runningFiles));
 
         try {
-          const uploadRes = await uploadDailyRoutineTemp({
-            uri: resolved.uri,
-            name: resolved.name,
-            type: resolved.mimeType,
-          } as any);
+          const uploadRes = await uploadDailyRoutineTemp(
+            {
+              uri: resolved.uri,
+              name: resolved.name,
+              type: resolved.mimeType,
+            } as any,
+            effectiveType
+          );
           const serverPath = uploadRes.data?.[0]?.path ?? "";
           runningFiles = runningFiles.map((f) =>
             f.id === tempId ? { ...f, file: serverPath, upload_failed: false } : f
@@ -889,11 +895,14 @@ export default function DailyRoutineDetailScreen() {
         updateItemState(stateKey, syncEvidenceState(runningFiles));
 
         try {
-          const uploadRes = await uploadDailyRoutineTemp({
-            uri: resolvedAsset.uri,
-            name: resolvedAsset.name,
-            type: resolvedAsset.mimeType,
-          } as any);
+          const uploadRes = await uploadDailyRoutineTemp(
+            {
+              uri: resolvedAsset.uri,
+              name: resolvedAsset.name,
+              type: resolvedAsset.mimeType,
+            } as any,
+            effectiveType
+          );
 
           const serverPath = uploadRes.data?.[0]?.path ?? "";
           runningFiles = runningFiles.map((f) =>
@@ -927,6 +936,7 @@ export default function DailyRoutineDetailScreen() {
     if (!files.length) return;
 
     setLoadingImageKey(stateKey);
+    const effectiveType = getEffectiveEvidenceType(stateKey);
 
     try {
       let updatedFiles = [...files];
@@ -947,11 +957,14 @@ export default function DailyRoutineDetailScreen() {
           targetFile.name || `daily-routine-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
 
         try {
-          const uploadRes = await uploadDailyRoutineTemp({
-            uri: targetFile.local_uri,
-            name: fileName,
-            type: mimeType,
-          } as any);
+          const uploadRes = await uploadDailyRoutineTemp(
+            {
+              uri: targetFile.local_uri,
+              name: fileName,
+              type: mimeType,
+            } as any,
+            effectiveType
+          );
 
           const serverPath = uploadRes.data?.[0]?.path ?? "";
           updatedFiles[idx] = {
@@ -1086,11 +1099,14 @@ export default function DailyRoutineDetailScreen() {
       updateItemState(stateKey, syncEvidenceState(currentFiles));
 
       try {
-        const uploadRes = await uploadDailyRoutineTemp({
-          uri: localUri,
-          name: finalName,
-          type: finalMime,
-        } as any);
+        const uploadRes = await uploadDailyRoutineTemp(
+          {
+            uri: localUri,
+            name: finalName,
+            type: finalMime,
+          } as any,
+          effectiveType
+        );
 
         const serverPath = uploadRes.data?.[0]?.path ?? "";
         currentFiles[idx] = {

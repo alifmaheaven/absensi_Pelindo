@@ -2,6 +2,21 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
+jest.mock("expo-router", () => ({
+  router: {
+    replace: jest.fn(),
+  },
+}));
+
+jest.mock("../stores/auth", () => ({
+  useAuthStore: {
+    getState: () => ({
+      logout: jest.fn(),
+      setUser: jest.fn(),
+    }),
+  },
+}));
+
 import {
   validateEvidenceFile,
   resolveEvidenceType,
@@ -11,6 +26,8 @@ import {
   resolveTranscodedAsset,
   EvidenceType,
 } from "../utils/dailyRoutineHelpers";
+import { uploadDailyRoutineTemp } from "../services/dailyRoutine";
+import axios from "../lib/axios";
 import { getAttachedFiles, IItemState } from "../components/daily-routine/ChecklistItemCard";
 import {
   parseWIBDate,
@@ -558,6 +575,175 @@ describe("ADR-266 Verification Test Suite", () => {
       const today = todayWIB();
       expect(typeof today).toBe("string");
       expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+  });
+
+  describe("Task C / Defect Fixes: Fail-Safe Policy & Upload Payload (OD-4)", () => {
+    describe("resolveEvidenceType fail-safe and backward compatibility", () => {
+      it("an unrecognised value resolves to 'photo'", () => {
+        expect(resolveEvidenceType("unknown")).toBe("photo");
+        expect(resolveEvidenceType("document")).toBe("photo");
+        expect(resolveEvidenceType("garbage")).toBe("photo");
+        expect(resolveEvidenceType("")).toBe("photo");
+        expect(resolveEvidenceType("invalid_type")).toBe("photo");
+      });
+
+      it("explicit 'none' still means no-evidence-required", () => {
+        expect(resolveEvidenceType("none")).toBe("none");
+        expect(resolveEvidenceType("none", true)).toBe("none");
+        expect(resolveEvidenceType("none", false)).toBe("none");
+      });
+
+      it("absent value with is_photo_required: true -> 'photo' and with false -> 'none'", () => {
+        expect(resolveEvidenceType(undefined, true)).toBe("photo");
+        expect(resolveEvidenceType(undefined, false)).toBe("none");
+        expect(resolveEvidenceType(null, true)).toBe("photo");
+        expect(resolveEvidenceType(null, false)).toBe("none");
+        expect(resolveEvidenceType(undefined, undefined)).toBe("none");
+      });
+
+      it("explicit 'file' still accepts PDF mode and legal types are preserved", () => {
+        expect(resolveEvidenceType("file")).toBe("file");
+        expect(resolveEvidenceType("photo")).toBe("photo");
+        expect(resolveEvidenceType("both")).toBe("both");
+      });
+    });
+
+    describe("validateEvidenceFile policy enforcement under all modes", () => {
+      const validJpg = { name: "foto.jpg", mimeType: "image/jpeg", size: 1024 * 1024 };
+      const validPdf = { name: "berkas.pdf", mimeType: "application/pdf", size: 1024 * 1024 };
+      const svgFile = { name: "vektor.svg", mimeType: "image/svg+xml", size: 10 * 1024 };
+
+      it("an unrecognised value resolves to 'photo' and rejects PDF", () => {
+        const resUnknown = validateEvidenceFile(validPdf, "unknown");
+        expect(resUnknown.valid).toBe(false);
+        expect(resUnknown.error).toContain("hanya menerima bukti foto (JPG, PNG, WEBP)");
+
+        const resDoc = validateEvidenceFile(validPdf, "document");
+        expect(resDoc.valid).toBe(false);
+        expect(resDoc.error).toContain("hanya menerima bukti foto (JPG, PNG, WEBP)");
+
+        // Valid image passes for unrecognised mode as it fails safe to photo
+        expect(validateEvidenceFile(validJpg, "unknown").valid).toBe(true);
+        expect(validateEvidenceFile(validJpg, "document").valid).toBe(true);
+      });
+
+      it("explicit 'none' still means no-evidence-required", () => {
+        const res = validateEvidenceFile(validJpg, "none");
+        expect(res.valid).toBe(false);
+        expect(res.error).toContain("tidak memerlukan bukti");
+      });
+
+      it("absent value with is_photo_required: true -> 'photo' and with false -> 'none'", () => {
+        // is_photo_required: true -> photo only, rejects PDF, accepts photo
+        const resPdfTrue = validateEvidenceFile(validPdf, undefined, true);
+        expect(resPdfTrue.valid).toBe(false);
+        expect(resPdfTrue.error).toContain("hanya menerima bukti foto (JPG, PNG, WEBP)");
+
+        const resJpgTrue = validateEvidenceFile(validJpg, undefined, true);
+        expect(resJpgTrue.valid).toBe(true);
+
+        // is_photo_required: false -> none, rejects upload outright
+        const resFalse = validateEvidenceFile(validJpg, undefined, false);
+        expect(resFalse.valid).toBe(false);
+        expect(resFalse.error).toContain("tidak memerlukan bukti");
+      });
+
+      it("explicit 'file' still accepts PDF", () => {
+        const resPdf = validateEvidenceFile(validPdf, "file");
+        expect(resPdf.valid).toBe(true);
+
+        const resJpg = validateEvidenceFile(validJpg, "file");
+        expect(resJpg.valid).toBe(true);
+      });
+
+      it("SVG rejected in every mode", () => {
+        const modes = ["photo", "both", "file", "none", "unknown", "document", "garbage"];
+        for (const mode of modes) {
+          const res = validateEvidenceFile(svgFile, mode);
+          expect(res.valid).toBe(false);
+          expect(res.error).toContain("Format berkas SVG tidak didukung");
+        }
+      });
+    });
+
+    describe("uploadDailyRoutineTemp upload payload carries legal evidence_type", () => {
+      let postSpy: jest.SpyInstance;
+
+      beforeEach(() => {
+        postSpy = jest.spyOn(axios, "post").mockResolvedValue({
+          data: {
+            data: [{ path: "/uploads/evidence-1.jpg", link: "https://s3.pelindo.co.id/evidence-1.jpg" }],
+          },
+        });
+      });
+
+      afterEach(() => {
+        postSpy.mockRestore();
+      });
+
+      const extractFormDataField = (formData: any, key: string) => {
+        if (typeof formData.get === "function") {
+          return formData.get(key);
+        }
+        if (Array.isArray(formData._parts)) {
+          const part = formData._parts.find((p: any) => p[0] === key);
+          return part ? part[1] : undefined;
+        }
+        return undefined;
+      };
+
+      it("asserts upload payload carries legal 'file' for document items", async () => {
+        const dummyFile = { uri: "file:///storage/doc.pdf", name: "doc.pdf", type: "application/pdf" };
+        await uploadDailyRoutineTemp(dummyFile, "file");
+
+        expect(postSpy).toHaveBeenCalledTimes(1);
+        const [url, formData, config] = postSpy.mock.calls[0];
+        expect(url).toBe("/daily-routine/upload");
+        expect(config?.headers?.["Content-Type"]).toBe("multipart/form-data");
+        expect(extractFormDataField(formData, "evidence_type")).toBe("file");
+      });
+
+      it("asserts upload payload carries legal 'photo' for photo items", async () => {
+        const dummyFile = { uri: "file:///storage/photo.jpg", name: "photo.jpg", type: "image/jpeg" };
+        await uploadDailyRoutineTemp(dummyFile, "photo");
+
+        const [, formData] = postSpy.mock.calls[0];
+        expect(extractFormDataField(formData, "evidence_type")).toBe("photo");
+      });
+
+      it("asserts upload payload carries legal 'both' for both items", async () => {
+        const dummyFile = { uri: "file:///storage/photo.jpg", name: "photo.jpg", type: "image/jpeg" };
+        await uploadDailyRoutineTemp(dummyFile, "both");
+
+        const [, formData] = postSpy.mock.calls[0];
+        expect(extractFormDataField(formData, "evidence_type")).toBe("both");
+      });
+
+      it("asserts upload payload carries legal 'none' when none is provided", async () => {
+        const dummyFile = { uri: "file:///storage/photo.jpg", name: "photo.jpg", type: "image/jpeg" };
+        await uploadDailyRoutineTemp(dummyFile, "none");
+
+        const [, formData] = postSpy.mock.calls[0];
+        expect(extractFormDataField(formData, "evidence_type")).toBe("none");
+      });
+
+      it("asserts upload payload converts unrecognised 'document' to legal fail-safe 'photo'", async () => {
+        const dummyFile = { uri: "file:///storage/photo.jpg", name: "photo.jpg", type: "image/jpeg" };
+        await uploadDailyRoutineTemp(dummyFile, "document");
+
+        const [, formData] = postSpy.mock.calls[0];
+        expect(extractFormDataField(formData, "evidence_type")).toBe("photo");
+        expect(extractFormDataField(formData, "evidence_type")).not.toBe("document");
+      });
+
+      it("asserts upload payload defaults to legal 'photo' when evidence_type is omitted", async () => {
+        const dummyFile = { uri: "file:///storage/photo.jpg", name: "photo.jpg", type: "image/jpeg" };
+        await uploadDailyRoutineTemp(dummyFile);
+
+        const [, formData] = postSpy.mock.calls[0];
+        expect(extractFormDataField(formData, "evidence_type")).toBe("photo");
+      });
     });
   });
 });

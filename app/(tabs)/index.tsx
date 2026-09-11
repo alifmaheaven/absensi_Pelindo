@@ -229,7 +229,7 @@ export default function HomeScreen() {
     if (serverOvernight && !serverOvernight.attendance?.checkout) {
       isNightShiftActive = true;
       shift = serverOvernight.shift;
-      shiftDateStr = serverOvernight.shift_date || activeSession?.checkin?.split(" ")[0] || "";
+      shiftDateStr = serverOvernight.shift_date || activeSession?.checkin?.split(/[T\s]/)[0] || "";
       checkinTimeStr = serverOvernight.attendance?.checkin || serverOvernight.checkin || activeSession?.checkin || "";
       isOverdue = Boolean(serverOvernight.is_overdue);
     } else if (activeSession?.checkin && !activeSession?.checkout) {
@@ -237,13 +237,19 @@ export default function HomeScreen() {
       const checkinDate = parseWIBDate(activeSession.checkin);
       if (checkinDate) {
         const elapsedHours = (currentTime.getTime() - checkinDate.getTime()) / (1000 * 60 * 60);
-        const checkinDay = activeSession.checkin.split(" ")[0];
-        const isPastMidnight = checkinDay !== today && elapsedHours >= 0 && elapsedHours <= 18;
+        const checkinDay = activeSession.checkin.split(/[T\s]/)[0];
+        const checkinHour = getWIBHour(checkinDate);
+        const isNightCheckinTime = checkinHour >= 18 || checkinHour < 4;
+        const isPastMidnight =
+          checkinDay !== today &&
+          elapsedHours >= 0 &&
+          elapsedHours <= 18 &&
+          isNightCheckinTime;
         const isShiftOvernight = Boolean(todaySchedule?.shift?.is_overnight);
 
         if (isPastMidnight || isShiftOvernight) {
           isNightShiftActive = true;
-          shift = todaySchedule?.shift ?? {
+          shift = (isShiftOvernight ? todaySchedule?.shift : null) ?? {
             id: "overnight-fallback",
             code: "SHIFT-MALAM",
             name: "Shift Malam",
@@ -345,7 +351,7 @@ export default function HomeScreen() {
     if (overnightSessionInfo.shiftDate) {
       return overnightSessionInfo.shiftDate;
     }
-    return displaySession?.checkin?.split(" ")[0] ?? null;
+    return displaySession?.checkin?.split(/[T\s]/)[0] ?? null;
   }, [overnightSessionInfo, displaySession]);
 
   const graceStartStr = useMemo(() => {
@@ -399,7 +405,7 @@ export default function HomeScreen() {
       };
     }
 
-    const checkinDay = activeSession.checkin.split(" ")[0];
+    const checkinDay = activeSession.checkin.split(/[T\s]/)[0];
     const shiftDate = shiftDateForStatus || checkinDay || getTodayDateString();
 
     const status = calculateEarlyCheckoutStatus({

@@ -139,26 +139,92 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
   });
 
   // 4. Audit Edge Case: Perilaku fallback jika shift kemarin non-overnight (BUG-267-08)
-  it("EDGE CASE BUG-267-08: resolveHomeScreenCurrentShift falls back to FALLBACK_OVERNIGHT_SHIFT when checkinDay !== today even for regular shift", () => {
-    const yesterdayDaySession = {
+  it("VERIFIES FIX BUG-267-08: resolveHomeScreenCurrentShift does NOT fall back to FALLBACK_OVERNIGHT_SHIFT for daytime checkin (14:00 or 09:30)", () => {
+    const afternoonSession = {
       id: "att-day-yesterday",
       checkin: "2026-09-11 14:00:00",
       checkout: "2026-09-11 22:00:00",
     };
 
-    // Tidak ada server overnight shift
-    const resolvedShift = resolveHomeScreenCurrentShift({
+    // Skenario A: Tidak ada server overnight shift dan tidak ada jadwal hari ini -> resolves to null
+    const resolvedNull = resolveHomeScreenCurrentShift({
       isOvernightActive: false,
       overnightShift: null,
       isTodayShiftCompleted: true,
-      displaySession: yesterdayDaySession,
+      displaySession: afternoonSession,
       todaySchedule: { shift: null, active_overnight_session: null } as any,
       todayDateStr: "2026-09-12",
     });
 
-    // Karena checkinDay !== today, sistem mengasumsikan FALLBACK_OVERNIGHT_SHIFT
-    expect(resolvedShift).toEqual(FALLBACK_OVERNIGHT_SHIFT);
-    expect(resolvedShift?.start_time).toBe("22:00:00");
+    expect(resolvedNull).toBeNull();
+    expect(resolvedNull).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
+
+    // Skenario B: Ada jadwal shift hari ini -> resolves to todaySchedule.shift
+    const dayShift = {
+      id: "shift-siang",
+      code: "SIANG",
+      name: "Shift Siang",
+      start_time: "14:00:00",
+      end_time: "22:00:00",
+      grace_late: 15,
+      grace_early: 15,
+      is_overnight: false,
+      color: "#2563EB",
+    };
+
+    const resolvedWithSchedule = resolveHomeScreenCurrentShift({
+      isOvernightActive: false,
+      overnightShift: null,
+      isTodayShiftCompleted: true,
+      displaySession: afternoonSession,
+      todaySchedule: { shift: dayShift, active_overnight_session: null } as any,
+      todayDateStr: "2026-09-12",
+    });
+
+    expect(resolvedWithSchedule).toEqual(dayShift);
+    expect(resolvedWithSchedule).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
+
+    // Skenario C: Sesi 09:30 kemarin tanpa jadwal hari ini
+    const morningSession930 = {
+      id: "att-day-930",
+      checkin: "2026-09-11 09:30:00",
+      checkout: "2026-09-11 17:30:00",
+    };
+
+    const resolved930Null = resolveHomeScreenCurrentShift({
+      isOvernightActive: false,
+      overnightShift: null,
+      isTodayShiftCompleted: true,
+      displaySession: morningSession930,
+      todaySchedule: { shift: null, active_overnight_session: null } as any,
+      todayDateStr: "2026-09-12",
+    });
+
+    expect(resolved930Null).toBeNull();
+    expect(resolved930Null).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
+  });
+
+  it("VERIFIES FIX BUG-267-08: morning checkin (09:33) post-midnight returns null (not Shift Malam) when no today schedule", () => {
+    // Skenario User alif@prakhya.id (Working Hours 09:00 - 17:00, Senin-Jumat)
+    // Checkin Jumat 09:33 WIB, buka aplikasi Sabtu 01:15 WIB (pasca tengah malam)
+    const morningSession = {
+      id: "att-morning-yesterday",
+      checkin: "2026-09-11 09:33:00",
+      checkout: "2026-09-11 17:05:00",
+    };
+
+    const resolvedShift = resolveHomeScreenCurrentShift({
+      isOvernightActive: false,
+      overnightShift: null,
+      isTodayShiftCompleted: true,
+      displaySession: morningSession,
+      todaySchedule: { shift: null, active_overnight_session: null } as any,
+      todayDateStr: "2026-09-12",
+    });
+
+    // Harus bernilai null, TIDAK BOLEH fallback ke FALLBACK_OVERNIGHT_SHIFT ("Shift Malam")
+    expect(resolvedShift).toBeNull();
+    expect(resolvedShift).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
   });
 
   // 5. Audit Kontras Visual: Warna teks sukses on-time terhadap kartu successSoft (BUG-267-10)

@@ -403,7 +403,7 @@ export function calculateEarlyCheckoutStatus(params: {
   // Tentukan tanggal dasar shift (WIB)
   const shiftDateStr =
     params.shiftDate ||
-    (params.checkinTime ? params.checkinTime.split(" ")[0] : getTodayDateString());
+    (params.checkinTime ? params.checkinTime.split(/[T\s]/)[0] : getTodayDateString());
 
   const formattedEndTime =
     shift.end_time.length === 5 ? `${shift.end_time}:00` : shift.end_time;
@@ -549,7 +549,7 @@ export function resolveAttendanceSession(params: {
   if (checkInData?.length) {
     const completedCandidate = checkInData.find((c) => Boolean(c.checkin && c.checkout));
     if (completedCandidate?.checkout) {
-      const checkoutDay = completedCandidate.checkout.split(" ")[0];
+      const checkoutDay = completedCandidate.checkout.split(/[T\s]/)[0];
       const checkoutDate = parseWIBDate(completedCandidate.checkout);
 
       if (checkoutDay === targetDateStr) {
@@ -605,13 +605,23 @@ export function resolveHomeScreenCurrentShift(params: {
   }
   if (params.isTodayShiftCompleted && params.displaySession?.checkin) {
     const today = params.todayDateStr || getTodayDateString();
-    const checkinDay = params.displaySession.checkin.split(" ")[0];
+    const checkinDate = parseWIBDate(params.displaySession.checkin);
+    let checkinHour = checkinDate ? getWIBHour(checkinDate) : -1;
+    if (checkinHour < 0) {
+      const match = params.displaySession.checkin.match(/(?:T|\s)(\d{1,2}):/);
+      if (match) {
+        checkinHour = parseInt(match[1], 10);
+      }
+    }
+    const checkinDay = params.displaySession.checkin.split(/[T\s]/)[0];
     const serverOvernight = params.todaySchedule?.active_overnight_session;
     const isShiftOvernight = Boolean(params.todaySchedule?.shift?.is_overnight);
+    const isNightCheckinTime =
+      checkinHour >= 0 && (checkinHour >= 18 || checkinHour < 4);
     const isOvernightCheckin =
-      checkinDay !== today ||
       Boolean(serverOvernight?.shift) ||
-      isShiftOvernight;
+      isShiftOvernight ||
+      (isNightCheckinTime && checkinDay !== today);
 
     if (isOvernightCheckin) {
       return (

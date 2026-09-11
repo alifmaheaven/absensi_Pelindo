@@ -25,11 +25,14 @@ import {
   resolveAttendanceSession,
   smartCapitalize,
   buildWIBScheduledTime,
+  getWorkStatus,
+  resolveHomeScreenCurrentShift,
 } from "@/utils/utils";
 import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSafeAreaInsets, type EdgeInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ActivityIndicator,
   Alert,
@@ -52,76 +55,7 @@ import NotificationRationaleModal from "@/components/home/NotificationRationaleM
 import NotificationPermissionBanner from "@/components/home/NotificationPermissionBanner";
 import EarlyCheckoutModal from "@/components/ui/EarlyCheckoutModal";
 
-export function getWorkStatus(
-  datetime?: string | null,
-  type: "checkin" | "checkout" = "checkin",
-  shift?: Ishift | null,
-  shiftDate?: string | null
-): string {
-  if (!shift) {
-    // No schedule assigned — just show neutral state
-    return "--";
-  }
-
-  const [sh, sm] = shift.start_time.split(":").map(Number);
-  const [eh, em] = shift.end_time.split(":").map(Number);
-  const defaultText = `${type === "checkin" ? "Start" : "End"} ${type === "checkin" ? shift.start_time.slice(0,5) : shift.end_time.slice(0,5)}`;
-
-  if (!datetime) return defaultText;
-
-  // checkin/checkout = WIB wall-clock string → parse WIB (bukan device-local).
-  const actualTime = parseWIBDate(datetime);
-  if (!actualTime) return defaultText;
-
-  // S-MO-2: Turunkan tanggal jadwal dari tanggal shift (baseDate), bukan tanggal aktual.
-  // Ini menghapus bug penambahan ganda +1 hari pada checkout pagi hari H+1.
-  let baseDate = new Date(actualTime);
-  if (shiftDate) {
-    const parsedShiftDate = parseWIBDate(shiftDate.includes(" ") ? shiftDate : `${shiftDate} 00:00:00`);
-    if (parsedShiftDate) {
-      baseDate = parsedShiftDate;
-    }
-  } else if (type === "checkout" && shift.is_overnight && eh < sh) {
-    // Jika checkout terjadi di jam pagi (< sh), maka tanggal mulai shift adalah kemarin
-    if (getWIBHour(actualTime) < sh) {
-      baseDate.setDate(baseDate.getDate() - 1);
-    }
-  }
-
-  const buildScheduled = (hh: number, mm: number): Date => {
-    return buildWIBScheduledTime(baseDate, hh, mm);
-  };
-
-  if (type === "checkin") {
-    const scheduledTime = buildScheduled(sh, sm);
-    const graceMs = shift.grace_late * 60 * 1000;
-    const diffMs = actualTime.getTime() - scheduledTime.getTime();
-
-    if (diffMs > graceMs) {
-      const diffMinutes = Math.floor((diffMs - graceMs) / 60000);
-      return `Late Check in +${diffMinutes} min`;
-    }
-    if (diffMs < 0) {
-      // Checked in BEFORE shift started — show how early
-      const earlyMinutes = Math.floor(Math.abs(diffMs) / 60000);
-      return `Early Check in ${earlyMinutes} min`;
-    }
-    return defaultText;
-  } else {
-    let scheduledTime = buildScheduled(eh, em);
-    if (shift.is_overnight && eh < sh) {
-      scheduledTime = new Date(scheduledTime.getTime() + 24 * 60 * 60 * 1000);
-    }
-    const graceMs = shift.grace_early * 60 * 1000;
-    const diffMs = actualTime.getTime() - scheduledTime.getTime();
-
-    if (diffMs < -graceMs) {
-      const diffMinutes = Math.floor(Math.abs(diffMs + graceMs) / 60000);
-      return `Early Check Out ${diffMinutes} min`;
-    }
-    return defaultText;
-  }
-}
+export { getWorkStatus } from "@/utils/utils";
 
 export default function HomeScreen() {
   const colors = useThemeColors();
@@ -269,6 +203,18 @@ export default function HomeScreen() {
     });
   }, [recentlyCompletedSession, activeSession, currentTime]);
 
+  // ADR-267 / OI-2: Sesi dinas hari operasional ini telah selesai (pasca-checkout, sebelum cut-off 04:00 WIB)
+  const isTodayShiftCompleted = useMemo(() => {
+    return !activeSession && Boolean(recentlyCompletedSession && !completedBannerInfo?.isNewOperationalDay);
+  }, [activeSession, recentlyCompletedSession, completedBannerInfo]);
+
+  // Sesi yang ditampilkan pada kartu presensi (aktif berjalan, atau yang baru diselesaikan hari ini)
+  const displaySession = useMemo(() => {
+    if (activeSession) return activeSession;
+    if (isTodayShiftCompleted) return recentlyCompletedSession;
+    return null;
+  }, [activeSession, isTodayShiftCompleted, recentlyCompletedSession]);
+
   // Evaluasi sesi shift malam (overnight session), overdue, dan status pulang awal (S-MO-4)
   const overnightSessionInfo = useMemo(() => {
     const today = getTodayDateString();
@@ -386,18 +332,21 @@ export default function HomeScreen() {
   }, [todaySchedule, activeSession, currentTime]);
 
   const currentShift = useMemo(() => {
-    if (overnightSessionInfo.isActive && overnightSessionInfo.shift) {
-      return overnightSessionInfo.shift;
-    }
-    return todaySchedule?.shift ?? null;
-  }, [overnightSessionInfo, todaySchedule]);
+    return resolveHomeScreenCurrentShift({
+      isOvernightActive: overnightSessionInfo.isActive,
+      overnightShift: overnightSessionInfo.shift,
+      isTodayShiftCompleted,
+      displaySession,
+      todaySchedule,
+    });
+  }, [overnightSessionInfo, todaySchedule, isTodayShiftCompleted, displaySession]);
 
   const shiftDateForStatus = useMemo(() => {
     if (overnightSessionInfo.shiftDate) {
       return overnightSessionInfo.shiftDate;
     }
-    return activeSession?.checkin?.split(" ")[0] ?? null;
-  }, [overnightSessionInfo, activeSession]);
+    return displaySession?.checkin?.split(" ")[0] ?? null;
+  }, [overnightSessionInfo, displaySession]);
 
   const graceStartStr = useMemo(() => {
     if (!overnightSessionInfo.shift) return "05:45";
@@ -472,6 +421,14 @@ export default function HomeScreen() {
   const handleCheckoutPress = () => {
     // Guard anti double-trigger
     if (submittingRef.current) return;
+
+    if (isTodayShiftCompleted || displaySession?.checkout) {
+      showToast(
+        "Presensi dinas hari ini telah selesai. Sesi baru dapat dimulai pukul 04:00 WIB.",
+        "info"
+      );
+      return;
+    }
 
     if (!activeSession?.checkin) {
       showToast("Anda belum check in", "info");
@@ -692,58 +649,64 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={isDark ? "#38bdf8" : colors.primary}
-            colors={[colors.primary]}
-          />
-        }
+      <LinearGradient
+        colors={[colors.primary, colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.gradient}
       >
-        {/* Top Bar */}
-        <View style={styles.topBar}>
-          <View>
-            <Text style={styles.greeting}>{getGreeting()}</Text>
-            <Text style={styles.userName}>
-              Sir {smartCapitalize(user?.name)}
-            </Text>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.onGradient}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          {/* Top Bar */}
+          <View style={styles.topBar}>
+            <View>
+              <Text style={styles.greeting}>{getGreeting()}</Text>
+              <Text style={styles.userName}>
+                Sir {smartCapitalize(user?.name)}
+              </Text>
+            </View>
+
+            <View style={styles.rightActions}>
+              {/* Notification */}
+              <TouchableOpacity
+                onPress={handleNotificationPress}
+                style={styles.notificationBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Bell color={colors.onGradient} />
+
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Avatar */}
+              <TouchableOpacity
+                onPress={handleAvatarPress}
+                style={styles.avatar}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <PersonFill color={colors.onGradient} {...styles.avatarIcon} />
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <View style={styles.rightActions}>
-            {/* Notification */}
-            <TouchableOpacity
-              onPress={handleNotificationPress}
-              style={styles.notificationBtn}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              activeOpacity={0.7}
-            >
-              <Bell color={colors.textStrong} />
-
-              {unreadCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            {/* Avatar */}
-            <TouchableOpacity
-              onPress={handleAvatarPress}
-              style={styles.avatar}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              activeOpacity={0.7}
-            >
-              <PersonFill color={colors.textStrong} {...styles.avatarIcon} />
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* R-BL-11: Pill antrean offline */}
         {pendingOfflineCount > 0 && (
@@ -847,43 +810,51 @@ export default function HomeScreen() {
           <View style={styles.attendanceRow}>
             <AttendanceCard
               type="checkin"
-              time={activeSession?.checkin}
-              subtitle={getWorkStatus(activeSession?.checkin, "checkin", currentShift, shiftDateForStatus)}
+              time={displaySession?.checkin}
+              subtitle={getWorkStatus(displaySession?.checkin, "checkin", currentShift, shiftDateForStatus)}
               shift={currentShift}
               shiftDate={shiftDateForStatus}
-              badgeText={activeSession?.checkin ? "Checked In" : "Check In"}
-              onPress={() => {
-                if (submittingRef.current) return;
-                if (activeSession?.checkin) {
-                  showToast(
-                    "Sesi dinas masih aktif. Silakan lakukan check-out terlebih dahulu sebelum memulai sesi baru.",
-                    "warning"
-                  );
-                  return;
-                }
-                submittingRef.current = true;
-                router.push("/(no-tabs)/checkin");
-                setTimeout(() => {
-                  submittingRef.current = false;
-                }, 1500);
-              }}
+              badgeText={displaySession?.checkin ? "Checked In" : "Check In"}
+              disabled={isTodayShiftCompleted || Boolean(activeSession?.checkin)}
+              disabledReason={isTodayShiftCompleted ? "Sesi dinas hari ini telah selesai" : undefined}
+              onPress={
+                isTodayShiftCompleted
+                  ? undefined
+                  : () => {
+                      if (submittingRef.current) return;
+                      if (activeSession?.checkin) {
+                        showToast(
+                          "Sesi dinas masih aktif. Silakan lakukan check-out terlebih dahulu sebelum memulai sesi baru.",
+                          "warning"
+                        );
+                        return;
+                      }
+                      submittingRef.current = true;
+                      router.push("/(no-tabs)/checkin");
+                      setTimeout(() => {
+                        submittingRef.current = false;
+                      }, 1500);
+                    }
+              }
             />
 
             <AttendanceCard
               type="checkout"
-              time={activeSession?.checkout}
-              subtitle={getWorkStatus(activeSession?.checkout, "checkout", currentShift, shiftDateForStatus)}
+              time={displaySession?.checkout}
+              subtitle={getWorkStatus(displaySession?.checkout, "checkout", currentShift, shiftDateForStatus)}
               shift={currentShift}
               shiftDate={shiftDateForStatus}
               isOverdue={overnightSessionInfo.isOverdue}
               badgeText={
-                activeSession?.checkout
+                displaySession?.checkout
                   ? "Checked Out"
                   : overnightSessionInfo.isOverdue
                   ? "Check Out Sekarang"
                   : "Check Out"
               }
-              onPress={handleCheckoutPress}
+              disabled={isTodayShiftCompleted}
+              disabledReason={isTodayShiftCompleted ? "Sesi dinas hari ini telah selesai" : undefined}
+              onPress={isTodayShiftCompleted ? undefined : handleCheckoutPress}
             />
           </View>
 
@@ -1038,6 +1009,7 @@ export default function HomeScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+    </LinearGradient>
 
       <EarlyCheckoutModal
         visible={showEarlyCheckoutModal}
@@ -1074,6 +1046,9 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     flex: 1,
     backgroundColor: c.background,
   },
+  gradient: {
+    flex: 1,
+  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -1088,22 +1063,23 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   greeting: {
     fontSize: 22,
     fontWeight: "bold",
-    color: c.textStrong,
+    color: c.onGradient,
     marginBottom: 2,
   },
   userName: {
     fontSize: 14,
-    color: c.textSecondary,
+    color: c.onGradient,
+    opacity: 0.9,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: c.surface,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: "rgba(255, 255, 255, 0.25)",
   },
   avatarIcon: {
     width: 22,
@@ -1166,7 +1142,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1204,7 +1180,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
   },
   dayIcon: {
     fontSize: 12,
@@ -1376,7 +1352,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     paddingVertical: 16,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
   },
   clockIconRow: {
     flexDirection: "row",
@@ -1421,7 +1397,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     padding: 16,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1456,7 +1432,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.borderStrong,
     marginBottom: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -1473,9 +1449,9 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     position: "relative",
     width: 44,
     height: 44,
-    backgroundColor: c.surface,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: "rgba(255, 255, 255, 0.25)",
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
@@ -1493,7 +1469,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     paddingHorizontal: 3,
   },
   notificationBadgeText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 10,
     fontWeight: "bold",
   },

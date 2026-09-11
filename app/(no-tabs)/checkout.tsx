@@ -20,7 +20,7 @@ import {
 import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
-import { parseWIBDate } from "@/utils/utils";
+import { parseWIBDate, getOperationalDateWIB, formatHourMinute } from "@/utils/utils";
 import NetInfo from "@react-native-community/netinfo";
 import { queueOfflineCheckOut } from "@/lib/offlineQueue";
 import { Ionicons } from "@expo/vector-icons";
@@ -78,6 +78,8 @@ export default function CheckoutScreen() {
   const submittingRef = useRef(false);
   const [activeCheckin, setActiveCheckin] = useState<IAttendance | null>(null);
   const [multiSessionWarning, setMultiSessionWarning] = useState<string | null>(null);
+  const [isCompletedShift, setIsCompletedShift] = useState(false);
+  const [completedSession, setCompletedSession] = useState<IAttendance | null>(null);
 
   const params = useLocalSearchParams<{ attendance_id?: string }>();
   const { run: fetchActiveCheckinsReq } = useRequest(() => getActiveCheckins());
@@ -141,6 +143,15 @@ export default function CheckoutScreen() {
                 setActiveCheckin(candidate);
                 return;
               }
+            }
+          }
+          // Sesi aktif tidak ada. Cek apakah sesi hari operasional ini sudah selesai (OD267-6 / ADR-267)
+          const completed = attList.find((c) => Boolean(c.checkin && c.checkout));
+          if (completed?.checkin) {
+            const isSameDay = getOperationalDateWIB(completed.checkin) === getOperationalDateWIB(new Date());
+            if (isSameDay) {
+              setIsCompletedShift(true);
+              setCompletedSession(completed);
             }
           }
         }
@@ -411,6 +422,8 @@ export default function CheckoutScreen() {
               <TouchableOpacity
                 onPress={() => router.back()}
                 style={styles.backButton}
+                accessibilityRole="button"
+                accessibilityLabel="Kembali"
               >
                 <ArrowLeft color="#fff" />
               </TouchableOpacity>
@@ -423,7 +436,50 @@ export default function CheckoutScreen() {
         </LinearGradient>
 
         <View style={styles.contentContainer}>
-          {loadingLocation ? (
+          {isCompletedShift ? (
+            <View style={styles.completedContainer}>
+              <View style={styles.completedCard}>
+                <Ionicons
+                  name="information-circle"
+                  size={48}
+                  color={colors.primary}
+                  style={{ marginBottom: 16 }}
+                />
+                <Text style={styles.completedCardTitle}>
+                  Sesi Dinas Hari Ini Selesai
+                </Text>
+                <Text style={styles.completedCardDesc}>
+                  Presensi masuk dan pulang telah tercatat lengkap untuk hari operasional ini. Anda telah menyelesaikan sesi dinas.
+                </Text>
+                {completedSession ? (
+                  <View style={styles.completedDetailBox}>
+                    <View style={styles.completedDetailRow}>
+                      <Text style={styles.completedDetailLabel}>Waktu Masuk:</Text>
+                      <Text style={styles.completedDetailValue}>
+                        {formatHourMinute(completedSession.checkin)} WIB
+                      </Text>
+                    </View>
+                    <View style={styles.completedDetailRow}>
+                      <Text style={styles.completedDetailLabel}>Waktu Pulang:</Text>
+                      <Text style={styles.completedDetailValue}>
+                        {formatHourMinute(completedSession.checkout)} WIB
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.completedBackButton}
+                  onPress={() => router.replace("/(tabs)")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kembali ke Beranda"
+                >
+                  <Text style={styles.completedBackButtonText}>
+                    Kembali ke Beranda
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : loadingLocation ? (
             <FormSkeleton />
           ) : (
           <ScrollView
@@ -770,5 +826,78 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
     fontWeight: "500",
     lineHeight: 18,
+  },
+  completedContainer: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  completedCard: {
+    backgroundColor: c.card,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: c.borderStrong,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  completedCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: c.textStrong,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  completedCardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: c.textSecondary,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  completedDetailBox: {
+    width: "100%",
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    gap: 8,
+  },
+  completedDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  completedDetailLabel: {
+    fontSize: 12,
+    color: c.textMuted,
+  },
+  completedDetailValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: c.textStrong,
+  },
+  completedBackButton: {
+    backgroundColor: c.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  completedBackButtonText: {
+    color: c.onGradient,
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

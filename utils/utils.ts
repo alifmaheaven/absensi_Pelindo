@@ -1,6 +1,6 @@
 import * as ImageManipulator from "expo-image-manipulator";
 import { ImagePickerAsset } from "expo-image-picker";
-import type { IAttendance, IScheduleToday } from "../types";
+import type { IAttendance, IScheduleToday, Ishift } from "../types";
 
 export const smartCapitalize = (name?: string) => {
   if (!name) return "";
@@ -572,6 +572,58 @@ export function resolveAttendanceSession(params: {
   };
 }
 
+export const FALLBACK_OVERNIGHT_SHIFT: Ishift = {
+  id: "overnight-fallback",
+  code: "SHIFT-MALAM",
+  name: "Shift Malam",
+  start_time: "22:00:00",
+  end_time: "06:00:00",
+  grace_late: 15,
+  grace_early: 15,
+  reminder_minutes: 30,
+  is_overnight: true,
+  color: "#5B21B6",
+};
+
+/**
+ * QA BUG-267-03 / ADR-267:
+ * Menentukan shift yang berlaku untuk evaluasi status presensi di Beranda.
+ * Jika sesi overnight telah selesai (pasca-checkout, sebelum cut-off 04:00 WIB),
+ * pertahankan konteks shift malam (serverOvernight?.shift atau fallback overnight),
+ * BUKAN jadwal pagi hari ini (todaySchedule.shift), untuk mencegah false "Terlambat 725 Menit".
+ */
+export function resolveHomeScreenCurrentShift(params: {
+  isOvernightActive?: boolean;
+  overnightShift?: Ishift | null;
+  isTodayShiftCompleted?: boolean;
+  displaySession?: { checkin?: string | null } | null;
+  todaySchedule?: Partial<IScheduleToday> | null;
+  todayDateStr?: string;
+}): Ishift | null {
+  if (params.isOvernightActive && params.overnightShift) {
+    return params.overnightShift;
+  }
+  if (params.isTodayShiftCompleted && params.displaySession?.checkin) {
+    const today = params.todayDateStr || getTodayDateString();
+    const checkinDay = params.displaySession.checkin.split(" ")[0];
+    const serverOvernight = params.todaySchedule?.active_overnight_session;
+    const isShiftOvernight = Boolean(params.todaySchedule?.shift?.is_overnight);
+    const isOvernightCheckin =
+      checkinDay !== today ||
+      Boolean(serverOvernight?.shift) ||
+      isShiftOvernight;
+
+    if (isOvernightCheckin) {
+      return (
+        serverOvernight?.shift ??
+        (isShiftOvernight ? params.todaySchedule?.shift : null) ??
+        FALLBACK_OVERNIGHT_SHIFT
+      );
+    }
+  }
+  return params.todaySchedule?.shift ?? null;
+}
+
 /**
  * Konstanta cut-off hari operasional dalam jam (ADR-245).
  * Pergantian hari operasional resmi pada pukul 04:00 WIB.
@@ -639,4 +691,186 @@ export function getCompletedShiftBannerInfo(params: {
     isNewOperationalDay: false,
   };
 }
+
+export type AttendanceState =
+  | "ON_TIME"
+  | "LATE"
+  | "EARLY_CHECKOUT"
+  | "UNKNOWN_SCHEDULE";
+
+export interface AttendanceStatusParams {
+  datetime?: string | null;
+  type?: "checkin" | "checkout";
+  shift?: {
+    start_time?: string | null;
+    end_time?: string | null;
+    grace_late?: number | null;
+    grace_early?: number | null;
+    is_overnight?: boolean | null;
+    name?: string | null;
+  } | null;
+  shiftDate?: string | null;
+}
+
+export interface AttendanceStatusResult {
+  state: AttendanceState;
+  deltaMinutes: number;
+  displayText: string;
+}
+
+/**
+ * OD267-7 / ADR-267: Helper tunggal kalkulasi status presensi dan indikator keterlambatan.
+ * Digunakan bersama oleh Beranda (AttendanceCard) dan Tab Riwayat (attendance.tsx)
+ * untuk menjamin konsistensi data (mencegah RSK-267-04).
+ *
+ * Aturan Bisnis & Kontrak Waktu (OD267-7 & OD267-9):
+ * 1. deltaMinutes dihitung dari JAM JADWAL ASLI (scheduled_time), BUKAN dari akhir batas toleransi (grace).
+ *    grace_late hanya menentukan APAKAH status dihitung terlambat (gate threshold).
+ *    Contoh: Jadwal 08:00, grace 15, absen 08:16 -> LATE dengan deltaMinutes 16 (Terlambat 16 Menit).
+ *    Selaras 100% dengan backend attendanceSummaryController.ts:586.
+ * 2. Jadwal tidak ada / data shift kosong -> UNKNOWN_SCHEDULE ("Dinas Mandiri (Jadwal Terbuka)"),
+ *    tidak pernah menuduh pengguna terlambat.
+ * 3. Parsing waktu wajib menggunakan helper WIB (parseWIBDate, getWIBHour, buildWIBScheduledTime).
+ * 4. Teks dalam Bahasa Indonesia baku formal tanpa emoji (UX Spec §3.3).
+ */
+export function calculateAttendanceStatus(
+  params: AttendanceStatusParams
+): AttendanceStatusResult {
+  const { datetime, type = "checkin", shift, shiftDate } = params;
+
+  // 1. Tanpa jadwal atau data shift tidak lengkap -> UNKNOWN_SCHEDULE
+  if (
+    !shift ||
+    (type === "checkin" && !shift.start_time) ||
+    (type === "checkout" && !shift.end_time)
+  ) {
+    return {
+      state: "UNKNOWN_SCHEDULE",
+      deltaMinutes: 0,
+      displayText: "Dinas Mandiri (Jadwal Terbuka)",
+    };
+  }
+
+  // 2. Jika datetime belum ada (belum ada rekaman absensi), kembalikan teks jadwal
+  if (!datetime) {
+    const timeLabel =
+      type === "checkin"
+        ? `Mulai ${shift.start_time?.slice(0, 5) ?? "--:--"} WIB`
+        : `Selesai ${shift.end_time?.slice(0, 5) ?? "--:--"} WIB`;
+    return {
+      state: "UNKNOWN_SCHEDULE",
+      deltaMinutes: 0,
+      displayText: timeLabel,
+    };
+  }
+
+  // 3. Parse timestamp ke Date WIB absolut
+  const actualTime = parseWIBDate(datetime);
+  if (!actualTime) {
+    return {
+      state: "UNKNOWN_SCHEDULE",
+      deltaMinutes: 0,
+      displayText: "Dinas Mandiri (Jadwal Terbuka)",
+    };
+  }
+
+  const [sh, sm] = (shift.start_time || "08:00").split(":").map(Number);
+  const [eh, em] = (shift.end_time || "17:00").split(":").map(Number);
+
+  // 4. Tentukan baseDate (WIB) untuk pembentukan waktu jadwal
+  let baseDate = new Date(actualTime);
+  if (shiftDate) {
+    const parsedShiftDate = parseWIBDate(
+      shiftDate.includes(" ") ? shiftDate : `${shiftDate} 00:00:00`
+    );
+    if (parsedShiftDate) {
+      baseDate = parsedShiftDate;
+    }
+  } else if (type === "checkout" && (shift.is_overnight || eh < sh)) {
+    // Jika checkout terjadi di jam pagi (< sh), maka tanggal mulai shift adalah kemarin
+    if (getWIBHour(actualTime) < sh) {
+      baseDate = new Date(baseDate.getTime() - 24 * 60 * 60 * 1000);
+    }
+  }
+
+  if (type === "checkin") {
+    const scheduledTime = buildWIBScheduledTime(baseDate, sh, sm || 0);
+    const graceLate = shift.grace_late != null ? Number(shift.grace_late) : 0;
+    const lateThresholdMs = scheduledTime.getTime() + graceLate * 60 * 1000;
+    const checkinMs = actualTime.getTime();
+    const scheduledMs = scheduledTime.getTime();
+
+    // Sesuai backend: checkinMs > lateThresholdMs
+    // lateMinutes = Math.round((checkinMs - scheduledMs) / 60000)
+    if (checkinMs > lateThresholdMs) {
+      const deltaMinutes = Math.max(0, Math.round((checkinMs - scheduledMs) / 60000));
+      return {
+        state: "LATE",
+        deltaMinutes,
+        displayText: `Terlambat ${deltaMinutes} Menit`,
+      };
+    }
+
+    // Jika datang lebih awal >= 5 menit dari jadwal (UX Spec §3.3)
+    if (scheduledMs - checkinMs >= 5 * 60 * 1000) {
+      const earlyMinutes = Math.max(0, Math.round((scheduledMs - checkinMs) / 60000));
+      return {
+        state: "ON_TIME",
+        deltaMinutes: earlyMinutes,
+        displayText: `Lebih Awal ${earlyMinutes} Menit`,
+      };
+    }
+
+    return {
+      state: "ON_TIME",
+      deltaMinutes: 0,
+      displayText: "Tepat Waktu",
+    };
+  } else {
+    // Checkout
+    let scheduledTime = buildWIBScheduledTime(baseDate, eh, em || 0);
+    if (shift.is_overnight || eh < sh) {
+      scheduledTime = new Date(scheduledTime.getTime() + 24 * 60 * 60 * 1000);
+    }
+    const graceEarly = shift.grace_early != null ? Number(shift.grace_early) : 0;
+    const earlyThresholdMs = scheduledTime.getTime() - graceEarly * 60 * 1000;
+    const checkoutMs = actualTime.getTime();
+    const scheduledMs = scheduledTime.getTime();
+
+    if (checkoutMs < earlyThresholdMs) {
+      const deltaMinutes = Math.max(0, Math.round((scheduledMs - checkoutMs) / 60000));
+      return {
+        state: "EARLY_CHECKOUT",
+        deltaMinutes,
+        displayText: `Pulang Awal ${deltaMinutes} Menit`,
+      };
+    }
+
+    return {
+      state: "ON_TIME",
+      deltaMinutes: 0,
+      displayText: "Tepat Waktu",
+    };
+  }
+}
+
+/**
+ * Adapter untuk komponen visual yang membutuhkan teks status presensi.
+ * Menjamin keseragaman salinan teks dengan mendelegasikan ke calculateAttendanceStatus.
+ */
+export function getWorkStatus(
+  datetime?: string | null,
+  type: "checkin" | "checkout" = "checkin",
+  shift?: Ishift | null,
+  shiftDate?: string | null
+): string {
+  const result = calculateAttendanceStatus({
+    datetime,
+    type,
+    shift,
+    shiftDate,
+  });
+  return result.displayText;
+}
+
 

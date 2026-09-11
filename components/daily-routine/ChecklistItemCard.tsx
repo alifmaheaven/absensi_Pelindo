@@ -16,6 +16,7 @@ import {
   EvidenceType,
   formatFileSize,
   getEvidenceRequirementLabel,
+  isCameraOnlyEvidence,
   resolveEvidenceType,
 } from "@/utils/dailyRoutineHelpers";
 
@@ -108,14 +109,17 @@ export default function ChecklistItemCard({
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const isLoading = loadingEvidence ?? loadingImage ?? false;
-  const handlePickPhoto = onPickPhoto || onPickImage || (() => {});
-  const handlePickGallery = onPickGallery || handlePickPhoto;
-  const handlePickDocument = onPickDocument || (() => {});
-
   const effectiveEvidenceType = resolveEvidenceType(
     evidenceType ?? item.evidence_type,
     requiresPhoto ?? item.is_photo_required
   );
+  const isCameraOnly = isCameraOnlyEvidence(effectiveEvidenceType);
+
+  const handlePickPhoto = onPickPhoto || onPickImage || (() => {});
+  const handlePickGallery = isCameraOnly
+    ? () => {}
+    : onPickGallery || handlePickPhoto;
+  const handlePickDocument = onPickDocument || (() => {});
 
   const requirementLabel = getEvidenceRequirementLabel(
     effectiveEvidenceType,
@@ -133,12 +137,9 @@ export default function ChecklistItemCard({
       onReplaceEvidence(index);
       return;
     }
-    if (effectiveEvidenceType === "photo") {
-      Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
-        { text: "Batal", style: "cancel" },
-        { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
-        { text: "Pilih dari Galeri", onPress: handlePickGallery },
-      ]);
+    if (isCameraOnly) {
+      handlePickPhoto();
+      return;
     } else if (effectiveEvidenceType === "file") {
       Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
         { text: "Batal", style: "cancel" },
@@ -151,7 +152,7 @@ export default function ChecklistItemCard({
       Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
         { text: "Batal", style: "cancel" },
         { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
-        { text: "Pilih Berkas", onPress: handlePickGallery },
+        { text: "Pilih dari Galeri", onPress: handlePickGallery },
       ]);
     }
   };
@@ -499,50 +500,29 @@ export default function ChecklistItemCard({
                   {!isReadOnly && !isMaxReached && (
                     <View style={styles.addMoreSection}>
                       {effectiveEvidenceType === "photo" && (
-                        <View style={styles.bothButtonsRow}>
-                          <TouchableOpacity
-                            style={[
-                              styles.pickerButton,
-                              styles.pickerButtonPhoto,
-                              styles.bothBtn,
-                              isLoading && { opacity: 0.6 },
-                            ]}
-                            onPress={handlePickPhoto}
-                            disabled={isLoading}
-                            activeOpacity={0.8}
-                          >
-                            <ImageIcon
-                              color={colors.primary}
-                              width={16}
-                              height={16}
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text style={styles.pickerButtonPhotoText}>
-                              Ambil Foto
-                            </Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[
-                              styles.pickerButton,
-                              styles.pickerButtonGallery,
-                              styles.bothBtn,
-                              isLoading && { opacity: 0.6 },
-                            ]}
-                            onPress={handlePickGallery}
-                            disabled={isLoading}
-                            activeOpacity={0.8}
-                          >
-                            <ImageIcon
-                              color={colors.textSecondary}
-                              width={16}
-                              height={16}
-                              style={{ marginRight: 6 }}
-                            />
-                            <Text style={styles.pickerButtonGalleryText}>
-                              Pilih dari Galeri
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerButton,
+                            styles.pickerButtonPhoto,
+                            isLoading && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePickPhoto}
+                          disabled={isLoading}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Ambil Foto"
+                          accessibilityState={{ disabled: isLoading }}
+                        >
+                          <ImageIcon
+                            color={colors.primary}
+                            width={16}
+                            height={16}
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text style={styles.pickerButtonPhotoText}>
+                            Ambil Foto
+                          </Text>
+                        </TouchableOpacity>
                       )}
 
                       {effectiveEvidenceType === "file" && (
@@ -618,22 +598,24 @@ export default function ChecklistItemCard({
                           <TouchableOpacity
                             style={[
                               styles.pickerButton,
-                              styles.pickerButtonFile,
+                              styles.pickerButtonGallery,
                               styles.bothBtn,
                               isLoading && { opacity: 0.6 },
                             ]}
                             onPress={handlePickGallery}
                             disabled={isLoading}
                             activeOpacity={0.8}
+                            accessibilityLabel="Pilih dari Galeri"
+                            accessibilityState={{ disabled: isLoading }}
                           >
-                            <DocumentCheck
+                            <ImageIcon
                               color={colors.textSecondary}
                               width={16}
                               height={16}
                               style={{ marginRight: 6 }}
                             />
-                            <Text style={styles.pickerButtonFileText}>
-                              Pilih Berkas
+                            <Text style={styles.pickerButtonGalleryText}>
+                              Pilih dari Galeri
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -658,6 +640,7 @@ export default function ChecklistItemCard({
                           activeOpacity={0.8}
                           accessibilityRole="button"
                           accessibilityLabel="Ambil Foto"
+                          accessibilityState={{ disabled: isLoading }}
                         >
                           {isLoading ? (
                             <ActivityIndicator
@@ -677,29 +660,6 @@ export default function ChecklistItemCard({
                               </Text>
                             </>
                           )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.pickerButton,
-                            styles.pickerButtonGallery,
-                            isLoading && { opacity: 0.6 },
-                          ]}
-                          onPress={handlePickGallery}
-                          disabled={isLoading}
-                          activeOpacity={0.8}
-                          accessibilityRole="button"
-                          accessibilityLabel="Pilih dari Galeri"
-                        >
-                          <ImageIcon
-                            color={colors.textSecondary}
-                            width={18}
-                            height={18}
-                            style={{ marginRight: 8 }}
-                          />
-                          <Text style={styles.pickerButtonGalleryText}>
-                            Pilih dari Galeri
-                          </Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -805,13 +765,15 @@ export default function ChecklistItemCard({
                           <TouchableOpacity
                             style={[
                               styles.pickerButton,
-                              styles.pickerButtonFile,
+                              styles.pickerButtonGallery,
                               styles.bothBtn,
                               isLoading && { opacity: 0.6 },
                             ]}
                             onPress={handlePickGallery}
                             disabled={isLoading}
                             activeOpacity={0.8}
+                            accessibilityLabel="Pilih dari Galeri"
+                            accessibilityState={{ disabled: isLoading }}
                           >
                             {isLoading ? (
                               <ActivityIndicator
@@ -820,14 +782,14 @@ export default function ChecklistItemCard({
                               />
                             ) : (
                               <>
-                                <DocumentCheck
+                                <ImageIcon
                                   color={colors.textSecondary}
                                   width={16}
                                   height={16}
                                   style={{ marginRight: 6 }}
                                 />
-                                <Text style={styles.pickerButtonFileText}>
-                                  Pilih Berkas
+                                <Text style={styles.pickerButtonGalleryText}>
+                                  Pilih dari Galeri
                                 </Text>
                               </>
                             )}

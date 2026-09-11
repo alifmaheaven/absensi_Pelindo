@@ -12,6 +12,16 @@ import { getProfile } from "@/services/auth";
 import { useAuthStore } from "@/stores/auth";
 import { SvgProps } from "react-native-svg";
 
+const iconStyles = StyleSheet.create({
+  container: {
+    width: 36,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
+
 // Custom Tab Bar Icon Component
 function TabIcon({
   icon: Icon,
@@ -22,9 +32,14 @@ function TabIcon({
 }) {
   const colors = useThemeColors();
   return (
-    <View style={{ alignItems: "center", justifyContent: "center", width: 28, height: 28 }}>
+    <View
+      style={[
+        iconStyles.container,
+        focused && { backgroundColor: colors.primarySoft },
+      ]}
+    >
       <Icon
-        color={focused ? colors.primary : colors.textSecondary}
+        color={focused ? colors.primaryText : colors.textSecondary}
         width={22}
         height={22}
       />
@@ -64,7 +79,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
+        tabBarActiveTintColor: colors.primaryText,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: false,
         tabBarButton: HapticTab,

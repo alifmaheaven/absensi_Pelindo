@@ -34,6 +34,7 @@ import {
   EvidenceType,
   formatRoutineFrequency,
   getHeicTranscodeErrorMessage,
+  isCameraOnlyEvidence,
   isHeicAsset,
   resolveEvidenceType,
   resolveTranscodedAsset,
@@ -626,6 +627,15 @@ export default function DailyRoutineDetailScreen() {
     const itemState = itemStates[stateKey];
     if (!itemState) return;
 
+    const effectiveType = getEffectiveEvidenceType(stateKey);
+    if (isCameraOnlyEvidence(effectiveType)) {
+      Alert.alert(
+        "Kamera Langsung Diperlukan",
+        "Item ini dikonfigurasi Kamera Langsung dan hanya dapat mengambil foto secara langsung melalui kamera perangkat."
+      );
+      return;
+    }
+
     const currentFiles = getAttachedFiles(itemState);
     const remainingSlots = 5 - currentFiles.length;
     if (remainingSlots <= 0) {
@@ -1132,31 +1142,44 @@ export default function DailyRoutineDetailScreen() {
     const idx = fileIndex ?? 0;
     const effectiveType = getEffectiveEvidenceType(stateKey);
 
+    const pickCamera = async () => {
+      try {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== ImagePicker.PermissionStatus.GRANTED) {
+          showToast("Izin kamera diperlukan", "error");
+          return;
+        }
+        const res = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          quality: 1,
+        });
+        if (res.canceled || !res.assets?.[0]) return;
+        await processReplaceFile(stateKey, idx, res.assets[0], "image");
+      } catch (e) {
+        console.error("Replace camera error:", e);
+      }
+    };
+
+    if (isCameraOnlyEvidence(effectiveType)) {
+      pickCamera();
+      return;
+    }
+
     const options: any[] = [
       {
         text: "Kamera",
-        onPress: async () => {
-          try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== ImagePicker.PermissionStatus.GRANTED) {
-              showToast("Izin kamera diperlukan", "error");
-              return;
-            }
-            const res = await ImagePicker.launchCameraAsync({
-              mediaTypes: ["images"],
-              quality: 1,
-            });
-            if (res.canceled || !res.assets?.[0]) return;
-            await processReplaceFile(stateKey, idx, res.assets[0], "image");
-          } catch (e) {
-            console.error("Replace camera error:", e);
-          }
-        },
+        onPress: pickCamera,
       },
-      {
+    ];
+
+    if (!isCameraOnlyEvidence(effectiveType)) {
+      options.push({
         text: "Galeri",
         onPress: async () => {
           try {
+            if (isCameraOnlyEvidence(getEffectiveEvidenceType(stateKey))) {
+              return;
+            }
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== ImagePicker.PermissionStatus.GRANTED) {
               showToast("Izin galeri diperlukan", "error");
@@ -1173,8 +1196,8 @@ export default function DailyRoutineDetailScreen() {
             console.error("Replace gallery error:", e);
           }
         },
-      },
-    ];
+      });
+    }
 
     if (effectiveType === "file") {
       options.push({
@@ -1573,7 +1596,11 @@ export default function DailyRoutineDetailScreen() {
                                   loadingEvidence={loadingImageKey === stateKey}
                                   onToggle={() => handleCheckToggle(stateKey)}
                                   onPickPhoto={() => handlePickImage(stateKey)}
-                                  onPickGallery={() => handlePickGallery(stateKey)}
+                                  onPickGallery={
+                                    isCameraOnlyEvidence(evidenceType, requiresPhoto)
+                                      ? undefined
+                                      : () => handlePickGallery(stateKey)
+                                  }
                                   onPickDocument={() => handlePickDocument(stateKey)}
                                   onRetryUpload={(idx) => handleRetryUpload(stateKey, idx)}
                                   onRemoveEvidence={(idx) => handleRemoveEvidence(stateKey, idx)}
@@ -1611,7 +1638,11 @@ export default function DailyRoutineDetailScreen() {
                           loadingEvidence={loadingImageKey === stateKey}
                           onToggle={() => handleCheckToggle(stateKey)}
                           onPickPhoto={() => handlePickImage(stateKey)}
-                          onPickGallery={() => handlePickGallery(stateKey)}
+                          onPickGallery={
+                            isCameraOnlyEvidence(evidenceType, requiresPhoto)
+                              ? undefined
+                              : () => handlePickGallery(stateKey)
+                          }
                           onPickDocument={() => handlePickDocument(stateKey)}
                           onRetryUpload={(idx) => handleRetryUpload(stateKey, idx)}
                           onRemoveEvidence={(idx) => handleRemoveEvidence(stateKey, idx)}

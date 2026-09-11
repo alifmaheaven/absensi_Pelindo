@@ -100,13 +100,15 @@ export function mapTimeToColor(
 interface AttendanceCardProps {
   type: "checkin" | "checkout";
   time?: string | null;
-  subtitle: string;
+  subtitle?: string;
   subtitle2?: string;
   shift?: Ishift | null;
   shiftDate?: string | null;
-  onPress: () => void;
+  onPress?: () => void;
   badgeText: string;
   isOverdue?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 export default function AttendanceCard({
@@ -118,23 +120,31 @@ export default function AttendanceCard({
   onPress,
   badgeText,
   isOverdue,
+  disabled,
+  disabledReason,
 }: AttendanceCardProps) {
-  const theme = useThemeColors();
-  const colors = mapTimeToColor(time, type, shift, theme, shiftDate);
+  const colors = useThemeColors();
+  const statusColors = mapTimeToColor(time, type, shift, colors, shiftDate);
   const formattedTime = getHourMinute(time);
 
   // Default styles based on type (fallback if time is null/empty)
   // Khusus overdue pada checkout belum selesai: tampilkan styling alert
   const isOverdueAlert = isOverdue && type === "checkout" && !time;
-  const backgroundColor = time ? colors.container : isOverdueAlert ? theme.dangerSoft : theme.surface;
-  const textColor = time ? colors.text : isOverdueAlert ? theme.danger : theme.text;
-  const buttonColor = time ? colors.button : isOverdueAlert ? theme.danger : theme.primary;
+  const backgroundColor = time ? statusColors.container : isOverdueAlert ? colors.dangerSoft : colors.surface;
+  const textColor = time ? statusColors.text : isOverdueAlert ? colors.danger : colors.text;
+  const buttonColor = time ? statusColors.button : isOverdueAlert ? colors.danger : colors.primary;
 
   const cardTitle = type === "checkin" ? "Check in" : "Check out";
 
   return (
     <View
-      style={[styles.card, { backgroundColor }]}
+      style={[
+        styles.card,
+        {
+          backgroundColor,
+          borderColor: colors.borderStrong,
+        },
+      ]}
       accessible={true}
       accessibilityRole="summary"
       accessibilityLabel={`${cardTitle} jam ${formattedTime}, ${subtitle}`}
@@ -143,20 +153,44 @@ export default function AttendanceCard({
         {cardTitle}
       </Text>
       <Text style={[styles.time, { color: textColor }]}>{formattedTime}</Text>
-      <Text style={[styles.subtitle, { color: textColor }]}>{subtitle}</Text>
+      {subtitle ? (
+        <Text style={[styles.subtitle, { color: textColor }]}>{subtitle}</Text>
+      ) : null}
 
       <TouchableOpacity
-        style={[styles.badge, { backgroundColor: buttonColor }]}
-        onPress={onPress}
-        activeOpacity={0.8}
+        style={[
+          styles.badge,
+          {
+            backgroundColor: disabled ? colors.surface : buttonColor,
+            borderColor: disabled ? colors.borderStrong : undefined,
+            borderWidth: disabled ? 1 : 0,
+          },
+          disabled && styles.badgeDisabled,
+        ]}
+        onPress={disabled ? undefined : onPress}
+        disabled={Boolean(disabled)}
+        activeOpacity={disabled ? 1 : 0.8}
         accessible={true}
         accessibilityRole="button"
+        accessibilityState={{ disabled: Boolean(disabled) }}
         accessibilityLabel={`${badgeText}, tombol untuk aksi ${cardTitle}`}
       >
-        <Text style={[styles.badgeText, { color: "#FFFFFF" }]}>
+        <Text
+          style={[
+            styles.badgeText,
+            {
+              color: disabled ? colors.textSecondary : colors.onGradient,
+            },
+          ]}
+        >
           {badgeText}
         </Text>
       </TouchableOpacity>
+      {disabled && disabledReason ? (
+        <Text style={[styles.disabledReason, { color: textColor }]}>
+          {disabledReason}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -167,6 +201,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     justifyContent: "space-between",
+    borderWidth: 1.5,
   },
   label: {
     fontSize: 12,
@@ -189,6 +224,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     minHeight: 48,
+    minWidth: 48,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
@@ -196,5 +232,12 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 12,
     fontWeight: "bold",
+  },
+  badgeDisabled: {},
+  disabledReason: {
+    fontSize: 10,
+    opacity: 0.8,
+    marginTop: 6,
+    textAlign: "center",
   },
 });

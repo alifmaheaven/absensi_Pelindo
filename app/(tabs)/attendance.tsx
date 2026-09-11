@@ -1,10 +1,17 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getAttendanceList } from "@/services/attendance";
+import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
 import { useAuthStore } from "@/stores/auth";
-import { parseWIBDate } from "@/utils/utils";
+import {
+  parseWIBDate,
+  calculateAttendanceStatus,
+  getOperationalDateWIB,
+  getTodayDateString,
+} from "@/utils/utils";
 import {
   IAttendance,
   IMeta,
+  Ishift,
 } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
@@ -39,6 +46,32 @@ export default function AttendanceTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [isError, setIsError] = useState(false);
+
+  const [scheduleMap, setScheduleMap] = useState<Record<string, Ishift>>({});
+
+  const loadSchedules = async () => {
+    try {
+      const [todayRes, weekRes] = await Promise.allSettled([
+        getTodaySchedule(),
+        getWeekSchedule(),
+      ]);
+      const map: Record<string, Ishift> = {};
+      if (weekRes.status === "fulfilled" && weekRes.value?.data?.schedules) {
+        weekRes.value.data.schedules.forEach((s) => {
+          if (s.date && s.shift) {
+            map[s.date] = s.shift;
+          }
+        });
+      }
+      if (todayRes.status === "fulfilled" && todayRes.value?.data?.shift) {
+        const todayStr = getTodayDateString();
+        map[todayStr] = todayRes.value.data.shift;
+      }
+      setScheduleMap(map);
+    } catch {
+      // Skenario offline/gagal memuat jadwal: tetap lanjut dengan fallback UNKNOWN_SCHEDULE
+    }
+  };
 
   const fetchAttendanceList = async (page: number) => {
     return getAttendanceList({
@@ -88,7 +121,10 @@ export default function AttendanceTabScreen() {
     setRefreshing(true);
     setIsError(false);
     try {
-      const response = await fetchAttendanceList(1);
+      const [response] = await Promise.all([
+        fetchAttendanceList(1),
+        loadSchedules(),
+      ]);
       const items = response.data?.data || [];
       const responseMeta = response.data?.meta;
       setAttendanceData(items);
@@ -106,6 +142,7 @@ export default function AttendanceTabScreen() {
 
   useEffect(() => {
     handleGetList();
+    loadSchedules();
   }, []);
 
   // checkin/checkout/created_at = WIB. Pakai helper timezone-aware
@@ -116,40 +153,112 @@ export default function AttendanceTabScreen() {
       hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
     }).format(parseWIBDate(s) ?? 0) : null;
 
-  const renderItem = ({ item }: { item: IAttendance }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardCode}>{item.code || "-"}</Text>
-        <StatusBadge
-          label={item.checkout ? "Selesai" : "Aktif"}
-          tone={item.checkout ? "success" : "primary"}
-          size="small"
-        />
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.timeRow}>
-          <View style={styles.timeBlock}>
-            <Ionicons name="log-in-outline" size={14} color={colors.success} />
-            <Text style={styles.timeLabel}>Check In</Text>
-            <Text style={styles.timeValue}>{formatWIB(item.checkin) || "-"}</Text>
-          </View>
-          <View style={styles.timeDivider} />
-          <View style={styles.timeBlock}>
-            <Ionicons name="log-out-outline" size={14} color={colors.danger} />
-            <Text style={styles.timeLabel}>Check Out</Text>
-            <Text style={styles.timeValue}>{formatWIB(item.checkout) || "-"}</Text>
-          </View>
+  const renderItem = ({ item }: { item: IAttendance }) => {
+    const opDate = item.checkin ? getOperationalDateWIB(item.checkin) : null;
+    const resolvedShift = (item as any).shift || (opDate ? scheduleMap[opDate] : null);
+    const checkinStatus = calculateAttendanceStatus({
+      datetime: item.checkin,
+      type: "checkin",
+      shift: resolvedShift,
+      shiftDate: opDate,
+    });
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardCode}>{item.code || "-"}</Text>
+          <StatusBadge
+            label={item.checkout ? "Selesai" : "Aktif"}
+            tone={item.checkout ? "success" : "primary"}
+            size="small"
+          />
         </View>
-        {item.description ? (
-          <Text style={styles.desc} numberOfLines={2}>{item.description}</Text>
-        ) : null}
+        <View style={styles.cardBody}>
+          <View style={styles.timeRow}>
+            <View style={styles.timeBlock}>
+              <View style={styles.timeBlockHeader}>
+                <Ionicons name="log-in-outline" size={14} color={colors.success} />
+                <Text style={styles.timeLabel}>Check In</Text>
+              </View>
+              <Text style={styles.timeValue}>{formatWIB(item.checkin) || "-"}</Text>
+              {item.checkin ? (
+                <View
+                  style={[
+                    styles.statusBadgeRow,
+                    {
+                      backgroundColor:
+                        checkinStatus.state === "LATE"
+                          ? colors.dangerSoft
+                          : checkinStatus.state === "ON_TIME"
+                          ? colors.successSoft
+                          : colors.surface,
+                      borderColor:
+                        checkinStatus.state === "LATE"
+                          ? colors.danger
+                          : checkinStatus.state === "ON_TIME"
+                          ? colors.success
+                          : colors.borderStrong,
+                    },
+                  ]}
+                  accessibilityRole="text"
+                  accessibilityLabel={`Status: ${checkinStatus.displayText}`}
+                >
+                  <Ionicons
+                    name={
+                      checkinStatus.state === "LATE"
+                        ? "alert-circle-outline"
+                        : checkinStatus.state === "ON_TIME"
+                        ? "checkmark-circle-outline"
+                        : "calendar-outline"
+                    }
+                    size={11}
+                    color={
+                      checkinStatus.state === "LATE"
+                        ? colors.danger
+                        : checkinStatus.state === "ON_TIME"
+                        ? colors.success
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      {
+                        color:
+                          checkinStatus.state === "LATE"
+                            ? colors.danger
+                            : checkinStatus.state === "ON_TIME"
+                            ? colors.success
+                            : colors.textSecondary,
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {checkinStatus.displayText}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.timeDivider} />
+            <View style={styles.timeBlock}>
+              <View style={styles.timeBlockHeader}>
+                <Ionicons name="log-out-outline" size={14} color={colors.danger} />
+                <Text style={styles.timeLabel}>Check Out</Text>
+              </View>
+              <Text style={styles.timeValue}>{formatWIB(item.checkout) || "-"}</Text>
+            </View>
+          </View>
+          {item.description ? (
+            <Text style={styles.desc} numberOfLines={2}>{item.description}</Text>
+          ) : null}
+        </View>
+        <View style={styles.cardFooter}>
+          <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.footerText}>{formatWIB(item.created_at)}</Text>
+        </View>
       </View>
-      <View style={styles.cardFooter}>
-        <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-        <Text style={styles.footerText}>{formatWIB(item.created_at)}</Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -229,4 +338,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
   emptyText: { fontSize: 16, fontWeight: "bold", color: c.text, textAlign: "center", marginBottom: 4 },
   emptySubText: { fontSize: 13, color: c.textMuted, textAlign: "center" },
+  timeBlockHeader: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statusBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: 4,
+    gap: 4,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
 });

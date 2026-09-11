@@ -378,7 +378,7 @@ describe("ChecklistItemCard Reveal-on-Check Component Tests", () => {
     expect(getByText("Pilih salah satu bukti pelaksanaan *:")).toBeTruthy();
     expect(getByText("Ambil Foto")).toBeTruthy();
     expect(getByText("atau")).toBeTruthy();
-    expect(getByText("Pilih Berkas")).toBeTruthy();
+    expect(getByText("Pilih dari Galeri")).toBeTruthy();
   });
 
   it("when checked with evidence_type='none': no evidence buttons shown, only notes", () => {

@@ -15,6 +15,7 @@ import {
   createAttendance,
   createGroupId,
   deleteEvidtmp,
+  getAttendanceList,
   getAttendanceSite,
   getAttendanceStatus,
   uploadEvid,
@@ -24,8 +25,13 @@ import {
 import { getActiveCheckins } from "@/services/ticket";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/stores/auth";
-import { IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
-import { getDistanceInMeters } from "@/utils/utils";
+import { IAttendance, IAttendanceSite, IAttendanceStatus, THttpErrorResult } from "@/types";
+import {
+  formatHourMinute,
+  getDistanceInMeters,
+  getOperationalDateWIB,
+  resolveAttendanceSession,
+} from "@/utils/utils";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -80,6 +86,8 @@ export default function CheckinScreen() {
   const [checkinStatusId, setCheckinStatusId] = useState<string>("");
   const [statusList, setStatusList] = useState<IAttendanceStatus[]>([]);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
+  const [isCompletedShift, setIsCompletedShift] = useState(false);
+  const [completedSession, setCompletedSession] = useState<IAttendance | null>(null);
   const { user } = useAuthStore();
   const {
     images,
@@ -144,6 +152,36 @@ export default function CheckinScreen() {
           const list = Array.isArray(activeRes) ? activeRes : (activeRes?.data ?? []);
           if (Array.isArray(list)) {
             setActiveSessions(list);
+          }
+        } catch { /* ignore */ }
+
+        // Cek apakah sesi hari operasional ini telah selesai (OD267-6 / ADR-267)
+        try {
+          const userId = user?.id || useAuthStore.getState().user?.id;
+          if (userId) {
+            const attRes = await getAttendanceList({
+              page: 1,
+              per_page: 5,
+              order_by_desc: ["created_at"],
+              user_id_exact: [userId],
+            });
+            const attList = attRes.data?.data || [];
+            const sessionRes = resolveAttendanceSession({
+              checkInData: attList,
+              currentTime: new Date(),
+            });
+            if (
+              !sessionRes.activeSession &&
+              sessionRes.recentlyCompletedSession?.checkin &&
+              sessionRes.recentlyCompletedSession?.checkout
+            ) {
+              const sessionOpDate = getOperationalDateWIB(sessionRes.recentlyCompletedSession.checkin);
+              const currentOpDate = getOperationalDateWIB(new Date());
+              if (sessionOpDate === currentOpDate) {
+                setIsCompletedShift(true);
+                setCompletedSession(sessionRes.recentlyCompletedSession);
+              }
+            }
           }
         } catch { /* ignore */ }
       } catch (error) {
@@ -433,6 +471,8 @@ export default function CheckinScreen() {
               <TouchableOpacity
                 onPress={() => router.back()}
                 style={styles.backButton}
+                accessibilityRole="button"
+                accessibilityLabel="Kembali"
               >
                 <ArrowLeft color="#fff" />
               </TouchableOpacity>
@@ -446,7 +486,50 @@ export default function CheckinScreen() {
         </LinearGradient>
 
         <View style={styles.contentContainer}>
-          {loadingLocation ? (
+          {isCompletedShift ? (
+            <View style={styles.completedContainer}>
+              <View style={styles.completedCard}>
+                <Ionicons
+                  name="information-circle"
+                  size={48}
+                  color={colors.primary}
+                  style={{ marginBottom: 16 }}
+                />
+                <Text style={styles.completedCardTitle}>
+                  Sesi Dinas Hari Ini Selesai
+                </Text>
+                <Text style={styles.completedCardDesc}>
+                  Presensi masuk dan pulang telah tercatat lengkap untuk hari operasional ini. Anda tidak dapat melakukan check-in ulang hingga jadwal shift berikutnya.
+                </Text>
+                {completedSession ? (
+                  <View style={styles.completedDetailBox}>
+                    <View style={styles.completedDetailRow}>
+                      <Text style={styles.completedDetailLabel}>Waktu Masuk:</Text>
+                      <Text style={styles.completedDetailValue}>
+                        {formatHourMinute(completedSession.checkin)} WIB
+                      </Text>
+                    </View>
+                    <View style={styles.completedDetailRow}>
+                      <Text style={styles.completedDetailLabel}>Waktu Pulang:</Text>
+                      <Text style={styles.completedDetailValue}>
+                        {formatHourMinute(completedSession.checkout)} WIB
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={styles.completedBackButton}
+                  onPress={() => router.replace("/(tabs)")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Kembali ke Beranda"
+                >
+                  <Text style={styles.completedBackButtonText}>
+                    Kembali ke Beranda
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : loadingLocation ? (
             <FormSkeleton />
           ) : (
           <ScrollView
@@ -1302,5 +1385,78 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: c.text,
+  },
+  completedContainer: {
+    flex: 1,
+    padding: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  completedCard: {
+    backgroundColor: c.card,
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: c.borderStrong,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  completedCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: c.textStrong,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  completedCardDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: c.textSecondary,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  completedDetailBox: {
+    width: "100%",
+    backgroundColor: c.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    gap: 8,
+  },
+  completedDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  completedDetailLabel: {
+    fontSize: 12,
+    color: c.textMuted,
+  },
+  completedDetailValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: c.textStrong,
+  },
+  completedBackButton: {
+    backgroundColor: c.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  completedBackButtonText: {
+    color: c.onGradient,
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

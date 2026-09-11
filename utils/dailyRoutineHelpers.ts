@@ -485,3 +485,16 @@ export function getEvidenceRequirementLabel(
       return null;
   }
 }
+
+/**
+ * Predikat pembantu untuk memeriksa apakah evidence_type hanya mengizinkan kamera fisik (OD267-1).
+ * Mode 'photo' ("Kamera Langsung") mewajibkan verifikasi fisik langsung lewat kamera dan
+ * melarang akses galeri foto atau dialog berkas internal.
+ */
+export function isCameraOnlyEvidence(
+  evidence_type?: string | null,
+  is_photo_required?: boolean
+): boolean {
+  return resolveEvidenceType(evidence_type, is_photo_required) === "photo";
+}
+

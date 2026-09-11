@@ -16,19 +16,27 @@ import {
   IDailyRoutineLogItem,
   IDailyRoutineItem,
 } from "@/types";
-import { compressImage } from "@/utils/utils";
+import { compressImage, getTodayDateString } from "@/utils/utils";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import ImageViewerModal from "@/components/ImageViewerModal";
-import ChecklistItemCard, { IItemState } from "@/components/daily-routine/ChecklistItemCard";
+import ChecklistItemCard, {
+  IItemState,
+  getAttachedFiles,
+} from "@/components/daily-routine/ChecklistItemCard";
+import { IEvidenceFileItem } from "@/types/dailyRoutine";
 import RoutineDetailSkeleton from "@/components/daily-routine/RoutineDetailSkeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
+  EvidenceType,
   formatRoutineFrequency,
+  getHeicTranscodeErrorMessage,
+  isHeicAsset,
   resolveEvidenceType,
+  resolveTranscodedAsset,
   validateEvidenceFile,
 } from "@/utils/dailyRoutineHelpers";
 import {
@@ -60,7 +68,7 @@ interface IDeviceGroup {
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const getDraftKey = (routineId: string, logDate?: string | null) => {
-  const datePart = logDate || new Date().toISOString().split("T")[0];
+  const datePart = logDate || getTodayDateString();
   return `@dr_draft_${routineId}_${datePart}`;
 };
 
@@ -194,27 +202,49 @@ export default function DailyRoutineDetailScreen() {
           group.items.forEach((item) => {
             const stateKey = `${group.device_id}::${item.id}`;
             const existingLogItem = logItemLookup[stateKey] || logItemLookupByItem[item.id];
-            const existingFile =
-              existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id
-                ? existingLogItem?.evidence_file || null
-                : null;
-            const isPdf = existingFile ? existingFile.toLowerCase().endsWith(".pdf") : false;
-            const existingFileName = existingFile ? existingFile.split("/").pop() : null;
+            const isMatchDevice =
+              existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id;
+
+            let initialFiles: IEvidenceFileItem[] = [];
+            if (isMatchDevice) {
+              if (Array.isArray(existingLogItem?.evidence_files) && existingLogItem.evidence_files.length > 0) {
+                initialFiles = existingLogItem.evidence_files.map((ef: any, idx: number) => ({
+                  id: ef.id || `${idx}-${ef.file}`,
+                  file: ef.file,
+                  name: ef.name || (ef.file ? ef.file.split("/").pop() : "Lampiran"),
+                  type: ef.file?.toLowerCase().endsWith(".pdf") ? "pdf" : "image",
+                  upload_failed: false,
+                }));
+              } else if (existingLogItem?.evidence_file) {
+                const ef = existingLogItem.evidence_file;
+                initialFiles = [
+                  {
+                    id: "legacy-0",
+                    file: ef,
+                    name: ef.split("/").pop() || "Lampiran",
+                    type: ef.toLowerCase().endsWith(".pdf") ? "pdf" : "image",
+                    upload_failed: false,
+                  },
+                ];
+              }
+            }
+
+            const firstFile = initialFiles[0]?.file || null;
+            const firstFileName = initialFiles[0]?.name || null;
+            const firstFileType = initialFiles[0]?.type || null;
 
             states[stateKey] = {
               daily_routine_item_id: item.id,
               device_id: group.device_id,
-              is_checked: existingLogItem?.is_checked || false,
-              evidence_file: existingFile,
-              notes:
-                existingLogItem?.device_id === group.device_id || !existingLogItem?.device_id
-                  ? existingLogItem?.notes || ""
-                  : "",
+              is_checked: isMatchDevice ? existingLogItem?.is_checked || false : false,
+              evidence_file: firstFile,
+              evidence_files: initialFiles,
+              notes: isMatchDevice ? existingLogItem?.notes || "" : "",
               local_uri: null,
               upload_failed: false,
-              file_name: existingFileName,
+              file_name: firstFileName,
               file_size: null,
-              file_type: isPdf ? "pdf" : "image",
+              file_type: firstFileType,
             };
           });
         });
@@ -225,20 +255,44 @@ export default function DailyRoutineDetailScreen() {
         (routineDetail.items || []).forEach((item: IDailyRoutineItem) => {
           const stateKey = `::${item.id}`;
           const existingLogItem = logItemLookup[stateKey] || logItemLookupByItem[item.id];
-          const existingFile = existingLogItem?.evidence_file || null;
-          const isPdf = existingFile ? existingFile.toLowerCase().endsWith(".pdf") : false;
-          const existingFileName = existingFile ? existingFile.split("/").pop() : null;
+
+          let initialFiles: IEvidenceFileItem[] = [];
+          if (Array.isArray(existingLogItem?.evidence_files) && existingLogItem.evidence_files.length > 0) {
+            initialFiles = existingLogItem.evidence_files.map((ef: any, idx: number) => ({
+              id: ef.id || `${idx}-${ef.file}`,
+              file: ef.file,
+              name: ef.name || (ef.file ? ef.file.split("/").pop() : "Lampiran"),
+              type: ef.file?.toLowerCase().endsWith(".pdf") ? "pdf" : "image",
+              upload_failed: false,
+            }));
+          } else if (existingLogItem?.evidence_file) {
+            const ef = existingLogItem.evidence_file;
+            initialFiles = [
+              {
+                id: "legacy-0",
+                file: ef,
+                name: ef.split("/").pop() || "Lampiran",
+                type: ef.toLowerCase().endsWith(".pdf") ? "pdf" : "image",
+                upload_failed: false,
+              },
+            ];
+          }
+
+          const firstFile = initialFiles[0]?.file || null;
+          const firstFileName = initialFiles[0]?.name || null;
+          const firstFileType = initialFiles[0]?.type || null;
 
           states[stateKey] = {
             daily_routine_item_id: item.id,
             is_checked: existingLogItem?.is_checked || false,
-            evidence_file: existingFile,
+            evidence_file: firstFile,
+            evidence_files: initialFiles,
             notes: existingLogItem?.notes || "",
             local_uri: null,
             upload_failed: false,
-            file_name: existingFileName,
+            file_name: firstFileName,
             file_size: null,
-            file_type: isPdf ? "pdf" : "image",
+            file_type: firstFileType,
           };
         });
       }
@@ -252,16 +306,41 @@ export default function DailyRoutineDetailScreen() {
             const draftStates: Record<string, IItemState> = JSON.parse(rawDraft);
             Object.entries(draftStates).forEach(([key, draftItem]) => {
               if (states[key]) {
+                const restoredFiles: IEvidenceFileItem[] =
+                  Array.isArray(draftItem.evidence_files) && draftItem.evidence_files.length > 0
+                    ? draftItem.evidence_files
+                    : (draftItem.evidence_file || draftItem.local_uri)
+                    ? [
+                        {
+                          id: "draft-0",
+                          file: draftItem.evidence_file || null,
+                          local_uri: draftItem.local_uri || null,
+                          name:
+                            draftItem.file_name ||
+                            (draftItem.evidence_file ? draftItem.evidence_file.split("/").pop() : "Lampiran"),
+                          size: draftItem.file_size || null,
+                          type:
+                            draftItem.file_type ||
+                            (draftItem.evidence_file?.toLowerCase().endsWith(".pdf") ? "pdf" : "image"),
+                          upload_failed: Boolean(draftItem.upload_failed),
+                        },
+                      ]
+                    : states[key].evidence_files || [];
+
                 states[key] = {
                   ...states[key],
                   is_checked: draftItem.is_checked ?? states[key].is_checked,
                   notes: draftItem.notes ?? states[key].notes,
-                  evidence_file: draftItem.evidence_file ?? states[key].evidence_file,
-                  local_uri: draftItem.local_uri ?? states[key].local_uri,
-                  upload_failed: draftItem.upload_failed ?? states[key].upload_failed,
-                  file_name: draftItem.file_name ?? states[key].file_name,
-                  file_size: draftItem.file_size ?? states[key].file_size,
-                  file_type: draftItem.file_type ?? states[key].file_type,
+                  evidence_file: restoredFiles[0]?.file || draftItem.evidence_file || states[key].evidence_file,
+                  evidence_files: restoredFiles,
+                  local_uri: restoredFiles[0]?.local_uri || draftItem.local_uri || states[key].local_uri,
+                  upload_failed:
+                    restoredFiles.some((f) => f.upload_failed) ??
+                    draftItem.upload_failed ??
+                    states[key].upload_failed,
+                  file_name: restoredFiles[0]?.name || draftItem.file_name || states[key].file_name,
+                  file_size: restoredFiles[0]?.size || draftItem.file_size || states[key].file_size,
+                  file_type: restoredFiles[0]?.type || draftItem.file_type || states[key].file_type,
                 };
               }
             });
@@ -321,14 +400,48 @@ export default function DailyRoutineDetailScreen() {
     }));
   };
 
+  const getEffectiveEvidenceType = (stateKey: string): EvidenceType => {
+    const itemState = itemStates[stateKey];
+    if (!itemState) return "none";
+    const routineItem = routine?.items?.find(
+      (ri) => ri.id === itemState.daily_routine_item_id
+    );
+    const deviceConf = (routine?.device_items || []).find(
+      (di: any) =>
+        di.device_id === itemState.device_id &&
+        di.daily_routine_item_id === itemState.daily_routine_item_id
+    );
+    return resolveEvidenceType(
+      deviceConf?.evidence_type ?? routineItem?.evidence_type,
+      deviceConf?.is_photo_required ?? routineItem?.is_photo_required ?? false
+    );
+  };
+
+  const syncEvidenceState = (files: IEvidenceFileItem[]) => {
+    const uploadedFiles = files.filter((f) => f.file && !f.upload_failed);
+    const primaryFile = uploadedFiles[0]?.file || null;
+    const firstLocal = files[0];
+    const hasFailed = files.some((f) => f.upload_failed);
+
+    return {
+      evidence_files: files,
+      evidence_file: primaryFile,
+      local_uri: firstLocal?.local_uri || primaryFile || null,
+      upload_failed: hasFailed,
+      file_name: firstLocal?.name || null,
+      file_size: firstLocal?.size || null,
+      file_type: firstLocal?.type || null,
+    };
+  };
+
   const handleCheckToggle = (stateKey: string) => {
     if (isReadOnly) return;
     const item = itemStates[stateKey];
     if (!item) return;
 
     if (item.is_checked) {
-      const hasEvidence = Boolean(item.evidence_file || item.local_uri);
-      if (hasEvidence) {
+      const attached = getAttachedFiles(item);
+      if (attached.length > 0) {
         Alert.alert(
           "Batalkan Centang",
           "Batalkan centang akan menghapus lampiran bukti item ini. Lanjutkan?",
@@ -342,6 +455,7 @@ export default function DailyRoutineDetailScreen() {
                 updateItemState(stateKey, {
                   is_checked: false,
                   evidence_file: null,
+                  evidence_files: [],
                   local_uri: null,
                   upload_failed: false,
                   file_name: null,
@@ -365,6 +479,14 @@ export default function DailyRoutineDetailScreen() {
 
   const handlePickImage = async (stateKey: string) => {
     if (isReadOnly) return;
+    const itemState = itemStates[stateKey];
+    if (!itemState) return;
+
+    const currentFiles = getAttachedFiles(itemState);
+    if (currentFiles.length >= 5) {
+      Alert.alert("Batas Maksimal", "Maksimal 5 berkas bukti untuk setiap item.");
+      return;
+    }
 
     setLoadingImageKey(stateKey);
 
@@ -406,23 +528,46 @@ export default function DailyRoutineDetailScreen() {
       }
 
       const rawAsset = result.assets[0];
+      const isHeic = isHeicAsset(rawAsset);
+      let compressedUri: string | null = null;
+      let transcodeFailed = false;
 
-      const compressed = await compressImage(rawAsset, {
-        maxWidth: IMAGE_MAX_WIDTH,
-        quality: IMAGE_QUALITY,
-      });
+      try {
+        const compressed = await compressImage(rawAsset, {
+          maxWidth: IMAGE_MAX_WIDTH,
+          quality: IMAGE_QUALITY,
+        });
+        if (compressed?.uri) {
+          compressedUri = compressed.uri;
+        }
+      } catch (compErr) {
+        console.warn("Compress camera image failed:", compErr);
+        transcodeFailed = true;
+      }
 
-      const localUri = compressed?.uri || rawAsset.uri;
-      const fileName = `daily-routine-${Date.now()}.jpg`;
-      const fileSize = rawAsset.fileSize || null;
+      if (isHeic && (!compressedUri || transcodeFailed)) {
+        showToast(getHeicTranscodeErrorMessage(rawAsset.fileName), "error");
+        setLoadingImageKey(null);
+        return;
+      }
 
-      // Validasi klien sebelum upload (NFR-07)
-      const validation = validateEvidenceFile({
-        size: fileSize,
-        name: fileName,
-        mimeType: "image/jpeg",
-        uri: localUri,
-      });
+      const resolved = await resolveTranscodedAsset(
+        rawAsset,
+        compressedUri,
+        `daily-routine-${Date.now()}`
+      );
+
+      const effectiveType = getEffectiveEvidenceType(stateKey);
+
+      const validation = validateEvidenceFile(
+        {
+          size: resolved.size,
+          name: resolved.name,
+          mimeType: resolved.mimeType,
+          uri: resolved.uri,
+        },
+        effectiveType
+      );
 
       if (!validation.valid) {
         showToast(validation.error || "Berkas foto tidak valid", "error");
@@ -430,33 +575,39 @@ export default function DailyRoutineDetailScreen() {
         return;
       }
 
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const newFileItem: IEvidenceFileItem = {
+        id: tempId,
+        file: null,
+        local_uri: resolved.uri,
+        name: resolved.name,
+        size: resolved.size,
+        type: "image",
+        upload_failed: false,
+      };
+
+      const updatedFiles = [...currentFiles, newFileItem];
+      updateItemState(stateKey, syncEvidenceState(updatedFiles));
+
       try {
         const uploadRes = await uploadDailyRoutineTemp({
-          uri: localUri,
-          name: fileName,
-          type: "image/jpeg",
+          uri: resolved.uri,
+          name: resolved.name,
+          type: resolved.mimeType,
         } as any);
 
         const serverPath = uploadRes.data?.[0]?.path ?? "";
-        updateItemState(stateKey, {
-          evidence_file: serverPath,
-          local_uri: localUri,
-          upload_failed: false,
-          file_name: fileName,
-          file_size: fileSize,
-          file_type: "image",
-        });
+        const finalFiles = updatedFiles.map((f) =>
+          f.id === tempId ? { ...f, file: serverPath, upload_failed: false } : f
+        );
+        updateItemState(stateKey, syncEvidenceState(finalFiles));
         showToast("Foto berhasil diunggah!", "success");
       } catch (uploadErr) {
         console.warn("Upload gagal saat ambil foto, disimpan lokal:", uploadErr);
-        updateItemState(stateKey, {
-          evidence_file: null,
-          local_uri: localUri,
-          upload_failed: true,
-          file_name: fileName,
-          file_size: fileSize,
-          file_type: "image",
-        });
+        const finalFiles = updatedFiles.map((f) =>
+          f.id === tempId ? { ...f, upload_failed: true } : f
+        );
+        updateItemState(stateKey, syncEvidenceState(finalFiles));
         showToast("Foto disimpan di draft. Gagal upload ke server, ketuk Coba Lagi.", "info");
       }
     } catch (error) {
@@ -467,8 +618,161 @@ export default function DailyRoutineDetailScreen() {
     }
   };
 
+  const handlePickGallery = async (stateKey: string) => {
+    if (isReadOnly) return;
+    const itemState = itemStates[stateKey];
+    if (!itemState) return;
+
+    const currentFiles = getAttachedFiles(itemState);
+    const remainingSlots = 5 - currentFiles.length;
+    if (remainingSlots <= 0) {
+      Alert.alert("Batas Maksimal", "Maksimal 5 berkas bukti untuk setiap item.");
+      return;
+    }
+
+    setLoadingImageKey(stateKey);
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== ImagePicker.PermissionStatus.GRANTED) {
+        Alert.alert(
+          "Izin Diperlukan",
+          "Aplikasi membutuhkan akses Galeri untuk memilih bukti foto. Mohon aktifkan di pengaturan perangkat.",
+          [
+            { text: "Batal", style: "cancel" },
+            { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
+          ]
+        );
+        setLoadingImageKey(null);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        selectionLimit: remainingSlots,
+        quality: 1,
+      });
+
+      if (result.canceled || !result.assets?.length) {
+        setLoadingImageKey(null);
+        return;
+      }
+
+      let assetsToProcess = result.assets;
+      if (assetsToProcess.length > remainingSlots) {
+        assetsToProcess = assetsToProcess.slice(0, remainingSlots);
+        showToast(
+          `Hanya ${remainingSlots} foto pertama yang dipilih (maksimal 5 berkas)`,
+          "info"
+        );
+      }
+
+      const effectiveType = getEffectiveEvidenceType(stateKey);
+      let runningFiles = [...currentFiles];
+
+      for (let i = 0; i < assetsToProcess.length; i++) {
+        const rawAsset = assetsToProcess[i];
+        const isHeic = isHeicAsset(rawAsset);
+        let compressedUri: string | null = null;
+        let transcodeFailed = false;
+
+        try {
+          const compressed = await compressImage(rawAsset, {
+            maxWidth: IMAGE_MAX_WIDTH,
+            quality: IMAGE_QUALITY,
+          });
+          if (compressed?.uri) {
+            compressedUri = compressed.uri;
+          }
+        } catch (compErr) {
+          console.warn("Compress gallery image failed:", compErr);
+          transcodeFailed = true;
+        }
+
+        if (isHeic && (!compressedUri || transcodeFailed)) {
+          showToast(getHeicTranscodeErrorMessage(rawAsset.fileName), "error");
+          continue;
+        }
+
+        const resolved = await resolveTranscodedAsset(
+          rawAsset,
+          compressedUri,
+          `gallery-${Date.now()}-${i + 1}`
+        );
+
+        const validation = validateEvidenceFile(
+          {
+            size: resolved.size,
+            name: resolved.name,
+            mimeType: resolved.mimeType,
+            uri: resolved.uri,
+          },
+          effectiveType
+        );
+
+        if (!validation.valid) {
+          showToast(
+            validation.error || `Berkas ${resolved.name} tidak memenuhi syarat`,
+            "error"
+          );
+          continue;
+        }
+
+        const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+        const newFileItem: IEvidenceFileItem = {
+          id: tempId,
+          file: null,
+          local_uri: resolved.uri,
+          name: resolved.name,
+          size: resolved.size,
+          type: "image",
+          upload_failed: false,
+        };
+
+        runningFiles = [...runningFiles, newFileItem];
+        updateItemState(stateKey, syncEvidenceState(runningFiles));
+
+        try {
+          const uploadRes = await uploadDailyRoutineTemp({
+            uri: resolved.uri,
+            name: resolved.name,
+            type: resolved.mimeType,
+          } as any);
+          const serverPath = uploadRes.data?.[0]?.path ?? "";
+          runningFiles = runningFiles.map((f) =>
+            f.id === tempId ? { ...f, file: serverPath, upload_failed: false } : f
+          );
+          updateItemState(stateKey, syncEvidenceState(runningFiles));
+        } catch (uploadErr) {
+          console.warn("Upload galeri item gagal:", uploadErr);
+          runningFiles = runningFiles.map((f) =>
+            f.id === tempId ? { ...f, upload_failed: true } : f
+          );
+          updateItemState(stateKey, syncEvidenceState(runningFiles));
+        }
+      }
+
+      showToast("Foto galeri diproses", "info");
+    } catch (err) {
+      console.error("Pick gallery error:", err);
+      showToast("Gagal memilih gambar dari galeri", "error");
+    } finally {
+      setLoadingImageKey(null);
+    }
+  };
+
   const handlePickDocument = async (stateKey: string) => {
     if (isReadOnly) return;
+    const itemState = itemStates[stateKey];
+    if (!itemState) return;
+
+    const currentFiles = getAttachedFiles(itemState);
+    const remainingSlots = 5 - currentFiles.length;
+    if (remainingSlots <= 0) {
+      Alert.alert("Batas Maksimal", "Maksimal 5 berkas bukti untuk setiap item.");
+      return;
+    }
 
     setLoadingImageKey(stateKey);
 
@@ -476,90 +780,136 @@ export default function DailyRoutineDetailScreen() {
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf"],
         copyToCacheDirectory: true,
-        multiple: false,
+        multiple: true,
       });
 
-      if (result.canceled || !result.assets?.[0]) {
+      if (result.canceled || !result.assets?.length) {
         setLoadingImageKey(null);
         return;
       }
 
-      const asset = result.assets[0];
-
-      // Validasi klien sebelum upload (NFR-07: maks 5MB, JPG/PNG/WEBP/PDF)
-      const validation = validateEvidenceFile({
-        size: asset.size,
-        name: asset.name,
-        mimeType: asset.mimeType,
-        uri: asset.uri,
-      });
-
-      if (!validation.valid) {
-        showToast(validation.error || "Berkas tidak valid", "error");
-        setLoadingImageKey(null);
-        return;
+      let assetsToProcess = result.assets;
+      if (assetsToProcess.length > remainingSlots) {
+        assetsToProcess = assetsToProcess.slice(0, remainingSlots);
+        showToast(
+          `Hanya ${remainingSlots} berkas pertama yang dipilih (maksimal 5 berkas)`,
+          "info"
+        );
       }
 
-      const isPdf =
-        asset.mimeType?.includes("pdf") ||
-        asset.name.toLowerCase().endsWith(".pdf");
+      const effectiveType = getEffectiveEvidenceType(stateKey);
+      let runningFiles = [...currentFiles];
 
-      let localUri = asset.uri;
+      for (let i = 0; i < assetsToProcess.length; i++) {
+        const asset = assetsToProcess[i];
+        const isPdf =
+          asset.mimeType?.includes("pdf") ||
+          asset.name.toLowerCase().endsWith(".pdf");
 
-      if (!isPdf && asset.mimeType?.startsWith("image/")) {
-        try {
-          const compressed = await compressImage(
-            {
-              uri: asset.uri,
-              width: 0,
-              height: 0,
-            } as any,
-            {
-              maxWidth: IMAGE_MAX_WIDTH,
-              quality: IMAGE_QUALITY,
+        let resolvedAsset: {
+          uri: string;
+          name: string;
+          mimeType: string;
+          size: number | null;
+          type: "image" | "pdf";
+        };
+
+        if (isPdf) {
+          resolvedAsset = {
+            uri: asset.uri,
+            name: asset.name || `doc-${Date.now()}-${i}.pdf`,
+            mimeType: "application/pdf",
+            size: asset.size || null,
+            type: "pdf",
+          };
+        } else {
+          const isHeic = isHeicAsset(asset);
+          let compressedUri: string | null = null;
+          let transcodeFailed = false;
+
+          try {
+            const compressed = await compressImage(
+              { uri: asset.uri, width: 0, height: 0 } as any,
+              { maxWidth: IMAGE_MAX_WIDTH, quality: IMAGE_QUALITY }
+            );
+            if (compressed?.uri) {
+              compressedUri = compressed.uri;
             }
-          );
-          if (compressed?.uri) {
-            localUri = compressed.uri;
+          } catch (compErr) {
+            console.warn("Compress doc image failed:", compErr);
+            transcodeFailed = true;
           }
-        } catch {
-          // Fallback to original URI if compress fails
+
+          if (isHeic && (!compressedUri || transcodeFailed)) {
+            showToast(getHeicTranscodeErrorMessage(asset.name), "error");
+            continue;
+          }
+
+          const resolvedImg = await resolveTranscodedAsset(
+            asset,
+            compressedUri,
+            `doc-${Date.now()}-${i}`
+          );
+          resolvedAsset = {
+            ...resolvedImg,
+            type: "image",
+          };
+        }
+
+        const validation = validateEvidenceFile(
+          {
+            size: resolvedAsset.size,
+            name: resolvedAsset.name,
+            mimeType: resolvedAsset.mimeType,
+            uri: resolvedAsset.uri,
+          },
+          effectiveType
+        );
+
+        if (!validation.valid) {
+          showToast(
+            validation.error || `Berkas ${resolvedAsset.name} tidak valid`,
+            "error"
+          );
+          continue;
+        }
+
+        const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+        const newFileItem: IEvidenceFileItem = {
+          id: tempId,
+          file: null,
+          local_uri: resolvedAsset.uri,
+          name: resolvedAsset.name,
+          size: resolvedAsset.size,
+          type: resolvedAsset.type,
+          upload_failed: false,
+        };
+
+        runningFiles = [...runningFiles, newFileItem];
+        updateItemState(stateKey, syncEvidenceState(runningFiles));
+
+        try {
+          const uploadRes = await uploadDailyRoutineTemp({
+            uri: resolvedAsset.uri,
+            name: resolvedAsset.name,
+            type: resolvedAsset.mimeType,
+          } as any);
+
+          const serverPath = uploadRes.data?.[0]?.path ?? "";
+          runningFiles = runningFiles.map((f) =>
+            f.id === tempId ? { ...f, file: serverPath, upload_failed: false } : f
+          );
+          updateItemState(stateKey, syncEvidenceState(runningFiles));
+        } catch (uploadErr) {
+          console.warn("Upload berkas gagal, disimpan di draft:", uploadErr);
+          runningFiles = runningFiles.map((f) =>
+            f.id === tempId ? { ...f, upload_failed: true } : f
+          );
+          updateItemState(stateKey, syncEvidenceState(runningFiles));
         }
       }
 
-      const fileName = asset.name || `doc-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
-      const fileSize = asset.size || null;
-      const mimeType = asset.mimeType || (isPdf ? "application/pdf" : "image/jpeg");
-
-      try {
-        const uploadRes = await uploadDailyRoutineTemp({
-          uri: localUri,
-          name: fileName,
-          type: mimeType,
-        } as any);
-
-        const serverPath = uploadRes.data?.[0]?.path ?? "";
-        updateItemState(stateKey, {
-          evidence_file: serverPath,
-          local_uri: localUri,
-          upload_failed: false,
-          file_name: fileName,
-          file_size: fileSize,
-          file_type: isPdf ? "pdf" : "image",
-        });
-        showToast("Berkas berhasil diunggah!", "success");
-      } catch (uploadErr) {
-        console.warn("Upload berkas gagal, disimpan di draft:", uploadErr);
-        updateItemState(stateKey, {
-          evidence_file: null,
-          local_uri: localUri,
-          upload_failed: true,
-          file_name: fileName,
-          file_size: fileSize,
-          file_type: isPdf ? "pdf" : "image",
-        });
-        showToast("Berkas disimpan di draft. Gagal upload ke server, ketuk Coba Lagi.", "info");
-      }
+      showToast("Berkas diproses", "info");
     } catch (err) {
       console.error("Pick document error:", err);
       showToast("Gagal memilih berkas", "error");
@@ -568,51 +918,278 @@ export default function DailyRoutineDetailScreen() {
     }
   };
 
-  const handleRetryUpload = async (stateKey: string) => {
+  const handleRetryUpload = async (stateKey: string, fileIndex?: number) => {
     if (isReadOnly) return;
     const itemState = itemStates[stateKey];
-    if (!itemState || !itemState.local_uri) return;
+    if (!itemState) return;
+
+    const files = getAttachedFiles(itemState);
+    if (!files.length) return;
 
     setLoadingImageKey(stateKey);
+
     try {
-      const isPdf =
-        itemState.file_type === "pdf" ||
-        (itemState.file_name ? itemState.file_name.toLowerCase().endsWith(".pdf") : false);
-      const mimeType = isPdf ? "application/pdf" : "image/jpeg";
-      const fileName =
-        itemState.file_name ||
-        `daily-routine-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+      let updatedFiles = [...files];
+      const indicesToRetry =
+        fileIndex !== undefined
+          ? [fileIndex]
+          : files.map((f, idx) => (f.upload_failed ? idx : -1)).filter((idx) => idx !== -1);
 
-      const uploadRes = await uploadDailyRoutineTemp({
-        uri: itemState.local_uri,
-        name: fileName,
-        type: mimeType,
-      } as any);
+      for (const idx of indicesToRetry) {
+        const targetFile = updatedFiles[idx];
+        if (!targetFile || !targetFile.local_uri) continue;
 
-      const serverPath = uploadRes.data?.[0]?.path ?? "";
-      updateItemState(stateKey, {
-        evidence_file: serverPath,
-        upload_failed: false,
-      });
-      showToast("Bukti berhasil diunggah!", "success");
-    } catch (err: any) {
-      console.error("Retry upload error:", err);
-      showToast(err?.message || "Gagal mengunggah bukti. Periksa koneksi internet.", "error");
+        const isPdf =
+          targetFile.type === "pdf" ||
+          (targetFile.name ? targetFile.name.toLowerCase().endsWith(".pdf") : false);
+        const mimeType = isPdf ? "application/pdf" : "image/jpeg";
+        const fileName =
+          targetFile.name || `daily-routine-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+
+        try {
+          const uploadRes = await uploadDailyRoutineTemp({
+            uri: targetFile.local_uri,
+            name: fileName,
+            type: mimeType,
+          } as any);
+
+          const serverPath = uploadRes.data?.[0]?.path ?? "";
+          updatedFiles[idx] = {
+            ...targetFile,
+            file: serverPath,
+            upload_failed: false,
+          };
+          updateItemState(stateKey, syncEvidenceState(updatedFiles));
+          showToast(`Bukti "${fileName}" berhasil diunggah!`, "success");
+        } catch (err: any) {
+          console.error("Retry upload error:", err);
+          const serverMsg =
+            err?.response?.data?.message || err?.message || "Gagal mengunggah bukti";
+          showToast(serverMsg, "error");
+        }
+      }
     } finally {
       setLoadingImageKey(null);
     }
   };
 
-  const handleRemoveEvidence = (stateKey: string) => {
+  const handleRemoveEvidence = (stateKey: string, fileIndex?: number) => {
     if (isReadOnly) return;
-    updateItemState(stateKey, {
-      evidence_file: null,
-      local_uri: null,
-      upload_failed: false,
-      file_name: null,
-      file_size: null,
-      file_type: null,
-    });
+    const itemState = itemStates[stateKey];
+    if (!itemState) return;
+
+    const currentFiles = getAttachedFiles(itemState);
+    if (fileIndex !== undefined && currentFiles[fileIndex]) {
+      const updatedFiles = currentFiles.filter((_, idx) => idx !== fileIndex);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      updateItemState(stateKey, syncEvidenceState(updatedFiles));
+    } else {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      updateItemState(stateKey, {
+        evidence_file: null,
+        evidence_files: [],
+        local_uri: null,
+        upload_failed: false,
+        file_name: null,
+        file_size: null,
+        file_type: null,
+      });
+    }
+  };
+
+  const processReplaceFile = async (
+    stateKey: string,
+    idx: number,
+    asset: any,
+    fileType: "image" | "pdf"
+  ) => {
+    const itemState = itemStates[stateKey];
+    if (!itemState) return;
+    const currentFiles = [...getAttachedFiles(itemState)];
+    setLoadingImageKey(stateKey);
+
+    try {
+      const isPdf = fileType === "pdf";
+      let localUri = asset.uri;
+      let finalName =
+        asset.fileName ||
+        asset.name ||
+        `replace-${Date.now()}.${isPdf ? "pdf" : "jpg"}`;
+      let finalMime = isPdf ? "application/pdf" : "image/jpeg";
+      let finalSize = asset.size || asset.fileSize || null;
+
+      if (!isPdf) {
+        const isHeic = isHeicAsset(asset);
+        let compressedUri: string | null = null;
+        let transcodeFailed = false;
+
+        try {
+          const comp = await compressImage(asset, {
+            maxWidth: IMAGE_MAX_WIDTH,
+            quality: IMAGE_QUALITY,
+          });
+          if (comp?.uri) {
+            compressedUri = comp.uri;
+          }
+        } catch (e) {
+          console.warn("Compress replacement image failed:", e);
+          transcodeFailed = true;
+        }
+
+        if (isHeic && (!compressedUri || transcodeFailed)) {
+          showToast(
+            getHeicTranscodeErrorMessage(asset.fileName || asset.name),
+            "error"
+          );
+          return;
+        }
+
+        const resolved = await resolveTranscodedAsset(
+          asset,
+          compressedUri,
+          `replace-${Date.now()}`
+        );
+        localUri = resolved.uri;
+        finalName = resolved.name;
+        finalMime = resolved.mimeType;
+        finalSize = resolved.size;
+      }
+
+      const effectiveType = getEffectiveEvidenceType(stateKey);
+
+      const validation = validateEvidenceFile(
+        {
+          size: finalSize,
+          name: finalName,
+          mimeType: finalMime,
+          uri: localUri,
+        },
+        effectiveType
+      );
+
+      if (!validation.valid) {
+        showToast(validation.error || "Berkas pengganti tidak valid", "error");
+        return;
+      }
+
+      const replacedItem: IEvidenceFileItem = {
+        id: `replace-${Date.now()}`,
+        file: null,
+        local_uri: localUri,
+        name: finalName,
+        size: finalSize,
+        type: fileType,
+        upload_failed: false,
+      };
+
+      currentFiles[idx] = replacedItem;
+      updateItemState(stateKey, syncEvidenceState(currentFiles));
+
+      try {
+        const uploadRes = await uploadDailyRoutineTemp({
+          uri: localUri,
+          name: finalName,
+          type: finalMime,
+        } as any);
+
+        const serverPath = uploadRes.data?.[0]?.path ?? "";
+        currentFiles[idx] = {
+          ...replacedItem,
+          file: serverPath,
+          upload_failed: false,
+        };
+        updateItemState(stateKey, syncEvidenceState(currentFiles));
+        showToast("Bukti berhasil diganti dan diunggah!", "success");
+      } catch (err: any) {
+        console.warn("Upload replaced evidence failed:", err);
+        currentFiles[idx] = { ...replacedItem, upload_failed: true };
+        updateItemState(stateKey, syncEvidenceState(currentFiles));
+        showToast("Bukti pengganti disimpan lokal. Ketuk Coba Lagi.", "info");
+      }
+    } finally {
+      setLoadingImageKey(null);
+    }
+  };
+
+  const handleReplaceEvidence = (stateKey: string, fileIndex?: number) => {
+    if (isReadOnly) return;
+    const idx = fileIndex ?? 0;
+    const effectiveType = getEffectiveEvidenceType(stateKey);
+
+    const options: any[] = [
+      {
+        text: "Kamera",
+        onPress: async () => {
+          try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== ImagePicker.PermissionStatus.GRANTED) {
+              showToast("Izin kamera diperlukan", "error");
+              return;
+            }
+            const res = await ImagePicker.launchCameraAsync({
+              mediaTypes: ["images"],
+              quality: 1,
+            });
+            if (res.canceled || !res.assets?.[0]) return;
+            await processReplaceFile(stateKey, idx, res.assets[0], "image");
+          } catch (e) {
+            console.error("Replace camera error:", e);
+          }
+        },
+      },
+      {
+        text: "Galeri",
+        onPress: async () => {
+          try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== ImagePicker.PermissionStatus.GRANTED) {
+              showToast("Izin galeri diperlukan", "error");
+              return;
+            }
+            const res = await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsMultipleSelection: false,
+              quality: 1,
+            });
+            if (res.canceled || !res.assets?.[0]) return;
+            await processReplaceFile(stateKey, idx, res.assets[0], "image");
+          } catch (e) {
+            console.error("Replace gallery error:", e);
+          }
+        },
+      },
+    ];
+
+    if (effectiveType === "file") {
+      options.push({
+        text: "Dokumen (PDF)",
+        onPress: async () => {
+          try {
+            const res = await DocumentPicker.getDocumentAsync({
+              type: ["image/*", "application/pdf"],
+              copyToCacheDirectory: true,
+            });
+            if (res.canceled || !res.assets?.[0]) return;
+            const asset = res.assets[0];
+            const isPdf =
+              asset.mimeType?.includes("pdf") ||
+              asset.name.toLowerCase().endsWith(".pdf");
+            await processReplaceFile(
+              stateKey,
+              idx,
+              asset,
+              isPdf ? "pdf" : "image"
+            );
+          } catch (e) {
+            console.error("Replace doc error:", e);
+          }
+        },
+      });
+    }
+
+    options.push({ text: "Batal", style: "cancel", onPress: () => {} });
+
+    Alert.alert("Ganti Bukti", "Pilih sumber bukti pengganti:", options);
   };
 
   const handleSubmit = async () => {
@@ -642,7 +1219,12 @@ export default function DailyRoutineDetailScreen() {
     const states = Object.values(itemStates);
 
     // M7: Periksa apakah ada bukti yang gagal diunggah
-    const failedItem = states.find((s) => s.is_checked && s.upload_failed);
+    const failedItem = states.find((s) => {
+      if (!s.is_checked) return false;
+      const attached = getAttachedFiles(s);
+      return attached.some((f) => f.upload_failed) || s.upload_failed;
+    });
+
     if (failedItem) {
       const rItem = routine?.items.find((ri) => ri.id === failedItem.daily_routine_item_id);
       showToast(
@@ -652,7 +1234,7 @@ export default function DailyRoutineDetailScreen() {
       return;
     }
 
-    // Validasi bukti wajib per item & per device (ADR-132-04)
+    // Validasi bukti wajib per item & per device (ADR-132-04 & ADR-266)
     for (const item of states) {
       if (!item.is_checked) continue;
       const routineItem = routine?.items.find(
@@ -668,7 +1250,10 @@ export default function DailyRoutineDetailScreen() {
         deviceConf?.is_photo_required ?? routineItem?.is_photo_required ?? false
       );
 
-      if (effectiveEvidence !== "none" && !item.evidence_file) {
+      const attached = getAttachedFiles(item);
+      const uploadedFiles = attached.filter((f) => Boolean(f.file));
+
+      if (effectiveEvidence !== "none" && uploadedFiles.length === 0) {
         const labels: Record<string, string> = {
           photo: "bukti foto",
           file: "bukti berkas",
@@ -683,14 +1268,23 @@ export default function DailyRoutineDetailScreen() {
       }
     }
 
-    // Siapkan payload submit dengan device_id (M5)
-    const submitItems = states.map((item) => ({
-      daily_routine_item_id: item.daily_routine_item_id,
-      device_id: item.device_id || null,
-      is_checked: item.is_checked,
-      ...(item.evidence_file && { evidence_file: item.evidence_file }),
-      ...(item.notes && { notes: item.notes }),
-    }));
+    // Siapkan payload submit dengan device_id, evidence_files, dan evidence_file (M5, ADR-266)
+    const submitItems = states.map((item) => {
+      const attached = getAttachedFiles(item);
+      const uploadedFiles = attached
+        .map((f) => f.file)
+        .filter((f): f is string => Boolean(f));
+      const primaryFile = uploadedFiles[0] || item.evidence_file || null;
+
+      return {
+        daily_routine_item_id: item.daily_routine_item_id,
+        device_id: item.device_id || null,
+        is_checked: item.is_checked,
+        ...(primaryFile ? { evidence_file: primaryFile } : {}),
+        ...(uploadedFiles.length > 0 ? { evidence_files: uploadedFiles } : {}),
+        ...(item.notes ? { notes: item.notes } : {}),
+      };
+    });
 
     // Konfirmasi submit parsial (Ruling Observer #11 / D124)
     const uncheckedStates = states.filter((s) => !s.is_checked);
@@ -963,9 +1557,11 @@ export default function DailyRoutineDetailScreen() {
                                   loadingEvidence={loadingImageKey === stateKey}
                                   onToggle={() => handleCheckToggle(stateKey)}
                                   onPickPhoto={() => handlePickImage(stateKey)}
+                                  onPickGallery={() => handlePickGallery(stateKey)}
                                   onPickDocument={() => handlePickDocument(stateKey)}
-                                  onRetryUpload={() => handleRetryUpload(stateKey)}
-                                  onRemoveEvidence={() => handleRemoveEvidence(stateKey)}
+                                  onRetryUpload={(idx) => handleRetryUpload(stateKey, idx)}
+                                  onRemoveEvidence={(idx) => handleRemoveEvidence(stateKey, idx)}
+                                  onReplaceEvidence={(idx) => handleReplaceEvidence(stateKey, idx)}
                                   onPreviewImage={(uri) => setPreviewImage(uri)}
                                   onChangeNotes={(text) =>
                                     updateItemState(stateKey, { notes: text })
@@ -999,9 +1595,11 @@ export default function DailyRoutineDetailScreen() {
                           loadingEvidence={loadingImageKey === stateKey}
                           onToggle={() => handleCheckToggle(stateKey)}
                           onPickPhoto={() => handlePickImage(stateKey)}
+                          onPickGallery={() => handlePickGallery(stateKey)}
                           onPickDocument={() => handlePickDocument(stateKey)}
-                          onRetryUpload={() => handleRetryUpload(stateKey)}
-                          onRemoveEvidence={() => handleRemoveEvidence(stateKey)}
+                          onRetryUpload={(idx) => handleRetryUpload(stateKey, idx)}
+                          onRemoveEvidence={(idx) => handleRemoveEvidence(stateKey, idx)}
+                          onReplaceEvidence={(idx) => handleReplaceEvidence(stateKey, idx)}
                           onPreviewImage={(uri) => setPreviewImage(uri)}
                           onChangeNotes={(text) =>
                             updateItemState(stateKey, { notes: text })

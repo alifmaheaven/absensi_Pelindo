@@ -16,7 +16,7 @@ import {
 } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendanceStatus, THttpErrorResult } from "@/types";
-import { formatAttendanceDate } from "@/utils/utils";
+import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -107,8 +107,8 @@ export default function LeaveScreen() {
               if (!start) return;
               if (lr.end_date) {
                 const end = lr.end_date.split("T")[0];
-                let curr = new Date(`${start}T00:00:00`);
-                const last = new Date(`${end}T00:00:00`);
+                let curr = parseWIBDate(start) || new Date(`${start}T00:00:00`);
+                const last = parseWIBDate(end) || new Date(`${end}T00:00:00`);
                 while (curr <= last) {
                   const y = curr.getFullYear();
                   const m = String(curr.getMonth() + 1).padStart(2, "0");
@@ -142,8 +142,8 @@ export default function LeaveScreen() {
       };
     }
 
-    const start = new Date(`${leaveDate}T00:00:00`);
-    const end = new Date(`${endDate}T00:00:00`);
+    const start = parseWIBDate(leaveDate) || new Date(`${leaveDate}T00:00:00`);
+    const end = parseWIBDate(endDate) || new Date(`${endDate}T00:00:00`);
     const diffTime = end.getTime() - start.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
     const totalDays = diffDays + 1;
@@ -177,8 +177,8 @@ export default function LeaveScreen() {
 
     // Validasi lokal: end >= start & <= 30 hari (R-LZ-3)
     if (endDate) {
-      const start = new Date(`${leaveDate}T00:00:00`);
-      const end = new Date(`${endDate}T00:00:00`);
+      const start = parseWIBDate(leaveDate) || new Date(`${leaveDate}T00:00:00`);
+      const end = parseWIBDate(endDate) || new Date(`${endDate}T00:00:00`);
       if (end < start) {
         Alert.alert(
           "Tanggal Tidak Valid",
@@ -416,7 +416,7 @@ export default function LeaveScreen() {
               onConfirm={(date) => {
                 setLeaveDate(date);
                 setDatePickerVisible(false);
-                if (endDate && new Date(`${endDate}T00:00:00`) < new Date(`${date}T00:00:00`)) {
+                if (endDate && (parseWIBDate(endDate)?.getTime() ?? 0) < (parseWIBDate(date)?.getTime() ?? 0)) {
                   setEndDate("");
                 }
               }}

@@ -9,6 +9,7 @@ import {
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { CheckRounded, ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { ITodayRoutineResponse } from "@/types";
+import { parseWIBDate } from "@/utils/utils";
 
 export interface RoutineProgressCardProps {
   routines?: ITodayRoutineResponse[] | null;
@@ -39,16 +40,7 @@ export function formatDDMMM(dateInput?: Date | string | null): string {
   if (!dateInput) {
     d = new Date();
   } else if (typeof dateInput === "string") {
-    const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-      d = new Date(
-        parseInt(match[1], 10),
-        parseInt(match[2], 10) - 1,
-        parseInt(match[3], 10)
-      );
-    } else {
-      d = new Date(dateInput);
-    }
+    d = parseWIBDate(dateInput) || new Date();
   } else {
     d = dateInput;
   }

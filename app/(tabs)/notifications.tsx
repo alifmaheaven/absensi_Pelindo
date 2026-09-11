@@ -16,7 +16,7 @@ import {
   markAsRead,
   markAllAsRead,
 } from "@/services/notification";
-import { parseUTCDate } from "@/utils/utils";
+import { parseWIBDate } from "@/utils/utils";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
 import { Bell, ClockOutline, Ticket, Calender } from "@/components/icon";
@@ -31,8 +31,8 @@ interface Notification {
 }
 
 function formatTime(dateStr: string): string {
-  // created_at = UTC space string → parse UTC (bukan device-local)
-  const date = parseUTCDate(dateStr) ?? new Date();
+  // created_at = WIB wall-clock string -> parse WIB (bukan device-local)
+  const date = parseWIBDate(dateStr) ?? new Date();
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);

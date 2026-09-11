@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { parseDateParts, todayWIB } from "@/utils/utils";
 
 const MONTHS = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -29,14 +30,13 @@ export default function DatePicker({ visible, value, onConfirm, onClose, disable
 
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // value = "YYYY-MM-DD" (tanggal WIB). new Date("YYYY-MM-DD") = UTC midnight
-  // → getDate() local bisa beda hari di device non-WIB. Parse sebagai WIB.
-  const parseWIB = (s: string) => new Date(`${s}T00:00:00+07:00`);
-  const today = parseWIB(new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
-  const initial = value ? parseWIB(value) : today;
-  const [year, setYear] = useState(initial.getFullYear());
-  const [month, setMonth] = useState(initial.getMonth()); // 0-indexed
-  const [selectedDay, setSelectedDay] = useState(initial.getDate());
+  // ponytail: Hindari Date instan absolut untuk komponen kalender.
+  // Ekstraksi komponen kalender (YYYY-MM-DD) secara langsung untuk mencegah
+  // pergeseran tanggal pada perangkat non-WIB (BUG-266-04).
+  const initial = parseDateParts(value || todayWIB());
+  const [year, setYear] = useState(initial.year);
+  const [month, setMonth] = useState(initial.month); // 0-indexed
+  const [selectedDay, setSelectedDay] = useState(initial.day);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun

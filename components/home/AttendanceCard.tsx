@@ -1,7 +1,7 @@
 import { DEFAULT_WORK_HOURS } from "@/constants";
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ishift } from "@/types";
-import { parseWIBDate } from "@/utils/utils";
+import { buildWIBScheduledTime, getWIBHour, parseWIBDate } from "@/utils/utils";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function getHourMinute(datetime?: string | null): string {
@@ -60,18 +60,19 @@ export function mapTimeToColor(
     }
   } else if (type === "checkout" && shift?.is_overnight) {
     const checkinSh = Number(shift.start_time.split(":")[0]);
-    if (targetTime.getHours() < checkinSh) {
+    if (getWIBHour(targetTime) < checkinSh) {
       baseDate.setDate(baseDate.getDate() - 1);
     }
   }
 
-  const scheduledTime = new Date(baseDate);
-  scheduledTime.setHours(sh, sm ?? 0, 0, 0);
+  let scheduledTime = buildWIBScheduledTime(baseDate, sh, sm ?? 0);
   // Overnight shift: checkout lewat tengah malam (H+1 dari tanggal mulai shift)
   if (type === "checkout" && shift?.is_overnight) {
     const eh = sh;
     const checkinSh = Number(shift.start_time.split(":")[0]);
-    if (eh < checkinSh) scheduledTime.setDate(scheduledTime.getDate() + 1);
+    if (eh < checkinSh) {
+      scheduledTime = new Date(scheduledTime.getTime() + 24 * 60 * 60 * 1000);
+    }
   }
 
   const graceMs = (type === "checkin" ? shift?.grace_late : shift?.grace_early) ? (type === "checkin" ? shift!.grace_late : shift!.grace_early) * 60 * 1000 : 0;

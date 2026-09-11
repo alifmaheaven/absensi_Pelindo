@@ -20,9 +20,11 @@ import {
   formatHourMinute,
   getCompletedShiftBannerInfo,
   getTodayDateString,
+  getWIBHour,
   parseWIBDate,
   resolveAttendanceSession,
   smartCapitalize,
+  buildWIBScheduledTime,
 } from "@/utils/utils";
 import { router, useFocusEffect } from "expo-router";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
@@ -81,15 +83,13 @@ export function getWorkStatus(
     }
   } else if (type === "checkout" && shift.is_overnight && eh < sh) {
     // Jika checkout terjadi di jam pagi (< sh), maka tanggal mulai shift adalah kemarin
-    if (actualTime.getHours() < sh) {
+    if (getWIBHour(actualTime) < sh) {
       baseDate.setDate(baseDate.getDate() - 1);
     }
   }
 
   const buildScheduled = (hh: number, mm: number): Date => {
-    const d = new Date(baseDate);
-    d.setHours(hh, mm, 0, 0);
-    return d;
+    return buildWIBScheduledTime(baseDate, hh, mm);
   };
 
   if (type === "checkin") {
@@ -108,9 +108,9 @@ export function getWorkStatus(
     }
     return defaultText;
   } else {
-    const scheduledTime = buildScheduled(eh, em);
+    let scheduledTime = buildScheduled(eh, em);
     if (shift.is_overnight && eh < sh) {
-      scheduledTime.setDate(scheduledTime.getDate() + 1);
+      scheduledTime = new Date(scheduledTime.getTime() + 24 * 60 * 60 * 1000);
     }
     const graceMs = shift.grace_early * 60 * 1000;
     const diffMs = actualTime.getTime() - scheduledTime.getTime();
@@ -333,10 +333,9 @@ export default function HomeScreen() {
     // Bangun scheduled end Date di zona WIB
     const [eh, em] = shift.end_time.split(":").map(Number);
     const parsedShiftDate = parseWIBDate(`${shiftDateStr} 00:00:00`) || new Date(currentTime);
-    const scheduledEndDate = new Date(parsedShiftDate);
-    scheduledEndDate.setHours(eh, em || 0, 0, 0);
+    const scheduledEndDate = buildWIBScheduledTime(parsedShiftDate, eh, em || 0);
     // Tambah 1 hari karena shift lintas hari
-    scheduledEndDate.setDate(scheduledEndDate.getDate() + 1);
+    scheduledEndDate.setTime(scheduledEndDate.getTime() + 24 * 60 * 60 * 1000);
 
     const nowMs = currentTime.getTime();
     const scheduledEndMs = scheduledEndDate.getTime();

@@ -54,6 +54,38 @@ export function getTodayDateString(): string {
   return getWIBDateString(new Date());
 }
 
+export interface CalendarDateParts {
+  year: number;
+  month: number; // 0-indexed (0=Jan, 11=Des)
+  day: number;
+}
+
+/**
+ * Parse string tanggal "YYYY-MM-DD" (atau naive WIB timestamp "YYYY-MM-DD HH:mm:ss")
+ * langsung menjadi field kalender numerik murni (year, month 0-indexed, day) tanpa
+ * melalui objek Date dan getter lokal perangkat.
+ * Menjamin UI kalender tidak bergeser tanggal pada perangkat non-WIB (BUG-266-04).
+ */
+export function parseDateParts(dateStr?: string | null): CalendarDateParts {
+  if (dateStr) {
+    const clean = String(dateStr).trim().split(/[ T]/)[0];
+    const parts = clean.split("-").map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return {
+        year: parts[0],
+        month: parts[1] - 1,
+        day: parts[2],
+      };
+    }
+  }
+  const todayParts = getTodayDateString().split("-").map(Number);
+  return {
+    year: todayParts[0],
+    month: todayParts[1] - 1,
+    day: todayParts[2],
+  };
+}
+
 /**
  * Format string datetime WIB ("YYYY-MM-DD HH:MM[:SS]") ke "HH:MM".
  * Fallback aman ke "--:--" bila null/empty.
@@ -67,17 +99,18 @@ export function formatHourMinute(datetime?: string | null): string {
 }
 
 /**
- * Parse timestamp backend (format spasi "YYYY-MM-DD HH:MM:SS[.fff]") sebagai
+ * Parse timestamp backend (format spasi "YYYY-MM-DD HH:MM:SS[.fff]" atau "YYYY-MM-DD") sebagai
  * WIB (Asia/Jakarta) → Date absolut. ANDAL di Hermes (bukan new Date(spasi)
- * yang engine-dependent). Pakai untuk field WIB: checkin, checkout.
+ * yang engine-dependent). Pakai untuk seluruh field waktu database (WIB wall-clock string).
  *
  * "2026-08-09 17:47:11" → Date di 17:47:11 WIB.
  */
 export function parseWIBDate(value?: string | null): Date | null {
   if (!value) return null;
-  // Normalisasi ke ISO dengan offset WIB: ganti spasi → "T", append "+07:00"
-  // bila belum ada offset/Z.
-  let s = value.replace(" ", "T");
+  let s = String(value).trim().replace(" ", "T");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    s += "T00:00:00";
+  }
   if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
     s = s + "+07:00";
   }
@@ -85,10 +118,134 @@ export function parseWIBDate(value?: string | null): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/** Alias kanonik parseWIBDate identik dengan formatters.js di Web */
+export const parseWIB = parseWIBDate;
+
+/** Tanggal hari ini di WIB sebagai "YYYY-MM-DD" (alias getTodayDateString) */
+export const todayWIB = getTodayDateString;
+
 /**
- * Parse timestamp backend sebagai UTC → Date absolut. Pakai untuk field
- * UTC: created_at, updated_at (backend Postgres default tanpa zona = UTC).
- *
+ * Dapatkan jam dalam zona WIB (0-23) dari sebuah Date objek secara deterministik
+ * tanpa terpengaruh zona waktu lokal perangkat.
+ * Menggunakan aritmatika UTC+7 murni karena WIB tidak memiliki daylight saving time (DST).
+ */
+export function getWIBHour(date: Date): number {
+  return new Date(date.getTime() + 7 * 3600 * 1000).getUTCHours();
+}
+
+/**
+ * Bangun objek Date absolut di zona WIB pada jam dan menit tertentu dari baseDate.
+ * Mencegah bug Date.setHours() yang mengevaluasi dalam zona waktu lokal perangkat.
+ */
+export function buildWIBScheduledTime(
+  baseDate: Date,
+  hour: number,
+  minute = 0
+): Date {
+  const dateStr = getWIBDateString(baseDate);
+  const hh = String(hour).padStart(2, "0");
+  const mm = String(minute).padStart(2, "0");
+  return parseWIBDate(`${dateStr} ${hh}:${mm}:00`) || new Date(baseDate);
+}
+
+/**
+ * Format tanggal dalam zona waktu WIB (Asia/Jakarta).
+ * Menerima Date atau string wall-clock WIB.
+ * Contoh: "11 Sep 2026".
+ */
+export function formatDate(
+  date?: string | Date | null,
+  formatStr?: string
+): string {
+  if (!date) return "-";
+  const d = typeof date === "string" ? parseWIBDate(date) : date;
+  if (!d || isNaN(d.getTime())) return typeof date === "string" ? date : "-";
+
+  if (formatStr) {
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mei",
+      "Jun",
+      "Jul",
+      "Agu",
+      "Sep",
+      "Okt",
+      "Nov",
+      "Des",
+    ];
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const dd = parts.find((p) => p.type === "day")?.value || "01";
+    const mmNum =
+      parseInt(parts.find((p) => p.type === "month")?.value || "1", 10) - 1;
+    const mmStr = parts.find((p) => p.type === "month")?.value || "01";
+    const yyyy = parts.find((p) => p.type === "year")?.value || "2026";
+    const mmm = months[mmNum] || "Jan";
+    return formatStr
+      .replace("YYYY", yyyy)
+      .replace("MMM", mmm)
+      .replace("MM", mmStr)
+      .replace("DD", dd);
+  }
+
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).format(d);
+}
+
+/**
+ * Format tanggal dan waktu lengkap dalam zona WIB (Asia/Jakarta).
+ * Contoh: "11/09/2026, 14.30.00".
+ */
+export function formatDateTime(
+  date?: string | Date | null,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  if (!date) return "-";
+  const d = typeof date === "string" ? parseWIBDate(date) : date;
+  if (!d || isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...options,
+    timeZone: "Asia/Jakarta",
+  }).format(d);
+}
+
+/**
+ * Format selisih waktu aktivitas relatif dalam bahasa Indonesia ("baru saja", "5m lalu", "2j lalu", "3h lalu").
+ * Parsing timestamp melalui parseWIBDate untuk menghindari Shape 1 / Shape 2 shift.
+ */
+export function formatRelative(date?: string | Date | null): string {
+  if (!date) return "";
+  const d = typeof date === "string" ? parseWIBDate(date) : date;
+  if (!d || isNaN(d.getTime())) return "";
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "baru saja";
+  if (mins < 60) return `${mins}m lalu`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}j lalu`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}h lalu`;
+  return formatDate(d);
+}
+
+/**
+ * Parse timestamp backend sebagai UTC → Date absolut.
  * "2026-08-09 10:47:12" → Date di 10:47:12 UTC.
  */
 export function parseUTCDate(value?: string | null): Date | null {

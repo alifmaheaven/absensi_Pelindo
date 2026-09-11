@@ -33,6 +33,18 @@ export interface IDailyRoutine {
   device_items?: IDailyRoutineDeviceItem[];
 }
 
+export interface IEvidenceFileItem {
+  id?: string;
+  file?: string | null;
+  local_uri?: string | null;
+  name?: string | null;
+  size?: number | null;
+  type?: "image" | "pdf" | string | null;
+  upload_failed?: boolean;
+  uploading?: boolean;
+  error?: string;
+}
+
 export interface IDailyRoutineLogItem {
   id: string;
   daily_routine_log_id: string;
@@ -41,6 +53,7 @@ export interface IDailyRoutineLogItem {
   is_checked: boolean;
   checked_at: string | null;
   evidence_file: string | null;
+  evidence_files?: Array<{ id?: string; file: string; name?: string }> | null;
   notes: string | null;
 }
 
@@ -71,6 +84,7 @@ export interface IDailyRoutineSubmitItem {
   device_id?: string | null;
   is_checked: boolean;
   evidence_file?: string;
+  evidence_files?: string[];
   evidence_type?: EvidenceType;
   notes?: string;
 }

@@ -20,25 +20,38 @@ export interface FileValidationResult {
 }
 
 /**
- * Validasi berkas bukti di sisi klien sebelum pengunggahan (NFR-07).
- * Batas ukuran: maksimal 5MB.
- * Format yang didukung: JPG, PNG, WEBP, PDF.
+ * Validasi berkas bukti di sisi klien sebelum pengunggahan (OD-4, NFR-07).
+ * Batas ukuran: maksimal 5MB (5.242.880 byte).
+ * Format per evidence_type:
+ * - photo: HANYA gambar (JPG, PNG, WEBP). PDF ditolak.
+ * - both: HANYA gambar (sama dengan photo — foto saja atau berkas berupa foto). PDF ditolak.
+ * - file: gambar + application/pdf.
+ * - none: tidak memerlukan bukti.
+ * SVG selalu DITOLAK (vektor stored-XSS).
  */
-export function validateEvidenceFile(file?: {
-  size?: number | null;
-  name?: string | null;
-  mimeType?: string | null;
-  uri?: string | null;
-} | null): FileValidationResult {
+export function validateEvidenceFile(
+  file?: {
+    size?: number | null;
+    name?: string | null;
+    mimeType?: string | null;
+    uri?: string | null;
+  } | null,
+  evidenceType?: EvidenceType | string | null
+): FileValidationResult {
   if (!file) {
     return { valid: false, error: "Berkas tidak valid." };
   }
 
-  // 1. Validasi ukuran (maksimal 5MB)
+  const fileName =
+    file.name || (file.uri ? file.uri.split("/").pop()?.split("?")[0] : "") || "Berkas";
+
+  // 1. Validasi ukuran (maksimal 5MB, NFR-07 / OD-4)
+  // ponytail: [ADR-266] Bila file.size bernilai null/undefined (ukuran tak terbaca di runtime lokal), berkas diizinkan lolos di sisi klien dan diverifikasi secara otoritatif oleh server (backend/src/utils/fileValidation.ts HTTP 422).
   if (typeof file.size === "number" && file.size > MAX_FILE_SIZE_BYTES) {
+    const formatted = formatFileSize(file.size);
     return {
       valid: false,
-      error: "Ukuran berkas melebihi batas 5MB. Silakan pilih berkas yang lebih kecil.",
+      error: `Ukuran berkas "${fileName}" melebihi batas 5MB (${formatted}). Silakan pilih berkas yang lebih kecil.`,
     };
   }
 
@@ -52,12 +65,59 @@ export function validateEvidenceFile(file?: {
 
   const mime = file.mimeType?.toLowerCase() || "";
 
-  const isExtAllowed = ext ? ALLOWED_FILE_EXTENSIONS.includes(ext) : false;
-  const isMimeAllowed = mime
-    ? ALLOWED_MIME_TYPES.some((m) => mime.startsWith(m))
-    : false;
+  // SVG selalu DITOLAK (OD-4)
+  if (ext === "svg" || mime.includes("svg")) {
+    return {
+      valid: false,
+      error: "Format berkas SVG tidak didukung.",
+    };
+  }
 
-  if (!isExtAllowed && !isMimeAllowed) {
+  const isPdf = ext === "pdf" || mime.includes("pdf");
+  const isImageExt = ["jpg", "jpeg", "png", "webp"].includes(ext);
+  const isImageMime = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+  ].some((m) => mime.startsWith(m));
+  const isImage = isImageExt || isImageMime;
+
+  const resolved = evidenceType ? resolveEvidenceType(evidenceType) : null;
+
+  // OD-4: 'photo' dan 'both' HANYA gambar (PDF ditolak!)
+  if (resolved === "photo" || resolved === "both") {
+    if (isPdf || !isImage) {
+      return {
+        valid: false,
+        error:
+          "Item ini hanya menerima bukti foto (JPG, PNG, WEBP). Berkas dokumen PDF tidak diizinkan.",
+      };
+    }
+    return { valid: true };
+  }
+
+  // OD-4: 'file' mengizinkan gambar + PDF
+  if (resolved === "file") {
+    if (!isPdf && !isImage) {
+      return {
+        valid: false,
+        error:
+          "Format berkas tidak didukung. Berkas yang diizinkan hanya PDF, JPG, PNG, atau WEBP.",
+      };
+    }
+    return { valid: true };
+  }
+
+  if (resolved === "none") {
+    return {
+      valid: false,
+      error: "Item ini tidak memerlukan bukti.",
+    };
+  }
+
+  // Fallback jika evidenceType tidak dispesifikasi (backward compatibility test suite)
+  if (!isPdf && !isImage) {
     return {
       valid: false,
       error: "Format berkas tidak didukung. Gunakan format JPG, PNG, WEBP, atau PDF.",
@@ -65,6 +125,184 @@ export function validateEvidenceFile(file?: {
   }
 
   return { valid: true };
+}
+
+/**
+ * Normalisasi nama berkas dan MIME type setelah gambar berhasil dikonversi/transcode ke JPEG (OD-4).
+ * Ekstensi disesuaikan menjadi .jpg dan mimeType menjadi image/jpeg, dengan tetap mempertahankan
+ * stem nama berkas asli agar teknisi mengenali fotonya (mis. IMG_0042.HEIC -> IMG_0042.jpg).
+ */
+export function normalizeTranscodedImageMetadata(
+  originalName?: string | null,
+  fallbackPrefix: string = "image"
+): { name: string; mimeType: string } {
+  const defaultExt = "jpg";
+  const defaultMime = "image/jpeg";
+
+  if (!originalName || !originalName.trim()) {
+    return {
+      name: `${fallbackPrefix}.${defaultExt}`,
+      mimeType: defaultMime,
+    };
+  }
+
+  const trimmed = originalName.trim();
+  const lastDot = trimmed.lastIndexOf(".");
+  const stem = lastDot > 0 ? trimmed.slice(0, lastDot) : trimmed;
+
+  return {
+    name: `${stem}.${defaultExt}`,
+    mimeType: defaultMime,
+  };
+}
+
+/**
+ * Deteksi apakah berkas merupakan format HEIC/HEIF berdasarkan ekstensi berkas atau MIME type.
+ */
+export function isHeicAsset(
+  asset?: {
+    name?: string | null;
+    fileName?: string | null;
+    mimeType?: string | null;
+    uri?: string | null;
+  } | null
+): boolean {
+  if (!asset) return false;
+  const name = asset.fileName || asset.name || "";
+  const uri = asset.uri || "";
+  let ext = "";
+  if (name.includes(".")) {
+    ext = name.split(".").pop()?.toLowerCase() || "";
+  } else if (uri.includes(".")) {
+    ext = uri.split(".").pop()?.split("?")[0]?.toLowerCase() || "";
+  }
+  const mime = (asset.mimeType || "").toLowerCase();
+  return (
+    ext === "heic" ||
+    ext === "heif" ||
+    mime.includes("heic") ||
+    mime.includes("heif")
+  );
+}
+
+/**
+ * Pesan kesalahan informatif dalam Bahasa Indonesia saat foto HEIC gagal di-transcode.
+ */
+export function getHeicTranscodeErrorMessage(fileName?: string | null): string {
+  const fileLabel = fileName ? ` "${fileName}"` : "";
+  return `Gagal mengonversi foto HEIC${fileLabel}. Format HEIC tidak didukung langsung oleh server dan gagal diubah ke JPEG. Silakan gunakan format JPG atau PNG.`;
+}
+
+/**
+ * Mendapatkan ukuran berkas lokal setelah transcode (jika didukung runtime).
+ * Memeriksa header content-length jika tersedia, lalu fallback ke pembacaan blob size.
+ * Bila gagal/tidak didukung runtime lokal, mengembalikan null.
+ */
+export async function getLocalFileSize(uri?: string | null): Promise<number | null> {
+  if (!uri) return null;
+  try {
+    const res = await fetch(uri);
+    const contentLength = res.headers?.get?.("content-length");
+    if (contentLength) {
+      const parsed = parseInt(contentLength, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    const blob = await res.blob();
+    if (typeof blob?.size === "number" && blob.size > 0) {
+      return blob.size;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export interface TranscodedAssetResult {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size: number | null;
+  isTranscoded: boolean;
+}
+
+/**
+ * Menyiapkan metadata berkas yang sebenarnya akan diunggah setelah proses transcode (OD-4).
+ * Memastikan nama berkas (.jpg), mimeType (image/jpeg), dan ukuran terkompresi tervalidasi dengan benar.
+ */
+export async function resolveTranscodedAsset(
+  rawAsset: {
+    uri: string;
+    fileName?: string | null;
+    name?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+    size?: number | null;
+  },
+  compressedUri?: string | null,
+  fallbackPrefix: string = "image"
+): Promise<TranscodedAssetResult> {
+  const originalName = rawAsset.fileName || rawAsset.name;
+  const rawSize =
+    typeof rawAsset.fileSize === "number"
+      ? rawAsset.fileSize
+      : typeof rawAsset.size === "number"
+      ? rawAsset.size
+      : null;
+
+  if (compressedUri) {
+    const normalized = normalizeTranscodedImageMetadata(originalName, fallbackPrefix);
+    const transcodedSize = await getLocalFileSize(compressedUri);
+
+    // Presedensi resolusi ukuran untuk berkas yang ditranscode (OD-4, NFR-07):
+    // 1. Ukuran terukur berkas hasil transcode/kompresi (transcodedSize) bila tersedia.
+    //    Ini adalah ukuran sebenarnya pasca-kompresi (menolak jika hasil kompresi tetap > 5MB,
+    //    dan meloloskan jika hasil kompresi <= 5MB meskipun ukuran mentah sebelumnya > 5MB).
+    // 2. Jika ukuran hasil kompresi tidak dapat diukur secara lokal, gunakan rawSize HANYA
+    //    sebagai sinyal konservatif jika rawSize <= MAX_FILE_SIZE_BYTES (karena kompresi tidak
+    //    akan memperbesar berkas). Jika rawSize > 5MB, rawSize TIDAK boleh memveto berkas
+    //    yang sudah berhasil dikompresi.
+    // 3. ponytail: [ADR-266 / OD-4] Bila kedua ukuran tidak dapat dipastikan (transcodedSize null
+    //    dan rawSize > 5MB atau rawSize null), tetapkan finalSize = null (diizinkan lolos di klien).
+    //    Server memegang batas otoritatif 5 MB (backend/src/utils/fileValidation.ts HTTP 422
+    //    dan batas 5MB Multer). Keputusan mengizinkan lolos di klien diambil agar perangkat teknisi
+    //    di lapangan (React Native / Hermes pada Android kelas bawah yang gagal membaca blob dari file:// URI)
+    //    tidak tertolak secara palsu setelah foto berhasil diresize ke 1080p (~400KB). Trade-off:
+    //    penolakan lambat di sisi server (slow rejection) pada kasus langka berkas tak terukur
+    //    jauh lebih aman bagi kelangsungan operasional teknisi daripada penolakan permanen di klien.
+    let finalSize: number | null = null;
+    if (transcodedSize !== null) {
+      finalSize = transcodedSize;
+    } else if (rawSize !== null && rawSize <= MAX_FILE_SIZE_BYTES) {
+      finalSize = rawSize;
+    } else {
+      finalSize = null;
+    }
+
+    return {
+      uri: compressedUri,
+      name: normalized.name,
+      mimeType: normalized.mimeType,
+      size: finalSize,
+      isTranscoded: true,
+    };
+  }
+
+  // Berkas TIDAK ditranscode (non-transcoded asset, mis. PDF dokumen atau kompresi dilewati):
+  // 1. rawSize adalah kebenaran otoritatif di sisi klien dan wajib ditegakkan jika tersedia (>5MB ditolak).
+  // 2. ponytail: [ADR-266 / OD-4] Jika rawSize null/tak terbaca pada berkas non-transcode, tetapkan size = null (diizinkan lolos ke server gatekeeper 5MB).
+  const defaultExt = "jpg";
+  const ext = originalName?.split(".").pop() || defaultExt;
+  const fileName = originalName || `${fallbackPrefix}.${ext}`;
+
+  return {
+    uri: rawAsset.uri,
+    name: fileName,
+    mimeType: rawAsset.mimeType || "image/jpeg",
+    size: rawSize,
+    isTranscoded: false,
+  };
 }
 
 /**

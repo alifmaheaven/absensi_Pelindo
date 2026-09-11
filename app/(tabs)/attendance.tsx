@@ -1,7 +1,7 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getAttendanceList } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
-import { parseWIBDate, parseUTCDate } from "@/utils/utils";
+import { parseWIBDate } from "@/utils/utils";
 import {
   IAttendance,
   IMeta,
@@ -108,18 +108,13 @@ export default function AttendanceTabScreen() {
     handleGetList();
   }, []);
 
-  // checkin/checkout = WIB, created_at = UTC. Pakai helper timezone-aware
+  // checkin/checkout/created_at = WIB. Pakai helper timezone-aware
   // (new Date(spasi) engine-dependent di Hermes → jam salah).
   const formatWIB = (s?: string | null) =>
     s ? new Intl.DateTimeFormat("id-ID", {
       day: "numeric", month: "short", year: "numeric",
       hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
     }).format(parseWIBDate(s) ?? 0) : null;
-  const formatUTC = (s?: string | null) =>
-    s ? new Intl.DateTimeFormat("id-ID", {
-      day: "numeric", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
-    }).format(parseUTCDate(s) ?? 0) : null;
 
   const renderItem = ({ item }: { item: IAttendance }) => (
     <View style={styles.card}>
@@ -151,7 +146,7 @@ export default function AttendanceTabScreen() {
       </View>
       <View style={styles.cardFooter}>
         <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-        <Text style={styles.footerText}>{formatUTC(item.created_at)}</Text>
+        <Text style={styles.footerText}>{formatWIB(item.created_at)}</Text>
       </View>
     </View>
   );

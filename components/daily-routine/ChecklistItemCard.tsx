@@ -19,17 +19,48 @@ import {
   resolveEvidenceType,
 } from "@/utils/dailyRoutineHelpers";
 
+import { IEvidenceFileItem } from "@/types/dailyRoutine";
+
 export interface IItemState {
   daily_routine_item_id: string;
   device_id?: string;
   is_checked: boolean;
   evidence_file: string | null;
+  evidence_files?: IEvidenceFileItem[];
   notes: string;
   local_uri: string | null;
   upload_failed?: boolean;
   file_name?: string | null;
   file_size?: number | null;
   file_type?: "image" | "pdf" | string | null;
+}
+
+export function getAttachedFiles(state: IItemState): IEvidenceFileItem[] {
+  if (Array.isArray(state.evidence_files) && state.evidence_files.length > 0) {
+    return state.evidence_files;
+  }
+  if (state.evidence_file || state.local_uri) {
+    return [
+      {
+        id: "legacy",
+        file: state.evidence_file,
+        local_uri: state.local_uri,
+        name:
+          state.file_name ||
+          (state.evidence_file
+            ? state.evidence_file.split("/").pop()
+            : "Lampiran Bukti"),
+        size: state.file_size,
+        type:
+          state.file_type ||
+          (state.evidence_file?.toLowerCase().endsWith(".pdf")
+            ? "pdf"
+            : "image"),
+        upload_failed: state.upload_failed,
+      },
+    ];
+  }
+  return [];
 }
 
 export interface ChecklistItemCardProps {
@@ -43,9 +74,11 @@ export interface ChecklistItemCardProps {
   onToggle: () => void;
   onPickPhoto?: () => void;
   onPickImage?: () => void;
+  onPickGallery?: () => void;
   onPickDocument?: () => void;
-  onRetryUpload: () => void;
-  onRemoveEvidence?: () => void;
+  onRetryUpload: (fileIndex?: number) => void;
+  onRemoveEvidence?: (fileIndex?: number) => void;
+  onReplaceEvidence?: (fileIndex?: number) => void;
   onPreviewImage: (uri: string) => void;
   onChangeNotes: (text: string) => void;
   getImageUrl: (file: string) => string;
@@ -62,9 +95,11 @@ export default function ChecklistItemCard({
   onToggle,
   onPickPhoto,
   onPickImage,
+  onPickGallery,
   onPickDocument,
   onRetryUpload,
   onRemoveEvidence,
+  onReplaceEvidence,
   onPreviewImage,
   onChangeNotes,
   getImageUrl,
@@ -74,6 +109,7 @@ export default function ChecklistItemCard({
 
   const isLoading = loadingEvidence ?? loadingImage ?? false;
   const handlePickPhoto = onPickPhoto || onPickImage || (() => {});
+  const handlePickGallery = onPickGallery || handlePickPhoto;
   const handlePickDocument = onPickDocument || (() => {});
 
   const effectiveEvidenceType = resolveEvidenceType(
@@ -86,44 +122,41 @@ export default function ChecklistItemCard({
     requiresPhoto ?? item.is_photo_required
   );
 
-  const activePhotoUri =
-    state.local_uri ||
-    (state.evidence_file ? getImageUrl(state.evidence_file) : null);
+  const files = getAttachedFiles(state);
+  const count = files.length;
+  const isMaxReached = count >= 5;
+  const hasEvidence = count > 0;
 
-  const hasEvidence = Boolean(state.evidence_file || state.local_uri);
-
-  const isPdf =
-    state.file_type === "pdf" ||
-    (state.file_name ? state.file_name.toLowerCase().endsWith(".pdf") : false) ||
-    (state.evidence_file
-      ? state.evidence_file.toLowerCase().endsWith(".pdf")
-      : false);
-
-  const fileNameDisplay =
-    state.file_name ||
-    (state.evidence_file
-      ? state.evidence_file.split("/").pop() || "Lampiran Bukti"
-      : "Lampiran Bukti");
-
-  const fileSizeDisplay = state.file_size ? formatFileSize(state.file_size) : "";
-
-  const handleReplacePress = () => {
+  const handleReplacePress = (index = 0) => {
     if (isReadOnly) return;
+    if (onReplaceEvidence) {
+      onReplaceEvidence(index);
+      return;
+    }
     if (effectiveEvidenceType === "photo") {
-      handlePickPhoto();
-    } else if (effectiveEvidenceType === "file") {
-      handlePickDocument();
-    } else {
-      // Both photo or file
       Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
         { text: "Batal", style: "cancel" },
         { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
-        { text: "Pilih Berkas Dokumen", onPress: handlePickDocument },
+        { text: "Pilih dari Galeri", onPress: handlePickGallery },
+      ]);
+    } else if (effectiveEvidenceType === "file") {
+      Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
+        { text: "Batal", style: "cancel" },
+        { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
+        { text: "Pilih dari Galeri", onPress: handlePickGallery },
+        { text: "Pilih Berkas Dokumen (PDF)", onPress: handlePickDocument },
+      ]);
+    } else {
+      // Both photo or file (OD-4: both is photo only)
+      Alert.alert("Ganti Bukti", "Pilih metode bukti pengganti:", [
+        { text: "Batal", style: "cancel" },
+        { text: "Ambil Foto Kamera", onPress: handlePickPhoto },
+        { text: "Pilih Berkas", onPress: handlePickGallery },
       ]);
     }
   };
 
-  const handleRemovePress = () => {
+  const handleRemovePress = (index = 0) => {
     if (isReadOnly) return;
     Alert.alert(
       "Hapus Bukti",
@@ -134,7 +167,7 @@ export default function ChecklistItemCard({
           text: "Hapus",
           style: "destructive",
           onPress: () => {
-            if (onRemoveEvidence) onRemoveEvidence();
+            if (onRemoveEvidence) onRemoveEvidence(index);
           },
         },
       ]
@@ -230,194 +263,504 @@ export default function ChecklistItemCard({
           {effectiveEvidenceType !== "none" && (
             <View style={styles.evidenceSection}>
               {hasEvidence ? (
-                state.upload_failed && state.local_uri ? (
-                  // Upload failed state
-                  <View style={styles.evidenceFailedBox}>
-                    <View style={styles.thumbnailWrapper}>
-                      {isPdf ? (
-                        <View style={styles.pdfThumbnailFailed}>
-                          <DocumentCheck width={28} height={28} color={colors.danger} />
-                          <Text style={styles.pdfBadgeTextFailed}>PDF</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() =>
-                            activePhotoUri && onPreviewImage(activePhotoUri)
-                          }
-                          activeOpacity={0.8}
-                        >
-                          <Image
-                            source={{ uri: activePhotoUri! }}
+                <>
+                  <View style={styles.counterRow}>
+                    <Text
+                      style={[
+                        styles.counterText,
+                        isMaxReached && styles.counterMaxText,
+                      ]}
+                    >
+                      {isMaxReached
+                        ? "5/5 berkas terlampir (Batas maksimal tercapai)"
+                        : `${count}/5 berkas terlampir`}
+                    </Text>
+                  </View>
+
+                  {files.map((file, index) => {
+                    const activePhotoUri =
+                      file.local_uri ||
+                      (file.file ? getImageUrl(file.file) : null);
+                    const isPdf =
+                      file.type === "pdf" ||
+                      (file.name
+                        ? file.name.toLowerCase().endsWith(".pdf")
+                        : false) ||
+                      (file.file
+                        ? file.file.toLowerCase().endsWith(".pdf")
+                        : false);
+                    const fileNameDisplay =
+                      file.name ||
+                      (file.file
+                        ? file.file.split("/").pop() || "Lampiran Bukti"
+                        : "Lampiran Bukti");
+                    const fileSizeDisplay = file.size
+                      ? formatFileSize(file.size)
+                      : "";
+
+                    return (
+                      <View
+                        key={file.id || `${index}-${fileNameDisplay}`}
+                        style={{ marginBottom: 8 }}
+                      >
+                        {file.upload_failed ? (
+                          // Upload failed state
+                          <View style={styles.evidenceFailedBox}>
+                            <View style={styles.thumbnailWrapper}>
+                              {isPdf ? (
+                                <View style={styles.pdfThumbnailFailed}>
+                                  <DocumentCheck
+                                    width={28}
+                                    height={28}
+                                    color={colors.danger}
+                                  />
+                                  <Text style={styles.pdfBadgeTextFailed}>
+                                    PDF
+                                  </Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    activePhotoUri &&
+                                    onPreviewImage(activePhotoUri)
+                                  }
+                                  activeOpacity={0.8}
+                                  accessibilityRole="imagebutton"
+                                  accessibilityLabel={`Lihat foto ${fileNameDisplay}`}
+                                >
+                                  <Image
+                                    source={{ uri: activePhotoUri || "" }}
+                                    style={[
+                                      styles.evidenceThumbnail,
+                                      styles.evidenceThumbnailFailed,
+                                    ]}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+
+                            <View style={styles.evidenceInfoCol}>
+                              <View style={styles.failedBadge}>
+                                <Text style={styles.failedBadgeText}>
+                                  Gagal Upload
+                                </Text>
+                              </View>
+                              <Text
+                                style={styles.fileNameText}
+                                numberOfLines={1}
+                              >
+                                {fileNameDisplay}
+                              </Text>
+                              {fileSizeDisplay ? (
+                                <Text style={styles.fileSizeText}>
+                                  ({fileSizeDisplay})
+                                </Text>
+                              ) : null}
+
+                              {!isReadOnly && (
+                                <View style={styles.actionBtnRow}>
+                                  <TouchableOpacity
+                                    style={styles.retryButton}
+                                    onPress={() => onRetryUpload(index)}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Coba Lagi"
+                                  >
+                                    {isLoading ? (
+                                      <ActivityIndicator
+                                        size="small"
+                                        color="#fff"
+                                      />
+                                    ) : (
+                                      <Text style={styles.retryButtonText}>
+                                        Coba Lagi
+                                      </Text>
+                                    )}
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.actionButtonSecondary}
+                                    onPress={() => handleReplacePress(index)}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Ganti bukti ${fileNameDisplay}`}
+                                  >
+                                    <Text
+                                      style={styles.actionButtonSecondaryText}
+                                    >
+                                      Ganti
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.actionButtonDanger}
+                                    onPress={() => handleRemovePress(index)}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Hapus bukti ${fileNameDisplay}`}
+                                  >
+                                    <Text style={styles.actionButtonDangerText}>
+                                      Hapus
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        ) : (
+                          // Successfully attached evidence preview
+                          <View style={styles.evidenceAttachedBox}>
+                            <View style={styles.thumbnailWrapper}>
+                              {isPdf ? (
+                                <View style={styles.pdfThumbnail}>
+                                  <DocumentCheck
+                                    width={30}
+                                    height={30}
+                                    color={colors.primary}
+                                  />
+                                  <Text style={styles.pdfBadgeText}>PDF</Text>
+                                </View>
+                              ) : (
+                                <TouchableOpacity
+                                  onPress={() =>
+                                    activePhotoUri &&
+                                    onPreviewImage(activePhotoUri)
+                                  }
+                                  activeOpacity={0.8}
+                                  accessibilityRole="imagebutton"
+                                  accessibilityLabel={`Lihat foto ${fileNameDisplay}`}
+                                >
+                                  <Image
+                                    source={{ uri: activePhotoUri || "" }}
+                                    style={styles.evidenceThumbnail}
+                                  />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+
+                            <View style={styles.evidenceInfoCol}>
+                              <View style={styles.attachedStatusRow}>
+                                <CheckRounded
+                                  width={14}
+                                  height={14}
+                                  color={colors.success}
+                                />
+                                <Text style={styles.attachedStatusText}>
+                                  Bukti terlampir
+                                </Text>
+                              </View>
+                              <Text
+                                style={styles.fileNameText}
+                                numberOfLines={1}
+                              >
+                                {fileNameDisplay}{" "}
+                                {fileSizeDisplay ? `(${fileSizeDisplay})` : ""}
+                              </Text>
+
+                              {!isReadOnly && (
+                                <View style={styles.actionBtnRow}>
+                                  <TouchableOpacity
+                                    style={styles.actionButtonPrimary}
+                                    onPress={() => handleReplacePress(index)}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Ganti bukti ${fileNameDisplay}`}
+                                  >
+                                    <Text
+                                      style={styles.actionButtonPrimaryText}
+                                    >
+                                      Ganti
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={styles.actionButtonDanger}
+                                    onPress={() => handleRemovePress(index)}
+                                    disabled={isLoading}
+                                    activeOpacity={0.8}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Hapus bukti ${fileNameDisplay}`}
+                                  >
+                                    <Text style={styles.actionButtonDangerText}>
+                                      Hapus
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+
+                  {/* Add more slot if under cap (< 5) */}
+                  {!isReadOnly && !isMaxReached && (
+                    <View style={styles.addMoreSection}>
+                      {effectiveEvidenceType === "photo" && (
+                        <View style={styles.bothButtonsRow}>
+                          <TouchableOpacity
                             style={[
-                              styles.evidenceThumbnail,
-                              styles.evidenceThumbnailFailed,
+                              styles.pickerButton,
+                              styles.pickerButtonPhoto,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
                             ]}
-                          />
-                        </TouchableOpacity>
+                            onPress={handlePickPhoto}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <ImageIcon
+                              color={colors.primary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonPhotoText}>
+                              Ambil Foto
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonGallery,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickGallery}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <ImageIcon
+                              color={colors.textSecondary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonGalleryText}>
+                              Pilih dari Galeri
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
-                    </View>
 
-                    <View style={styles.evidenceInfoCol}>
-                      <View style={styles.failedBadge}>
-                        <Text style={styles.failedBadgeText}>Gagal Upload</Text>
-                      </View>
-                      <Text style={styles.fileNameText} numberOfLines={1}>
-                        {fileNameDisplay}
-                      </Text>
-                      {fileSizeDisplay ? (
-                        <Text style={styles.fileSizeText}>({fileSizeDisplay})</Text>
-                      ) : null}
-
-                      {!isReadOnly && (
-                        <View style={styles.actionBtnRow}>
+                      {effectiveEvidenceType === "file" && (
+                        <View style={styles.bothButtonsRow}>
                           <TouchableOpacity
-                            style={styles.retryButton}
-                            onPress={onRetryUpload}
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonGallery,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickGallery}
                             disabled={isLoading}
                             activeOpacity={0.8}
                           >
-                            {isLoading ? (
-                              <ActivityIndicator size="small" color="#fff" />
-                            ) : (
-                              <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                            )}
+                            <ImageIcon
+                              color={colors.textSecondary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonGalleryText}>
+                              Pilih dari Galeri
+                            </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={styles.actionButtonSecondary}
-                            onPress={handleReplacePress}
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonFile,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickDocument}
                             disabled={isLoading}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.actionButtonSecondaryText}>Ganti</Text>
+                            <DocumentCheck
+                              color={colors.textSecondary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonFileText}>
+                              Pilih Berkas Dokumen (PDF)
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      {effectiveEvidenceType === "both" && (
+                        <View style={styles.bothButtonsRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonPhoto,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickPhoto}
+                            disabled={isLoading}
+                            activeOpacity={0.8}
+                          >
+                            <ImageIcon
+                              color={colors.primary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonPhotoText}>
+                              Ambil Foto
+                            </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            style={styles.actionButtonDanger}
-                            onPress={handleRemovePress}
+                            style={[
+                              styles.pickerButton,
+                              styles.pickerButtonFile,
+                              styles.bothBtn,
+                              isLoading && { opacity: 0.6 },
+                            ]}
+                            onPress={handlePickGallery}
                             disabled={isLoading}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.actionButtonDangerText}>Hapus</Text>
+                            <DocumentCheck
+                              color={colors.textSecondary}
+                              width={16}
+                              height={16}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text style={styles.pickerButtonFileText}>
+                              Pilih Berkas
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       )}
                     </View>
-                  </View>
-                ) : (
-                  // Successfully attached evidence preview
-                  <View style={styles.evidenceAttachedBox}>
-                    <View style={styles.thumbnailWrapper}>
-                      {isPdf ? (
-                        <View style={styles.pdfThumbnail}>
-                          <DocumentCheck width={30} height={30} color={colors.primary} />
-                          <Text style={styles.pdfBadgeText}>PDF</Text>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          onPress={() =>
-                            activePhotoUri && onPreviewImage(activePhotoUri)
-                          }
-                          activeOpacity={0.8}
-                        >
-                          <Image
-                            source={{ uri: activePhotoUri! }}
-                            style={styles.evidenceThumbnail}
-                          />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    <View style={styles.evidenceInfoCol}>
-                      <View style={styles.attachedStatusRow}>
-                        <CheckRounded width={14} height={14} color={colors.success} />
-                        <Text style={styles.attachedStatusText}>Bukti terlampir</Text>
-                      </View>
-                      <Text style={styles.fileNameText} numberOfLines={1}>
-                        {fileNameDisplay} {fileSizeDisplay ? `(${fileSizeDisplay})` : ""}
-                      </Text>
-
-                      {!isReadOnly && (
-                        <View style={styles.actionBtnRow}>
-                          <TouchableOpacity
-                            style={styles.actionButtonPrimary}
-                            onPress={handleReplacePress}
-                            disabled={isLoading}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.actionButtonPrimaryText}>Ganti</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.actionButtonDanger}
-                            onPress={handleRemovePress}
-                            disabled={isLoading}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.actionButtonDangerText}>Hapus</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )
+                  )}
+                </>
               ) : (
                 // No evidence attached yet: render pickers according to evidence_type
                 !isReadOnly ? (
                   <View style={styles.pickerSection}>
                     {effectiveEvidenceType === "photo" && (
-                      <TouchableOpacity
-                        style={[
-                          styles.pickerButton,
-                          styles.pickerButtonPhoto,
-                          isLoading && { opacity: 0.6 },
-                        ]}
-                        onPress={handlePickPhoto}
-                        disabled={isLoading}
-                        activeOpacity={0.8}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                          <>
-                            <ImageIcon
+                      <View style={styles.pickerSection}>
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerButton,
+                            styles.pickerButtonPhoto,
+                            isLoading && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePickPhoto}
+                          disabled={isLoading}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Ambil Foto"
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator
+                              size="small"
                               color={colors.primary}
-                              width={18}
-                              height={18}
-                              style={{ marginRight: 8 }}
                             />
-                            <Text style={styles.pickerButtonPhotoText}>
-                              Ambil Foto
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                          ) : (
+                            <>
+                              <ImageIcon
+                                color={colors.primary}
+                                width={18}
+                                height={18}
+                                style={{ marginRight: 8 }}
+                              />
+                              <Text style={styles.pickerButtonPhotoText}>
+                                Ambil Foto
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerButton,
+                            styles.pickerButtonGallery,
+                            isLoading && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePickGallery}
+                          disabled={isLoading}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Pilih dari Galeri"
+                        >
+                          <ImageIcon
+                            color={colors.textSecondary}
+                            width={18}
+                            height={18}
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text style={styles.pickerButtonGalleryText}>
+                            Pilih dari Galeri
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
 
                     {effectiveEvidenceType === "file" && (
-                      <TouchableOpacity
-                        style={[
-                          styles.pickerButton,
-                          styles.pickerButtonFile,
-                          isLoading && { opacity: 0.6 },
-                        ]}
-                        onPress={handlePickDocument}
-                        disabled={isLoading}
-                        activeOpacity={0.8}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator size="small" color={colors.textSecondary} />
-                        ) : (
-                          <>
-                            <DocumentCheck
+                      <View style={styles.pickerSection}>
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerButton,
+                            styles.pickerButtonFile,
+                            isLoading && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePickDocument}
+                          disabled={isLoading}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Pilih Berkas Dokumen"
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator
+                              size="small"
                               color={colors.textSecondary}
-                              width={18}
-                              height={18}
-                              style={{ marginRight: 8 }}
                             />
-                            <Text style={styles.pickerButtonFileText}>
-                              Pilih Berkas Dokumen (PDF/JPG/PNG)
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
+                          ) : (
+                            <>
+                              <DocumentCheck
+                                color={colors.textSecondary}
+                                width={18}
+                                height={18}
+                                style={{ marginRight: 8 }}
+                              />
+                              <Text style={styles.pickerButtonFileText}>
+                                Pilih Berkas Dokumen (PDF/JPG/PNG)
+                              </Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.pickerButton,
+                            styles.pickerButtonGallery,
+                            isLoading && { opacity: 0.6 },
+                          ]}
+                          onPress={handlePickGallery}
+                          disabled={isLoading}
+                          activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Pilih dari Galeri"
+                        >
+                          <ImageIcon
+                            color={colors.textSecondary}
+                            width={18}
+                            height={18}
+                            style={{ marginRight: 8 }}
+                          />
+                          <Text style={styles.pickerButtonGalleryText}>
+                            Pilih dari Galeri
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
 
                     {effectiveEvidenceType === "both" && (
@@ -438,7 +781,10 @@ export default function ChecklistItemCard({
                             activeOpacity={0.8}
                           >
                             {isLoading ? (
-                              <ActivityIndicator size="small" color={colors.primary} />
+                              <ActivityIndicator
+                                size="small"
+                                color={colors.primary}
+                              />
                             ) : (
                               <>
                                 <ImageIcon
@@ -463,12 +809,15 @@ export default function ChecklistItemCard({
                               styles.bothBtn,
                               isLoading && { opacity: 0.6 },
                             ]}
-                            onPress={handlePickDocument}
+                            onPress={handlePickGallery}
                             disabled={isLoading}
                             activeOpacity={0.8}
                           >
                             {isLoading ? (
-                              <ActivityIndicator size="small" color={colors.textSecondary} />
+                              <ActivityIndicator
+                                size="small"
+                                color={colors.textSecondary}
+                              />
                             ) : (
                               <>
                                 <DocumentCheck
@@ -488,7 +837,9 @@ export default function ChecklistItemCard({
                     )}
                   </View>
                 ) : (
-                  <Text style={styles.noEvidenceText}>Tidak ada bukti terlampir</Text>
+                  <Text style={styles.noEvidenceText}>
+                    Tidak ada bukti terlampir
+                  </Text>
                 )
               )}
             </View>
@@ -867,6 +1218,33 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 12,
       color: c.textMuted,
       fontStyle: "italic",
+    },
+    counterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    counterText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: c.textSecondary,
+    },
+    counterMaxText: {
+      color: c.warning,
+      fontWeight: "700",
+    },
+    addMoreSection: {
+      marginTop: 8,
+    },
+    pickerButtonGallery: {
+      backgroundColor: c.surface,
+      borderColor: c.borderStrong,
+    },
+    pickerButtonGalleryText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: c.textSecondary,
     },
 
     // Notes

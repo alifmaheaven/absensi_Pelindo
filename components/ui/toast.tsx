@@ -19,10 +19,11 @@ interface ToastProps {
   visible: boolean;
   message: string;
   type: ToastType;
+  duration?: number;
   onHide: () => void;
 }
 
-export function Toast({ visible, message, type, onHide }: ToastProps) {
+export function Toast({ visible, message, type, duration = 3000, onHide }: ToastProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
@@ -46,11 +47,11 @@ export function Toast({ visible, message, type, onHide }: ToastProps) {
 
       const timer = setTimeout(() => {
         hideToast();
-      }, 3000);
+      }, duration);
 
       return () => clearTimeout(timer);
     }
-  }, [visible]);
+  }, [visible, duration]);
 
   const hideToast = () => {
     Animated.parallel([
@@ -123,10 +124,11 @@ interface ToastState {
   visible: boolean;
   message: string;
   type: ToastType;
+  duration?: number;
 }
 
 interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
+  showToast: (message: string, type?: ToastType, duration?: number) => void;
   hideToast: () => void;
 }
 
@@ -137,10 +139,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     visible: false,
     message: "",
     type: "info",
+    duration: 3000,
   });
 
-  const showToast = (message: string, type: ToastType = "info") => {
-    setToast({ visible: true, message, type });
+  const showToast = (message: string, type: ToastType = "info", duration: number = 3000) => {
+    setToast({ visible: true, message, type, duration });
   };
 
   const hideToast = () => {
@@ -156,6 +159,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         visible={toast.visible}
         message={toast.message}
         type={toast.type}
+        duration={toast.duration}
         onHide={hideToast}
       />
     </ToastContext.Provider>
@@ -178,7 +182,7 @@ const makeStyles = (c: ThemeColors, insets?: { top: number }) => StyleSheet.crea
     left: 20,
     right: 20,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderRadius: 12,
     flexDirection: "row",
     alignItems: "center",

@@ -327,8 +327,8 @@ export async function syncQueuedRequests(): Promise<number> {
           synced++;
         }
       } catch (err: any) {
-        // Drop non-retryable 4xx errors (403 Forbidden, 401 Unauthorized, 422 Unprocessable)
-        // Request ini tidak akan pernah berhasil bila diulang tanpa perubahan izin di server / relogin.
+        // Drop non-retryable 4xx errors (409 Conflict, 403 Forbidden, 401 Unauthorized, 422 Unprocessable)
+        // Request ini tidak akan pernah berhasil bila diulang tanpa perubahan izin di server / relogin / pergantian hari operasional.
         // Mencegah perulangan retry tak terbatas (infinite retry storm) yang membanjiri server dan menghabiskan baterai/kuota.
         const statusCode =
           err?.code ||
@@ -336,6 +336,7 @@ export async function syncQueuedRequests(): Promise<number> {
           err?.response?.status;
 
         const isNonRetryable =
+          statusCode === 409 ||
           statusCode === 403 ||
           statusCode === 401 ||
           statusCode === 422;
@@ -345,6 +346,7 @@ export async function syncQueuedRequests(): Promise<number> {
             // JANGAN HAPUS BUKTI KERJA DIAM-DIAM!
             // Pindahkan ke penampung absensi gagal permanen agar data kehadiran lapangan tidak hilang
             // dan tidak di-retry berulang (mencegah retry storm).
+            const defaultConflictMsg = "Presensi untuk Hari Operasional ini sudah terdaftar (cut-off pukul 04:00 WIB).";
             const failedItem: FailedAttendanceItem = {
               id: action.id,
               type: action.type,
@@ -352,7 +354,10 @@ export async function syncQueuedRequests(): Promise<number> {
               timestamp: action.timestamp,
               failedAt: Date.now(),
               errorCode: statusCode,
-              errorMessage: err?.message || "Non-retryable 4xx error",
+              errorMessage:
+                statusCode === 409
+                  ? err?.message || defaultConflictMsg
+                  : err?.message || "Non-retryable 4xx error",
             };
             await saveFailedAttendance(failedItem);
             newlyFailedAttendance.push(failedItem);
@@ -387,7 +392,9 @@ export async function syncQueuedRequests(): Promise<number> {
       const first = newlyFailedAttendance[0];
       const jenis = first.type === "ATTENDANCE_CHECKIN" ? "Check-in" : "Check-out";
       const message =
-        count === 1
+        first.errorCode === 409
+          ? `Data absensi (${jenis}) tidak dapat disinkronkan karena presensi untuk Hari Operasional ini sudah terdaftar di server (batas cut-off pukul 04:00 WIB). Bukti kerja Anda tetap tersimpan aman di perangkat.`
+          : count === 1
           ? `Data absensi offline (${jenis}) gagal disinkronkan ke server (Error ${first.errorCode}: ${first.errorMessage}). Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`
           : `${count} data absensi offline gagal disinkronkan ke server. Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`;
 

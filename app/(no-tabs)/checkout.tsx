@@ -338,32 +338,56 @@ export default function CheckoutScreen() {
       const err = error as THttpErrorResult;
       console.error(err);
 
-      // Fallback offline queue
-      try {
-        await queueOfflineCheckOut({
-          attendance_id: activeCheckin.id,
-          user_name: user?.name || "User",
-          evidence_group_id: activeCheckin.evidence_group_id,
-          checkout: checkoutTimeStr,
-          checkout_latitude: location.coords.latitude,
-          checkout_longitude: location.coords.longitude,
-          description: finalDescription,
-          localImages: newCheckoutImages.map((img) => ({
-            uri: img.uri,
-            name: img.path || `checkout_${Date.now()}.jpg`,
-            type: "image/jpeg",
-          })),
-        });
-
+      // 1. Penanganan eksplisit HTTP 409 Conflict
+      if (err?.code === 409) {
+        const conflictMsg =
+          err?.message ||
+          "Presensi pada Hari Operasional ini mengalami konflik data. Periksa status dinas di Beranda.";
+        showToast(conflictMsg, "error", 6000);
         Alert.alert(
-          "Check Out Tersimpan Offline",
-          "Koneksi jaringan terputus saat pengiriman. Data check out telah disimpan secara aman di perangkat dan akan dikirim saat koneksi online kembali.",
-          [{ text: "OK", onPress: () => router.replace("/") }]
+          err?.title || "Konflik Presensi",
+          conflictMsg,
+          [
+            { text: "Kembali ke Beranda", onPress: () => router.replace("/") },
+            { text: "Tutup", style: "cancel" },
+          ]
         );
         return;
-      } catch {}
+      }
 
-      showToast("Gagal Check Out!", "error");
+      // 2. Fallback offline queue HANYA jika kendala jaringan murni (bukan HTTP error status)
+      const isNetworkError = !err?.code || err?.code === 0;
+      if (isNetworkError) {
+        try {
+          await queueOfflineCheckOut({
+            attendance_id: activeCheckin.id,
+            user_name: user?.name || "User",
+            evidence_group_id: activeCheckin.evidence_group_id,
+            checkout: checkoutTimeStr,
+            checkout_latitude: location.coords.latitude,
+            checkout_longitude: location.coords.longitude,
+            description: finalDescription,
+            localImages: newCheckoutImages.map((img) => ({
+              uri: img.uri,
+              name: img.path || `checkout_${Date.now()}.jpg`,
+              type: "image/jpeg",
+            })),
+          });
+
+          Alert.alert(
+            "Check Out Tersimpan Offline",
+            "Koneksi jaringan terputus saat pengiriman. Data check out telah disimpan secara aman di perangkat dan akan dikirim saat koneksi online kembali.",
+            [{ text: "OK", onPress: () => router.replace("/") }]
+          );
+          return;
+        } catch {}
+      }
+
+      showToast(err?.message || "Gagal Check Out!", "error");
+      Alert.alert(
+        err?.title || "Gagal Check Out",
+        err?.message || "Terjadi kesalahan, coba lagi."
+      );
     } finally {
       setLoadingSubmit(false);
       submittingRef.current = false;

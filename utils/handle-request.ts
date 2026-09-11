@@ -103,11 +103,27 @@ export async function handleHttpError(
     }
   }
 
+  // Normalisasi pesan 409 agar informatif bagi pengguna lapangan jika server mengembalikan pesan generik/mentah DB
+  if (status === 409) {
+    if (
+      !axiosError.response?.data?.message ||
+      responseMessage === DEFAULT_MESSAGES[409] ||
+      (typeof responseMessage === "string" &&
+        (responseMessage.toLowerCase().includes("duplicate key") ||
+          responseMessage.toLowerCase().includes("uq_attendance")))
+    ) {
+      responseMessage =
+        "Presensi Anda pada Hari Operasional ini sudah terdaftar (cut-off pukul 04:00 WIB). Periksa status dinas di Beranda atau hubungi pengawas jika memerlukan koreksi.";
+    }
+  }
+
   const title =
     status >= 500
       ? "Server Error"
       : status === 403
       ? "Akses Ditolak"
+      : status === 409
+      ? "Presensi Sudah Terdaftar"
       : "Request Error";
 
   return {

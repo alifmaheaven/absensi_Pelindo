@@ -357,36 +357,57 @@ export default function CheckinScreen() {
       const err = error as THttpErrorResult;
       console.error(JSON.stringify(err, null, 2));
 
-      // Jika gagal karena kendala koneksi saat request berlangsung, simpan ke antrean offline
-      try {
-        await queueOfflineCheckIn({
-          user_id: user?.id ?? "",
-          user_name: user?.name || "User",
-          company_id: user?.company_id || null,
-          site_id: selectedLocation || (user?.site_id ? String(user.site_id) : ""),
-          checkin: checkinTimeStr,
-          checkin_latitude: location.coords.latitude,
-          checkin_longitude: location.coords.longitude,
-          attendance_status_id: effectiveStatusId,
-          description: formattedNotes,
-          localImages: images.map((img) => ({
-            uri: img.uri,
-            name: img.path || `checkin_${Date.now()}.jpg`,
-            type: "image/jpeg",
-          })),
-          tolerance: selectedSite?.tolerance || 50,
-        });
-
+      // 1. Penanganan eksplisit HTTP 409 Conflict (Duplikasi Hari Operasional)
+      if (err?.code === 409) {
+        const conflictMsg =
+          err?.message ||
+          "Presensi Anda pada Hari Operasional ini sudah terdaftar (cut-off pukul 04:00 WIB). Periksa status dinas di Beranda atau hubungi pengawas jika memerlukan koreksi.";
+        showToast(conflictMsg, "error", 6000);
         Alert.alert(
-          "Check In Tersimpan Offline",
-          "Koneksi jaringan terputus saat pengiriman. Data absensi dan foto bukti telah diamankan di perangkat dan akan otomatis disinkronkan saat terhubung kembali.",
-          [{ text: "OK", onPress: () => router.replace("/") }]
+          err?.title || "Presensi Sudah Terdaftar",
+          conflictMsg,
+          [
+            { text: "Kembali ke Beranda", onPress: () => router.replace("/") },
+            { text: "Tutup", style: "cancel" },
+          ]
         );
         return;
-      } catch {}
+      }
 
+      // 2. Simpan ke antrean offline HANYA jika kendala jaringan murni (bukan HTTP error response dari server)
+      const isNetworkError = !err?.code || err?.code === 0;
+      if (isNetworkError) {
+        try {
+          await queueOfflineCheckIn({
+            user_id: user?.id ?? "",
+            user_name: user?.name || "User",
+            company_id: user?.company_id || null,
+            site_id: selectedLocation || (user?.site_id ? String(user.site_id) : ""),
+            checkin: checkinTimeStr,
+            checkin_latitude: location.coords.latitude,
+            checkin_longitude: location.coords.longitude,
+            attendance_status_id: effectiveStatusId,
+            description: formattedNotes,
+            localImages: images.map((img) => ({
+              uri: img.uri,
+              name: img.path || `checkin_${Date.now()}.jpg`,
+              type: "image/jpeg",
+            })),
+            tolerance: selectedSite?.tolerance || 50,
+          });
+
+          Alert.alert(
+            "Check In Tersimpan Offline",
+            "Koneksi jaringan terputus saat pengiriman. Data absensi dan foto bukti telah diamankan di perangkat dan akan otomatis disinkronkan saat terhubung kembali.",
+            [{ text: "OK", onPress: () => router.replace("/") }]
+          );
+          return;
+        } catch {}
+      }
+
+      showToast(err?.message || "Gagal Check In!", "error");
       Alert.alert(
-        "Gagal Check In",
+        err?.title || "Gagal Check In",
         err?.message || "Terjadi kesalahan, coba lagi.",
       );
     } finally {

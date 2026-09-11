@@ -508,12 +508,29 @@ export default function ChecklistItemCard({
                 style={styles.notesInput}
                 placeholder="Catatan tambahan (opsional)"
                 placeholderTextColor={colors.textMuted}
-                value={state.notes}
+                value={state.notes || ""}
                 onChangeText={onChangeNotes}
-                multiline
-                numberOfLines={2}
+                multiline={true}
+                numberOfLines={4}
+                maxLength={2000}
                 textAlignVertical="top"
+                returnKeyType="default"
+                blurOnSubmit={false}
+                editable={!isReadOnly}
               />
+              {state.notes && state.notes.length > 1800 ? (
+                <Text
+                  style={{
+                    fontSize: 11,
+                    textAlign: "right",
+                    marginTop: 4,
+                    color: state.notes.length >= 2000 ? "#ef4444" : "#f59e0b",
+                    fontWeight: state.notes.length >= 2000 ? "700" : "500",
+                  }}
+                >
+                  {state.notes.length}/2000 karakter
+                </Text>
+              ) : null}
             </View>
           )}
         </View>
@@ -861,10 +878,12 @@ const makeStyles = (c: ThemeColors) =>
       borderRadius: 8,
       borderWidth: 1,
       borderColor: c.border,
-      padding: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
       fontSize: 13,
       color: c.text,
-      minHeight: 44,
+      minHeight: 80,
+      textAlignVertical: "top",
     },
     notesContainerReadOnly: {
       marginTop: 6,

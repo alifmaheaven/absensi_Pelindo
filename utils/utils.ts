@@ -845,4 +845,45 @@ export function getWorkStatus(
   return result.displayText;
 }
 
+/**
+ * Membandingkan semver `major.minor.patch` secara numerik.
+ * Mengembalikan true HANYA jika remoteVersion secara numerik lebih tinggi dari localVersion.
+ * Mengembalikan false jika remoteVersion <= localVersion atau format tidak valid.
+ */
+export function isNewerVersion(
+  remoteVersion?: string | null,
+  localVersion?: string | null
+): boolean {
+  if (!remoteVersion || !localVersion) return false;
+
+  const cleanRemote = String(remoteVersion).trim().replace(/^v/i, "");
+  const cleanLocal = String(localVersion).trim().replace(/^v/i, "");
+
+  const parseParts = (v: string): number[] => {
+    const base = v.split(/[-+]/)[0];
+    const parts = base.split(".").map((p) => {
+      const num = parseInt(p, 10);
+      return isNaN(num) ? 0 : num;
+    });
+    while (parts.length < 3) {
+      parts.push(0);
+    }
+    return parts;
+  };
+
+  const remoteParts = parseParts(cleanRemote);
+  const localParts = parseParts(cleanLocal);
+
+  const maxLen = Math.max(remoteParts.length, localParts.length);
+  for (let i = 0; i < maxLen; i++) {
+    const r = remoteParts[i] ?? 0;
+    const l = localParts[i] ?? 0;
+    if (r > l) return true;
+    if (r < l) return false;
+  }
+
+  return false;
+}
+
+
 

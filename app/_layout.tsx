@@ -16,6 +16,7 @@ import { getToken, saveToken } from "@/lib/storage";
 import API from "@/lib/axios";
 
 import { startOfflineSync, syncQueuedRequests } from "@/lib/offlineQueue";
+import { isNewerVersion } from "@/utils/utils";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -102,7 +103,7 @@ export default function RootLayout() {
       const currentNativeVersion = Constants.expoConfig?.version || "1.0.0";
       if (__DEV__) console.debug("[VersionCheck] Current native version:", currentNativeVersion);
 
-      if (latest.name !== currentNativeVersion) {
+      if (isNewerVersion(latest.name, currentNativeVersion)) {
         if (__DEV__) console.debug("[VersionCheck] New version detected, showing force update overlay");
         setLatestVersionData({
           name: latest.name,

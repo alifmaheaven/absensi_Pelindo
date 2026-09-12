@@ -9,7 +9,7 @@ import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
 import { useAuthStore } from "@/stores/auth";
-import { smartCapitalize } from "@/utils/utils";
+import { smartCapitalize, isNewerVersion } from "@/utils/utils";
 import API from "@/lib/axios";
 import { getLatestVersion } from "@/services/version";
 import { getAttendanceMySummary, type IAttendanceMySummary } from "@/services/attendance";
@@ -187,7 +187,7 @@ export default function ProfileScreen() {
         );
         return;
       }
-      if (latest.name !== APP_VERSION) {
+      if (isNewerVersion(latest.name, APP_VERSION)) {
         Alert.alert(
           "Update Tersedia",
           `Versi baru ${latest.name} tersedia. Versi Anda: ${APP_VERSION}.`,

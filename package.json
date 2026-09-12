@@ -1,7 +1,7 @@
 {
   "name": "absensi_app",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.29",
   "scripts": {
     "start": "expo start -c",
     "test": "jest",

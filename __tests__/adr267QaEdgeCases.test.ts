@@ -12,12 +12,12 @@ import appJson from "../app.json";
 describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
   // 1. Audit Versi (OD267-11 & TSK-267-15)
   it("VERIFIES FIX: app.json version and versionCode should be current release", () => {
-    // ADR-268: versi dinaikkan ke 1.0.28 / versionCode 42
+    // ADR-268: versi dinaikkan ke 1.0.29 / versionCode 43
     const version = appJson.expo.version;
     const versionCode = appJson.expo.android.versionCode;
 
-    expect(version).toBe("1.0.28");
-    expect(versionCode).toBe(42);
+    expect(version).toBe("1.0.29");
+    expect(versionCode).toBe(43);
   });
 
   // 2. Audit Perhitungan Kontras WCAG AA pada Disabled Button (OD267-4 & OI-3)

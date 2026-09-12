@@ -1,3 +1,5 @@
+import type { Ishift } from "./schedule";
+
 export interface IAttendance {
   id: string;
   company_id: string;
@@ -38,6 +40,8 @@ export interface IAttendance {
   x19: null;
   x20: null;
   attendance_status_id: string;
+  shift_id?: string | null;
+  shift?: Ishift | null;
 }
 
 export interface IUpload {

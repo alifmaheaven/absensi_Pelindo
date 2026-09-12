@@ -90,7 +90,7 @@ export function mapTimeToColor(
     };
   } else {
     return {
-      text: theme ? theme.success : "#166534",
+      text: theme ? theme.successText : "#166534",
       container: theme ? theme.successSoft : "#E8F5E9",
       button: theme ? theme.success : "#0D7A53",
     };
@@ -149,10 +149,10 @@ export default function AttendanceCard({
       accessibilityRole="summary"
       accessibilityLabel={`${cardTitle} jam ${formattedTime}, ${subtitle}`}
     >
-      <Text style={[styles.label, { color: textColor }]}>
+      <Text style={[styles.label, { color: colors.textStrong }]}>
         {cardTitle}
       </Text>
-      <Text style={[styles.time, { color: textColor }]}>{formattedTime}</Text>
+      <Text style={[styles.time, { color: colors.textStrong }]}>{formattedTime}</Text>
       {subtitle ? (
         <Text style={[styles.subtitle, { color: textColor }]}>{subtitle}</Text>
       ) : null}

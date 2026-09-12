@@ -4,7 +4,6 @@ import {
   getCompletedShiftBannerInfo,
   getOperationalDateWIB,
   resolveHomeScreenCurrentShift,
-  FALLBACK_OVERNIGHT_SHIFT,
 } from "../utils/utils";
 import { isCameraOnlyEvidence } from "../utils/dailyRoutineHelpers";
 import { Colors } from "../constants/theme";
@@ -91,6 +90,7 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
       id: "att-night",
       checkin: "2026-09-11 20:05:00",
       checkout: "2026-09-12 03:50:00", // Checked out at 03:50 WIB before 04:00 cut-off
+      shift: nightShift,
     };
 
     const todaySchedule = {
@@ -117,12 +117,8 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
     // Scenario B: With resolveHomeScreenCurrentShift, completed overnight session
     // resolves to the night shift instead of falling back to day2MorningShift (08:00)
     const resolvedShift = resolveHomeScreenCurrentShift({
-      isOvernightActive: false, // Checkout completed
-      overnightShift: null,
-      isTodayShiftCompleted: true,
       displaySession: recentlyCompletedNightSession,
       todaySchedule: todaySchedule as any,
-      todayDateStr: "2026-09-12",
     });
 
     expect(resolvedShift).toEqual(nightShift);
@@ -138,8 +134,8 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
     expect(statusWithResolvedShift.displayText).toBe("Tepat Waktu");
   });
 
-  // 4. Audit Edge Case: Perilaku fallback jika shift kemarin non-overnight (BUG-267-08)
-  it("VERIFIES FIX BUG-267-08: resolveHomeScreenCurrentShift does NOT fall back to FALLBACK_OVERNIGHT_SHIFT for daytime checkin (14:00 or 09:30)", () => {
+  // 4. Audit Edge Case: Perilaku fallback jika shift kemarin non-overnight (BUG-267-08 / ADR-268)
+  it("VERIFIES FIX BUG-267-08: resolveHomeScreenCurrentShift deterministic shift resolution (ADR-268 / OD268-3)", () => {
     const afternoonSession = {
       id: "att-day-yesterday",
       checkin: "2026-09-11 14:00:00",
@@ -148,16 +144,11 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
 
     // Skenario A: Tidak ada server overnight shift dan tidak ada jadwal hari ini -> resolves to null
     const resolvedNull = resolveHomeScreenCurrentShift({
-      isOvernightActive: false,
-      overnightShift: null,
-      isTodayShiftCompleted: true,
       displaySession: afternoonSession,
       todaySchedule: { shift: null, active_overnight_session: null } as any,
-      todayDateStr: "2026-09-12",
     });
 
     expect(resolvedNull).toBeNull();
-    expect(resolvedNull).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
 
     // Skenario B: Ada jadwal shift hari ini -> resolves to todaySchedule.shift
     const dayShift = {
@@ -173,18 +164,13 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
     };
 
     const resolvedWithSchedule = resolveHomeScreenCurrentShift({
-      isOvernightActive: false,
-      overnightShift: null,
-      isTodayShiftCompleted: true,
       displaySession: afternoonSession,
       todaySchedule: { shift: dayShift, active_overnight_session: null } as any,
-      todayDateStr: "2026-09-12",
     });
 
     expect(resolvedWithSchedule).toEqual(dayShift);
-    expect(resolvedWithSchedule).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
 
-    // Skenario C: Sesi 09:30 kemarin tanpa jadwal hari ini
+    // Skenario C: Sesi 09:30 kemarin tanpa jadwal hari ini -> resolves to null (zero phantom shifts)
     const morningSession930 = {
       id: "att-day-930",
       checkin: "2026-09-11 09:30:00",
@@ -192,16 +178,24 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
     };
 
     const resolved930Null = resolveHomeScreenCurrentShift({
-      isOvernightActive: false,
-      overnightShift: null,
-      isTodayShiftCompleted: true,
       displaySession: morningSession930,
       todaySchedule: { shift: null, active_overnight_session: null } as any,
-      todayDateStr: "2026-09-12",
     });
 
     expect(resolved930Null).toBeNull();
-    expect(resolved930Null).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
+
+    // Skenario D: displaySession carries shift -> deterministically returns displaySession.shift
+    const sessionWithShift = {
+      id: "att-with-shift",
+      checkin: "2026-09-11 14:00:00",
+      checkout: "2026-09-11 22:00:00",
+      shift: dayShift,
+    };
+    const resolvedFromSession = resolveHomeScreenCurrentShift({
+      displaySession: sessionWithShift,
+      todaySchedule: { shift: null } as any,
+    });
+    expect(resolvedFromSession).toEqual(dayShift);
   });
 
   it("VERIFIES FIX BUG-267-08: morning checkin (09:33) post-midnight returns null (not Shift Malam) when no today schedule", () => {
@@ -214,21 +208,16 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
     };
 
     const resolvedShift = resolveHomeScreenCurrentShift({
-      isOvernightActive: false,
-      overnightShift: null,
-      isTodayShiftCompleted: true,
       displaySession: morningSession,
       todaySchedule: { shift: null, active_overnight_session: null } as any,
-      todayDateStr: "2026-09-12",
     });
 
-    // Harus bernilai null, TIDAK BOLEH fallback ke FALLBACK_OVERNIGHT_SHIFT ("Shift Malam")
+    // Harus bernilai null, TIDAK BOLEH fallback ke phantom shift
     expect(resolvedShift).toBeNull();
-    expect(resolvedShift).not.toEqual(FALLBACK_OVERNIGHT_SHIFT);
   });
 
-  // 5. Audit Kontras Visual: Warna teks sukses on-time terhadap kartu successSoft (BUG-267-10)
-  it("EDGE CASE BUG-267-10: Audit contrast ratio of theme.success on theme.successSoft in light mode", () => {
+  // 5. Audit Kontras Visual: Warna teks sukses on-time (#166534) terhadap kartu successSoft (BUG-267-10 & ADR-268)
+  it("VERIFIES FIX BUG-267-10: WCAG AA contrast ratio of on-time text #166534 on successSoft and white is >= 4.5:1", () => {
     function getLuminance(hex: string): number {
       const rgb = [
         parseInt(hex.slice(1, 3), 16) / 255,
@@ -246,12 +235,16 @@ describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
       return (bright + 0.05) / (dark + 0.05);
     }
 
-    const successLight = Colors.light.success;         // #22c55e
+    const onTimeGreen800 = "#166534";
     const successSoftLight = Colors.light.successSoft; // #E8F5E9
-    const contrastRatio = getContrastRatio(successLight, successSoftLight);
+    const white = "#ffffff";
 
-    // Rasio kontras terhitung ~2.03:1, berada di bawah ambang batas WCAG AA 4.5:1
-    expect(contrastRatio).toBeLessThan(3.0);
+    const contrastOnSuccessSoft = getContrastRatio(onTimeGreen800, successSoftLight);
+    const contrastOnWhite = getContrastRatio(onTimeGreen800, white);
+
+    // WCAG AA for normal text requires >= 4.5:1
+    expect(contrastOnSuccessSoft).toBeGreaterThanOrEqual(4.5);
+    expect(contrastOnWhite).toBeGreaterThanOrEqual(4.5);
   });
 });
 

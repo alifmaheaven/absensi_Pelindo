@@ -572,66 +572,28 @@ export function resolveAttendanceSession(params: {
   };
 }
 
-export const FALLBACK_OVERNIGHT_SHIFT: Ishift = {
-  id: "overnight-fallback",
-  code: "SHIFT-MALAM",
-  name: "Shift Malam",
-  start_time: "22:00:00",
-  end_time: "06:00:00",
-  grace_late: 15,
-  grace_early: 15,
-  reminder_minutes: 30,
-  is_overnight: true,
-  color: "#5B21B6",
+/**
+ * Sesi yang ditampilkan Home Screen. Field waktu dan id dipertahankan agar
+ * fixture test maupun objek attendance lengkap dapat dipakai tanpa any.
+ */
+type HomeScreenDisplaySession = {
+  id?: string;
+  checkin?: string | null;
+  checkout?: string | null;
+  shift?: Ishift | null;
 };
 
 /**
- * QA BUG-267-03 / ADR-267:
- * Menentukan shift yang berlaku untuk evaluasi status presensi di Beranda.
- * Jika sesi overnight telah selesai (pasca-checkout, sebelum cut-off 04:00 WIB),
- * pertahankan konteks shift malam (serverOvernight?.shift atau fallback overnight),
- * BUKAN jadwal pagi hari ini (todaySchedule.shift), untuk mencegah false "Terlambat 725 Menit".
+ * ADR-268 / OD268-3:
+ * Resolusi shift deterministik tanpa heuristik jam tebakan.
+ * 1. Jika displaySession.shift ada: gunakan shift dari sesi presensi tersebut.
+ * 2. Jika tidak: gunakan jadwal shift hari ini.
  */
 export function resolveHomeScreenCurrentShift(params: {
-  isOvernightActive?: boolean;
-  overnightShift?: Ishift | null;
-  isTodayShiftCompleted?: boolean;
-  displaySession?: { checkin?: string | null } | null;
+  displaySession?: HomeScreenDisplaySession | null;
   todaySchedule?: Partial<IScheduleToday> | null;
-  todayDateStr?: string;
 }): Ishift | null {
-  if (params.isOvernightActive && params.overnightShift) {
-    return params.overnightShift;
-  }
-  if (params.isTodayShiftCompleted && params.displaySession?.checkin) {
-    const today = params.todayDateStr || getTodayDateString();
-    const checkinDate = parseWIBDate(params.displaySession.checkin);
-    let checkinHour = checkinDate ? getWIBHour(checkinDate) : -1;
-    if (checkinHour < 0) {
-      const match = params.displaySession.checkin.match(/(?:T|\s)(\d{1,2}):/);
-      if (match) {
-        checkinHour = parseInt(match[1], 10);
-      }
-    }
-    const checkinDay = params.displaySession.checkin.split(/[T\s]/)[0];
-    const serverOvernight = params.todaySchedule?.active_overnight_session;
-    const isShiftOvernight = Boolean(params.todaySchedule?.shift?.is_overnight);
-    const isNightCheckinTime =
-      checkinHour >= 0 && (checkinHour >= 18 || checkinHour < 4);
-    const isOvernightCheckin =
-      Boolean(serverOvernight?.shift) ||
-      isShiftOvernight ||
-      (isNightCheckinTime && checkinDay !== today);
-
-    if (isOvernightCheckin) {
-      return (
-        serverOvernight?.shift ??
-        (isShiftOvernight ? params.todaySchedule?.shift : null) ??
-        FALLBACK_OVERNIGHT_SHIFT
-      );
-    }
-  }
-  return params.todaySchedule?.shift ?? null;
+  return params.displaySession?.shift ?? params.todaySchedule?.shift ?? null;
 }
 
 /**

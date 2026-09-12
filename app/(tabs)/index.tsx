@@ -233,35 +233,16 @@ export default function HomeScreen() {
       checkinTimeStr = serverOvernight.attendance?.checkin || serverOvernight.checkin || activeSession?.checkin || "";
       isOverdue = Boolean(serverOvernight.is_overdue);
     } else if (activeSession?.checkin && !activeSession?.checkout) {
-      // Deteksi lokal: checkin bukan hari ini (atau shift is_overnight), selisih <= 18 jam
-      const checkinDate = parseWIBDate(activeSession.checkin);
-      if (checkinDate) {
-        const elapsedHours = (currentTime.getTime() - checkinDate.getTime()) / (1000 * 60 * 60);
-        const checkinDay = activeSession.checkin.split(/[T\s]/)[0];
-        const checkinHour = getWIBHour(checkinDate);
-        const isNightCheckinTime = checkinHour >= 18 || checkinHour < 4;
-        const isPastMidnight =
-          checkinDay !== today &&
-          elapsedHours >= 0 &&
-          elapsedHours <= 18 &&
-          isNightCheckinTime;
-        const isShiftOvernight = Boolean(todaySchedule?.shift?.is_overnight);
-
-        if (isPastMidnight || isShiftOvernight) {
+      const isShiftOvernight = Boolean(
+        activeSession.shift
+          ? activeSession.shift.is_overnight
+          : todaySchedule?.shift?.is_overnight
+      );
+      if (isShiftOvernight) {
+        shift = activeSession.shift ?? (todaySchedule?.shift ?? null);
+        if (shift) {
           isNightShiftActive = true;
-          shift = (isShiftOvernight ? todaySchedule?.shift : null) ?? {
-            id: "overnight-fallback",
-            code: "SHIFT-MALAM",
-            name: "Shift Malam",
-            start_time: "22:00:00",
-            end_time: "06:00:00",
-            grace_late: 15,
-            grace_early: 15,
-            reminder_minutes: 30,
-            is_overnight: true,
-            color: "#5B21B6",
-          };
-          shiftDateStr = checkinDay;
+          shiftDateStr = activeSession.checkin.split(/[T\s]/)[0];
           checkinTimeStr = activeSession.checkin;
         }
       }
@@ -339,9 +320,6 @@ export default function HomeScreen() {
 
   const currentShift = useMemo(() => {
     return resolveHomeScreenCurrentShift({
-      isOvernightActive: overnightSessionInfo.isActive,
-      overnightShift: overnightSessionInfo.shift,
-      isTodayShiftCompleted,
       displaySession,
       todaySchedule,
     });
@@ -795,7 +773,7 @@ export default function HomeScreen() {
                     { color: currentShift.color || colors.primary },
                   ]}
                 >
-                  {currentShift.name} ({currentShift.start_time.slice(0, 5)} – {currentShift.end_time.slice(0, 5)} WIB)
+                  {currentShift.name} ({currentShift.start_time.slice(0, 5)} - {currentShift.end_time.slice(0, 5)} WIB)
                 </Text>
               </View>
             </View>

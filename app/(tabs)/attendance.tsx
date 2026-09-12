@@ -1,17 +1,14 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { getAttendanceList } from "@/services/attendance";
-import { getTodaySchedule, getWeekSchedule } from "@/services/schedule";
 import { useAuthStore } from "@/stores/auth";
 import {
   parseWIBDate,
   calculateAttendanceStatus,
   getOperationalDateWIB,
-  getTodayDateString,
 } from "@/utils/utils";
 import {
   IAttendance,
   IMeta,
-  Ishift,
 } from "@/types";
 import EmptyState from "@/components/ui/EmptyState";
 import ListSkeleton from "@/components/ui/ListSkeleton";
@@ -46,32 +43,6 @@ export default function AttendanceTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [isError, setIsError] = useState(false);
-
-  const [scheduleMap, setScheduleMap] = useState<Record<string, Ishift>>({});
-
-  const loadSchedules = async () => {
-    try {
-      const [todayRes, weekRes] = await Promise.allSettled([
-        getTodaySchedule(),
-        getWeekSchedule(),
-      ]);
-      const map: Record<string, Ishift> = {};
-      if (weekRes.status === "fulfilled" && weekRes.value?.data?.schedules) {
-        weekRes.value.data.schedules.forEach((s) => {
-          if (s.date && s.shift) {
-            map[s.date] = s.shift;
-          }
-        });
-      }
-      if (todayRes.status === "fulfilled" && todayRes.value?.data?.shift) {
-        const todayStr = getTodayDateString();
-        map[todayStr] = todayRes.value.data.shift;
-      }
-      setScheduleMap(map);
-    } catch {
-      // Skenario offline/gagal memuat jadwal: tetap lanjut dengan fallback UNKNOWN_SCHEDULE
-    }
-  };
 
   const fetchAttendanceList = async (page: number) => {
     return getAttendanceList({
@@ -121,10 +92,7 @@ export default function AttendanceTabScreen() {
     setRefreshing(true);
     setIsError(false);
     try {
-      const [response] = await Promise.all([
-        fetchAttendanceList(1),
-        loadSchedules(),
-      ]);
+      const response = await fetchAttendanceList(1);
       const items = response.data?.data || [];
       const responseMeta = response.data?.meta;
       setAttendanceData(items);
@@ -142,7 +110,6 @@ export default function AttendanceTabScreen() {
 
   useEffect(() => {
     handleGetList();
-    loadSchedules();
   }, []);
 
   // checkin/checkout/created_at = WIB. Pakai helper timezone-aware
@@ -155,7 +122,7 @@ export default function AttendanceTabScreen() {
 
   const renderItem = ({ item }: { item: IAttendance }) => {
     const opDate = item.checkin ? getOperationalDateWIB(item.checkin) : null;
-    const resolvedShift = (item as any).shift || (opDate ? scheduleMap[opDate] : null);
+    const resolvedShift = item.shift ?? null;
     const checkinStatus = calculateAttendanceStatus({
       datetime: item.checkin,
       type: "checkin",
@@ -173,6 +140,19 @@ export default function AttendanceTabScreen() {
             size="small"
           />
         </View>
+        {item.shift ? (
+          <View style={styles.shiftPillBadge}>
+            <Ionicons name="briefcase-outline" size={12} color={colors.primaryText} />
+            <Text style={styles.shiftPillText}>
+              {item.shift.name} • {item.shift.start_time.slice(0, 5)} - {item.shift.end_time.slice(0, 5)} WIB{item.shift.is_overnight ? " [Lintas Hari]" : ""}
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.shiftPillBadge, styles.neutralShiftPillBadge]}>
+            <Ionicons name="briefcase-outline" size={12} color={colors.textSecondary} />
+            <Text style={styles.neutralShiftPillText}>Dinas Terbuka (Non-Shift)</Text>
+          </View>
+        )}
         <View style={styles.cardBody}>
           <View style={styles.timeRow}>
             <View style={styles.timeBlock}>
@@ -324,6 +304,32 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: c.card, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: c.border },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   cardCode: { fontSize: 14, fontWeight: "700", color: c.textStrong },
+  shiftPillBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: c.primarySoft,
+    borderColor: c.borderStrong,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginBottom: 8,
+    gap: 4,
+  },
+  shiftPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: c.primaryText,
+  },
+  neutralShiftPillBadge: {
+    backgroundColor: c.surface,
+  },
+  neutralShiftPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: c.textSecondary,
+  },
   cardBody: { marginBottom: 8 },
   timeRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 8 },
   timeBlock: { flex: 1, gap: 2 },

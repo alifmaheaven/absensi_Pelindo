@@ -12,8 +12,10 @@ import {
   getOperationalDateWIB,
   getCompletedShiftBannerInfo,
   OPERATIONAL_DAY_CUTOFF_HOURS,
+  resolveHomeScreenCurrentShift,
 } from "../utils/utils";
-import type { IAttendance, IScheduleToday } from "../types";
+import { Colors } from "../constants/theme";
+import type { IAttendance, IScheduleToday, Ishift } from "../types";
 
 describe("Utils Pure Functions Test Suite", () => {
   describe("getDistanceInMeters (Haversine)", () => {
@@ -636,6 +638,105 @@ describe("Utils Pure Functions Test Suite", () => {
       expect(banner.title).toBe("Riwayat Shift Kemarin");
       expect(banner.subtitle).toContain("masuk --:-- WIB, keluar --:--");
       expect(banner.isNewOperationalDay).toBe(true);
+    });
+  });
+
+  describe("resolveHomeScreenCurrentShift (ADR-268 Deterministic Shift Resolution)", () => {
+    const morningShift: Ishift = {
+      id: "shift-pagi",
+      code: "PAGI",
+      name: "Shift Pagi",
+      start_time: "08:00:00",
+      end_time: "16:00:00",
+      grace_late: 15,
+      grace_early: 15,
+      is_overnight: false,
+      color: "#2563EB",
+    };
+
+    const nightShift: Ishift = {
+      id: "shift-malam",
+      code: "MALAM",
+      name: "Shift Malam",
+      start_time: "20:00:00",
+      end_time: "04:00:00",
+      grace_late: 15,
+      grace_early: 15,
+      is_overnight: true,
+      color: "#5B21B6",
+    };
+
+    it("returns displaySession.shift deterministically when present", () => {
+      const sessionWithNightShift = {
+        shift: nightShift,
+      };
+
+      const result = resolveHomeScreenCurrentShift({
+        displaySession: sessionWithNightShift,
+        todaySchedule: { shift: morningShift },
+      });
+
+      expect(result).toEqual(nightShift);
+    });
+
+    it("returns todaySchedule.shift when displaySession has no shift", () => {
+      const result = resolveHomeScreenCurrentShift({
+        displaySession: {},
+        todaySchedule: { shift: morningShift },
+      });
+
+      expect(result).toEqual(morningShift);
+    });
+
+    it("returns null when neither displaySession nor todaySchedule has shift (zero phantom shift)", () => {
+      const result = resolveHomeScreenCurrentShift({
+        displaySession: {},
+        todaySchedule: { shift: null },
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when both params are null/undefined", () => {
+      const result = resolveHomeScreenCurrentShift({});
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("WCAG AA Contrast Ratio (#166534 Green-800 - BUG-267-10 / ADR-268)", () => {
+    function getLuminance(hex: string): number {
+      const rgb = [
+        parseInt(hex.slice(1, 3), 16) / 255,
+        parseInt(hex.slice(3, 5), 16) / 255,
+        parseInt(hex.slice(5, 7), 16) / 255,
+      ].map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+      return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    }
+
+    function getContrastRatio(hex1: string, hex2: string): number {
+      const lum1 = getLuminance(hex1);
+      const lum2 = getLuminance(hex2);
+      const bright = Math.max(lum1, lum2);
+      const dark = Math.min(lum1, lum2);
+      return (bright + 0.05) / (dark + 0.05);
+    }
+
+    it("satisfies WCAG AA contrast ratio (>= 4.5:1) on successSoft (#E8F5E9)", () => {
+      const textGreen = "#166534";
+      const bgSoft = Colors.light.successSoft; // #E8F5E9
+      const ratio = getContrastRatio(textGreen, bgSoft);
+
+      // Contrast is ~6.33:1, passes WCAG AA (>= 4.5:1)
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it("satisfies WCAG AA contrast ratio (>= 4.5:1) on white (#FFFFFF)", () => {
+      const textGreen = "#166534";
+      const bgWhite = "#ffffff";
+      const ratio = getContrastRatio(textGreen, bgWhite);
+
+      // Contrast is ~7.12:1, passes WCAG AA and AAA (>= 7.0:1)
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
   });
 });

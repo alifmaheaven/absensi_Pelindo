@@ -75,7 +75,8 @@ export default function HomeScreen() {
       page: 1,
       per_page: 10,
       order_by_desc: ["created_at"],
-      user_id_exact: [user?.id ?? ""],
+      include: "shift",
+       user_id_exact: [user?.id ?? ""],
     })
   );
 

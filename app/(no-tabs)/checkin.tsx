@@ -163,7 +163,8 @@ export default function CheckinScreen() {
               page: 1,
               per_page: 5,
               order_by_desc: ["created_at"],
-              user_id_exact: [userId],
+              include: "shift",
+               user_id_exact: [userId],
             });
             const attList = attRes.data?.data || [];
             const sessionRes = resolveAttendanceSession({

@@ -17,6 +17,7 @@ import {
 export async function getAttendanceList(
   params: TParams & {
     order_by_desc: string[];
+    include?: string;
     user_id_exact?: string[];
     id_exact?: string[];
   },

@@ -11,13 +11,13 @@ import appJson from "../app.json";
 
 describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
   // 1. Audit Versi (OD267-11 & TSK-267-15)
-  it("VERIFIES FIX: app.json version and versionCode should be bumped to 1.0.27 / 41", () => {
-    // OD267-11: "Naikkan versi di Mobile/app.json ke 1.0.27 / versionCode 41 sebagai bagian wave."
+  it("VERIFIES FIX: app.json version and versionCode should be current release", () => {
+    // ADR-268: versi dinaikkan ke 1.0.28 / versionCode 42
     const version = appJson.expo.version;
     const versionCode = appJson.expo.android.versionCode;
 
-    expect(version).toBe("1.0.27");
-    expect(versionCode).toBe(41);
+    expect(version).toBe("1.0.28");
+    expect(versionCode).toBe(42);
   });
 
   // 2. Audit Perhitungan Kontras WCAG AA pada Disabled Button (OD267-4 & OI-3)

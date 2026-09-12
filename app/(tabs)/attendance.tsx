@@ -49,7 +49,8 @@ export default function AttendanceTabScreen() {
       page,
       per_page: meta.per_page,
       order_by_desc: ["created_at"],
-      user_id_exact: [user?.id ?? ""],
+      include: "shift",
+       user_id_exact: [user?.id ?? ""],
     });
   };
 

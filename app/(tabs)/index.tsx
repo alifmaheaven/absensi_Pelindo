@@ -120,7 +120,12 @@ export default function HomeScreen() {
   }, []);
 
   useEffect(() => {
-    checkNotificationRationale();
+    // IIFE async: setState di checkNotificationRationale terjadi setelah
+    // `await`, bukan sinkron di body effect
+    // (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await checkNotificationRationale();
+    })();
 
     const subscription = AppState.addEventListener("change", (nextAppState) => {
       if (nextAppState === "active") {

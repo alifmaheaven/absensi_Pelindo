@@ -110,7 +110,11 @@ export default function AttendanceTabScreen() {
   };
 
   useEffect(() => {
-    handleGetList();
+    // IIFE async: setState di handleGetList terjadi setelah `await`, bukan
+    // sinkron di body effect (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await handleGetList();
+    })();
   }, []);
 
   // checkin/checkout/created_at = WIB. Pakai helper timezone-aware

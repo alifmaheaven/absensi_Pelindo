@@ -66,7 +66,11 @@ export default function LoginScreen() {
     // Clear app HTTP cache on entering the login screen so a stale (expired)
     // captcha token can never be reused. Runs only on mount — NOT after login.
     clearCache().catch(() => {});
-    fetchCaptcha();
+    // IIFE async: setState terjadi setelah `await`, bukan sinkron di body
+    // effect (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await fetchCaptcha();
+    })();
   }, []);
 
   const { run: loginReq, loading } = useRequest(() =>

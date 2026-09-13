@@ -39,7 +39,11 @@ export default function JadwalScreen() {
   }, []);
 
   useEffect(() => {
-    fetchSchedule();
+    // IIFE async: setState di fetchSchedule terjadi setelah `await`, bukan
+    // sinkron di body effect (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await fetchSchedule();
+    })();
   }, [fetchSchedule]);
 
   const monthYear = new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });

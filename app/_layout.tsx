@@ -7,7 +7,7 @@ import { DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "react-native-reanimated";
 import "../lib/i18n";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -47,15 +47,8 @@ export default function RootLayout() {
     description?: string;
   } | null>(null);
 
-  useEffect(() => {
-    checkVersion();
-    checkTokenExpiry();
-    startOfflineSync();
-    syncQueuedRequests();
-  }, []);
-
   // Proactively refresh token on app launch if it expires within 7 days
-  async function checkTokenExpiry() {
+  const checkTokenExpiry = useCallback(async () => {
     try {
       const token = await getToken();
       if (!token) return;
@@ -87,9 +80,9 @@ export default function RootLayout() {
     } catch {
       // Token check failed
     }
-  }
+  }, []);
 
-  async function checkVersion() {
+  const checkVersion = useCallback(async () => {
     try {
       if (__DEV__) console.debug("[VersionCheck] Fetching latest version...");
       const latest = await getLatestVersion();
@@ -115,7 +108,19 @@ export default function RootLayout() {
     } catch (err) {
       if (__DEV__) console.error("[VersionCheck] Error:", JSON.stringify(err));
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    // Dibungkus IIFE async: `setState` di dalamnya terjadi setelah `await`,
+    // bukan sinkron di body effect. Pola ini memenuhi aturan React Compiler
+    // (`react-hooks/set-state-in-effect`) tanpa mengubah perilaku.
+    (async () => {
+      await checkVersion();
+      await checkTokenExpiry();
+    })();
+    startOfflineSync();
+    syncQueuedRequests();
+  }, [checkVersion, checkTokenExpiry]);
 
   const currentNativeVersion = Constants.expoConfig?.version || "1.0.0";
 

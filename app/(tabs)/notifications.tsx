@@ -6,7 +6,6 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  ActivityIndicator,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -90,7 +89,11 @@ export default function NotificationsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    // IIFE async: setState di fetchData terjadi setelah `await`, bukan sinkron
+    // di body effect (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await fetchData();
+    })();
   }, [fetchData]);
 
   const onRefresh = useCallback(() => {

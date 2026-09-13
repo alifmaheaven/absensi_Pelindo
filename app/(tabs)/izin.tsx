@@ -12,7 +12,7 @@ import {
 import { deleteLeave, getMyLeaves, ILeaveRequest, resubmitLeave } from "@/services/leave";
 import { useAuthStore } from "@/stores/auth";
 import { formatAttendanceDate, parseWIBDate } from "@/utils/utils";
-import { IAttendance, IAttendanceEvidGroupId, THttpErrorResult } from "@/types";
+import { IAttendanceEvidGroupId, THttpErrorResult } from "@/types";
 import { DocumentCheck, InfoOutlineRounded } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
 import EmptyState from "@/components/ui/EmptyState";
@@ -73,11 +73,104 @@ export default function IzinScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();
+  // Diekstrak ke variabel primitif agar dependency `useCallback` cocok
+  // dengan yang di-inferensi React Compiler (closure membaca `userId`).
+  const userId = user?.id;
   const { showToast } = useToast();
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
+
+  const fetchAll = useCallback(async () => {
+    if (!userId) return;
+    try {
+      setIsLoading(true);
+      setIsError(false);
+
+      const [attendanceRes, statusRes, leavesRes] = await Promise.all([
+        getAttendanceList({
+          page: 1,
+          per_page: 20,
+          order_by_desc: ["created_at"],
+          user_id_exact: [userId],
+        }),
+        getAttendanceStatus({ page: 1, per_page: 10 }),
+        getMyLeaves({ page: 1, per_page: 20 }),
+      ]);
+
+      const attendance = attendanceRes?.data?.data || [];
+      const status = statusRes.data?.data || [];
+      const leaves: ILeaveRequest[] = Array.isArray(leavesRes) ? leavesRes : [];
+
+      const statusMap: Record<string, string> = {};
+      const attendId = status.find((s) => s.name?.toLowerCase() === "attend")?.id || "";
+      status.forEach((s) => { statusMap[s.id] = s.name; });
+
+      // 1. Leave requests milik sendiri (pending, approved, rejected)
+      const leaveItems: MergedItem[] = leaves.map((lr) => {
+        const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
+        return {
+          id: lr.id,
+          type: "leave_request",
+          title: leaveTypeLabel,
+          date: lr.leave_date,
+          end_date: lr.end_date,
+          status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
+          rawStatus: lr.status,
+          reason: lr.reason,
+          leave_type: lr.leave_type,
+          evidence_group_id: lr.evidence_group_id,
+          rejection_reason: lr.rejection_reason,
+        };
+      });
+
+      // Helper untuk mengecek apakah attendance record checkin jatuh pada rentang leave request yang sudah di-approve
+      const isCoveredByApprovedLeave = (checkinStr?: string | null) => {
+        if (!checkinStr) return false;
+        const checkinDay = checkinStr.split(/[T ]/)[0];
+        return leaves.some((lr) => {
+          if (lr.status !== "approved") return false;
+          const start = (lr.leave_date || "").split(/[T ]/)[0];
+          const end = (lr.end_date || lr.leave_date || "").split(/[T ]/)[0];
+          return checkinDay >= start && checkinDay <= end;
+        });
+      };
+
+      // 2. Attendance records non-Attend (misal CRUD manual attendance oleh admin web)
+      const attendanceItems: MergedItem[] = attendance
+        .filter(
+          (item) =>
+            item.attendance_status_id !== attendId &&
+            !isCoveredByApprovedLeave(item.checkin)
+        )
+        .map((item) => ({
+          id: item.id,
+          type: "attendance",
+          title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
+          date: item.checkin ?? "",
+          status: item.checkin ? "Disetujui" : "Pending",
+          reason: item.description,
+        }));
+
+      const merged: MergedItem[] = [...leaveItems, ...attendanceItems];
+
+      // Sort by date desc — parse WIB (andal di Hermes), NaN → 0 (stabil)
+      const dateVal = (d?: string) => {
+        const parsed = parseWIBDate(d);
+        return parsed ? parsed.getTime() : 0;
+      };
+      merged.sort((a, b) => dateVal(b.date) - dateVal(a.date));
+
+      setMergedData(merged);
+    } catch (error) {
+      console.error("Failed to fetch izin data:", error);
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, [userId]);
 
   // Detail modal state
   const [detailItem, setDetailItem] = useState<MergedItem | null>(null);
@@ -238,95 +331,6 @@ export default function IzinScreen() {
     }
   };
 
-  const fetchAll = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      setIsLoading(true);
-      setIsError(false);
-
-      const [attendanceRes, statusRes, leavesRes] = await Promise.all([
-        getAttendanceList({
-          page: 1,
-          per_page: 20,
-          order_by_desc: ["created_at"],
-          user_id_exact: [user.id],
-        }),
-        getAttendanceStatus({ page: 1, per_page: 10 }),
-        getMyLeaves({ page: 1, per_page: 20 }),
-      ]);
-
-      const attendance = attendanceRes?.data?.data || [];
-      const status = statusRes.data?.data || [];
-      const leaves: ILeaveRequest[] = Array.isArray(leavesRes) ? leavesRes : [];
-
-      const statusMap: Record<string, string> = {};
-      const attendId = status.find((s) => s.name?.toLowerCase() === "attend")?.id || "";
-      status.forEach((s) => { statusMap[s.id] = s.name; });
-
-      // 1. Leave requests milik sendiri (pending, approved, rejected)
-      const leaveItems: MergedItem[] = leaves.map((lr) => {
-        const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
-        return {
-          id: lr.id,
-          type: "leave_request",
-          title: leaveTypeLabel,
-          date: lr.leave_date,
-          end_date: lr.end_date,
-          status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
-          rawStatus: lr.status,
-          reason: lr.reason,
-          leave_type: lr.leave_type,
-          evidence_group_id: lr.evidence_group_id,
-          rejection_reason: lr.rejection_reason,
-        };
-      });
-
-      // Helper untuk mengecek apakah attendance record checkin jatuh pada rentang leave request yang sudah di-approve
-      const isCoveredByApprovedLeave = (checkinStr?: string | null) => {
-        if (!checkinStr) return false;
-        const checkinDay = checkinStr.split(/[T ]/)[0];
-        return leaves.some((lr) => {
-          if (lr.status !== "approved") return false;
-          const start = (lr.leave_date || "").split(/[T ]/)[0];
-          const end = (lr.end_date || lr.leave_date || "").split(/[T ]/)[0];
-          return checkinDay >= start && checkinDay <= end;
-        });
-      };
-
-      // 2. Attendance records non-Attend (misal CRUD manual attendance oleh admin web)
-      const attendanceItems: MergedItem[] = attendance
-        .filter(
-          (item) =>
-            item.attendance_status_id !== attendId &&
-            !isCoveredByApprovedLeave(item.checkin)
-        )
-        .map((item) => ({
-          id: item.id,
-          type: "attendance",
-          title: statusMap[item.attendance_status_id] || item.description || "Izin/Cuti",
-          date: item.checkin ?? "",
-          status: item.checkin ? "Disetujui" : "Pending",
-          reason: item.description,
-        }));
-
-      const merged: MergedItem[] = [...leaveItems, ...attendanceItems];
-
-      // Sort by date desc — parse WIB (andal di Hermes), NaN → 0 (stabil)
-      const dateVal = (d?: string) => {
-        const parsed = parseWIBDate(d);
-        return parsed ? parsed.getTime() : 0;
-      };
-      merged.sort((a, b) => dateVal(b.date) - dateVal(a.date));
-
-      setMergedData(merged);
-    } catch (error) {
-      console.error("Failed to fetch izin data:", error);
-      setIsError(true);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  }, [user?.id]);
 
   // Refresh every time this tab gets focus
   useFocusEffect(

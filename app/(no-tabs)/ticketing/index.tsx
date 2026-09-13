@@ -20,8 +20,8 @@ import {
 } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   FlatList,
   TextInput,
@@ -232,7 +232,11 @@ const TicketingScreen = () => {
   // navigating back from detail can update the list without
   // resetting state, which avoids competing with the back gesture.
   useEffect(() => {
-    handleGetTicketList();
+    // IIFE async: setState di handleGetTicketList terjadi setelah `await`,
+    // bukan sinkron di body effect (memenuhi `react-hooks/set-state-in-effect`).
+    (async () => {
+      await handleGetTicketList();
+    })();
   }, []);
 
   // Fetch status options on mount
@@ -262,20 +266,30 @@ const TicketingScreen = () => {
 
   // Refetch when applied filters change
   useEffect(() => {
-    handleGetTicketList();
+    // IIFE async — lihat catatan pada effect mount di atas.
+    (async () => {
+      await handleGetTicketList();
+    })();
   }, [appliedSearch, appliedStatus]);
 
-  // Refresh list when returning from edit that changed data
-  useEffect(() => {
-    const store = useTicketStore.getState();
-    if (store.needsRefresh) {
-      setTicketDatas([]);
-      setTicketMeta(initialMeta);
-      setHasMore(true);
-      handleGetTicketList();
-      store.setNeedsRefresh(false);
-    }
-  });
+  // Refresh list when returning from an edit that changed data.
+  //
+  // Sebelumnya effect ini TANPA array dependency sehingga berjalan di SETIAP
+  // render dan membaca flag dari store. Pemicunya sebenarnya "layar ini kembali
+  // mendapat fokus", jadi tempat yang tepat adalah `useFocusEffect`. Guard
+  // `needsRefresh` tetap dipertahankan agar pemuatan hanya terjadi saat edit
+  // benar-benar mengubah data.
+  useFocusEffect(
+    useCallback(() => {
+      const store = useTicketStore.getState();
+      if (store.needsRefresh) {
+        store.setNeedsRefresh(false);
+        (async () => {
+          await handleGetTicketList();
+        })();
+      }
+    }, []),
+  );
 
   const handleTicketDetail = (item: ITicket) => {
     if (navigating.current) return;

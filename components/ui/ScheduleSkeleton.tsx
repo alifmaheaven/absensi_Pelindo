@@ -1,11 +1,12 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import React, { useEffect, useRef , useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
+import { useAnimatedValue } from "@/hooks/use-animated-value";
 import { Animated, StyleSheet, View } from "react-native";
 
 export default function ScheduleSkeleton({ count = 5 }: { count?: number }) {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const animatedValue = useRef(new Animated.Value(0.3)).current;
+  const animatedValue = useAnimatedValue(0.3);
 
   useEffect(() => {
     const animation = Animated.loop(

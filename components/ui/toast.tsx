@@ -1,10 +1,11 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useAnimatedValue } from "@/hooks/use-animated-value";
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   useMemo,
 } from "react";
@@ -27,8 +28,23 @@ export function Toast({ visible, message, type, duration = 3000, onHide }: Toast
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(-100)).current;
+  const fadeAnim = useAnimatedValue(0);
+  const translateY = useAnimatedValue(-100);
+
+  const hideToast = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -100,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => onHide());
+  }, [fadeAnim, translateY, onHide]);
 
   useEffect(() => {
     if (visible) {
@@ -51,22 +67,7 @@ export function Toast({ visible, message, type, duration = 3000, onHide }: Toast
 
       return () => clearTimeout(timer);
     }
-  }, [visible, duration]);
-
-  const hideToast = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: -100,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => onHide());
-  };
+  }, [visible, duration, fadeAnim, translateY, hideToast]);
 
   const getBackgroundColor = () => {
     const c = colors;

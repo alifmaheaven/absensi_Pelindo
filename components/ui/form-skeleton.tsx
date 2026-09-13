@@ -1,11 +1,12 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
-import React, { useEffect, useRef , useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
+import { useAnimatedValue } from "@/hooks/use-animated-value";
 import { Animated, StyleSheet, View } from "react-native";
 
 const SkeletonBlock = ({ width, height, style }: { width?: number | string; height?: number | string; style?: any }) => {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const opacity = useRef(new Animated.Value(0.3)).current;
+  const opacity = useAnimatedValue(0.3);
 
   useEffect(() => {
     const animation = Animated.loop(

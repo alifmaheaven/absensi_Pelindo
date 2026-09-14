@@ -262,6 +262,10 @@ export default function CheckinScreen() {
   const handleSubmit = async () => {
     // Guard double-submit: flag synchronous (loadingSubmit state async)
     if (submittingRef.current) return;
+    if (loadingImage) {
+      showToast("Sedang memproses foto, silakan tunggu sebentar...", "info");
+      return;
+    }
     // Validasi lokasi GPS
     if (!location) {
       showToast("Tunggu deteksi lokasi...", "info");
@@ -354,7 +358,22 @@ export default function CheckinScreen() {
       console.debug("Group ID", groupId);
 
       for (const img of images) {
-        const uploaded = await uploadEvidPermanent({ links: [img.path] });
+        let permanentPath = img.path;
+        if (!permanentPath) {
+          try {
+            const tempRes = await uploadEvid({
+              uri: img.uri,
+              name: `checkin_${Date.now()}.jpg`,
+              type: "image/jpeg",
+            } as any);
+            permanentPath = tempRes.data?.[0]?.path ?? "";
+          } catch (e) {
+            console.warn("Failed to upload temp image online:", e);
+          }
+        }
+        if (!permanentPath) continue;
+
+        const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
         const file = uploaded.data?.links?.[0];
 
         if (!file) continue;

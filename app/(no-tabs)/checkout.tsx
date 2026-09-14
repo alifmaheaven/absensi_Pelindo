@@ -253,6 +253,10 @@ export default function CheckoutScreen() {
 
   const handleSubmit = async () => {
     if (submittingRef.current) return;
+    if (loadingImage) {
+      showToast("Sedang memproses foto, silakan tunggu sebentar...", "info");
+      return;
+    }
     if (!location) {
       showToast("Tunggu deteksi lokasi...", "info");
       return;
@@ -321,7 +325,22 @@ export default function CheckoutScreen() {
 
       // Upload ONLY new checkout evidence to group
       for (const img of newCheckoutImages) {
-        const uploaded = await uploadEvidPermanent({ links: [img.path] });
+        let permanentPath = img.path;
+        if (!permanentPath) {
+          try {
+            const tempRes = await uploadService.uploadTemp({
+              uri: img.uri,
+              name: `checkout_${Date.now()}.jpg`,
+              type: "image/jpeg",
+            });
+            permanentPath = tempRes.data?.[0]?.path ?? tempRes?.[0]?.path ?? "";
+          } catch (e) {
+            console.warn("Failed to upload temp image online:", e);
+          }
+        }
+        if (!permanentPath) continue;
+
+        const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
         const file = uploaded.data?.links?.[0];
         if (file) {
           await uploadEvidGroupId({

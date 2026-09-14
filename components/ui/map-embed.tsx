@@ -4,8 +4,6 @@ import React, { useRef } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 
-import { Circle } from "react-native-maps";
-
 export interface MapCenter {
   lat: number;
   lng: number;
@@ -16,9 +14,6 @@ export interface MapEmbedProps {
   center?: MapCenter | null;
   radiusMeters?: number | null;
 }
-
-// Re-export Circle from react-native-maps for type/component parity
-export { Circle };
 
 export const MapEmbed: React.FC<MapEmbedProps> = ({
   location,

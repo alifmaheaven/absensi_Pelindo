@@ -5,6 +5,7 @@ import {
 } from "@/constants";
 import { THttpErrorResult } from "@/types";
 import { compressImage } from "@/utils/utils";
+import NetInfo from "@react-native-community/netinfo";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import {
@@ -17,6 +18,8 @@ export interface IImage {
   uri: string;
   path: string;
   link: string;
+  name?: string;
+  type?: string;
 }
 
 export interface IImageUploadService {
@@ -101,24 +104,66 @@ export function useImagePicker() {
       });
       console.debug("[PickImage] Compressed result:", compressed);
 
+      const fileUri = compressed?.uri || result.assets?.[0]?.uri;
+      if (!fileUri) {
+        setLoadingImage(false);
+        return;
+      }
+
+      const fileName = `image-${Date.now()}.jpg`;
+      const localImage: IImage = {
+        uri: fileUri,
+        path: "",
+        link: fileUri,
+        name: fileName,
+        type: "image/jpeg",
+      };
+
+      // Store local URI in state immediately so captured photo is preserved for offline queue
+      setImages((prev) => [...prev, localImage]);
+
+      // Check network status before attempting remote upload
+      let isOffline = false;
+      try {
+        const netState = await NetInfo.fetch();
+        isOffline = !netState.isConnected || !netState.isInternetReachable;
+      } catch {
+        // Assume online if NetInfo fails
+      }
+
+      if (isOffline) {
+        console.debug("[PickImage] Offline detected, preserved local photo:", fileUri);
+        setLoadingImage(false);
+        return;
+      }
+
       try {
         const res = await uploadService.uploadTemp({
-          uri: compressed?.uri,
-          name: `image-${Date.now()}.jpg`,
+          uri: fileUri,
+          name: fileName,
           type: "image/jpeg",
         } as any);
         console.debug("[PickImage] Upload result:", res);
 
-        if (compressed?.uri) {
-          setImages((prev) => [
-            ...prev,
-            {
-              uri: compressed.uri,
-              path: res.data?.[0]?.path ?? "",
-              link: res.data?.[0]?.link ?? "",
-            },
-          ]);
+        const serverPath = res?.data?.[0]?.path ?? res?.[0]?.path ?? "";
+        const serverLink = res?.data?.[0]?.link ?? res?.[0]?.link ?? "";
+
+        if (serverPath || serverLink) {
+          setImages((prev) =>
+            prev.map((img) =>
+              img.uri === fileUri
+                ? {
+                    ...img,
+                    path: serverPath || img.path,
+                    link: serverLink || img.link,
+                  }
+                : img,
+            ),
+          );
         }
+      } catch (uploadError) {
+        // ponytail: offline photo preservation - keep local URI in state for queueOfflineCheckIn/Out
+        console.warn("[PickImage] Remote upload failed, keeping local image:", uploadError);
       } finally {
         setLoadingImage(false);
       }
@@ -135,8 +180,14 @@ export function useImagePicker() {
       setLoadingImage(true);
       const newImages = [...images];
       const target = images[index];
-      if (target?.path) await uploadService.deleteTemp({ links: [target.path] });
-      console.debug("Image deleted");
+      if (target?.path) {
+        try {
+          await uploadService.deleteTemp({ links: [target.path] });
+          console.debug("Image deleted from server");
+        } catch (delErr) {
+          console.warn("Failed to delete temp image on server:", delErr);
+        }
+      }
       newImages.splice(index, 1);
       setImages(newImages);
     } catch (error) {
@@ -155,8 +206,15 @@ export function useImagePicker() {
   const openModal = () => setIsModalVisible(true);
   const closeModal = () => setIsModalVisible(false);
 
+  const localImages = images.map((img) => ({
+    uri: img.uri,
+    name: img.path || img.name || `image-${Date.now()}.jpg`,
+    type: img.type || "image/jpeg",
+  }));
+
   return {
     images,
+    localImages,
     loadingImage,
     isModalVisible,
     pickImage,

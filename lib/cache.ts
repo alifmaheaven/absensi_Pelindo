@@ -25,3 +25,24 @@ export async function clearCache(key?: string) {
   const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
   await AsyncStorage.multiRemove(keys);
 }
+
+/**
+ * MOB-02 sibling-leak sweep: remove every AsyncStorage key starting with any of
+ * the given prefixes.
+ *
+ * `clearCache()` above only knows the `@cache_` namespace, so any user-specific
+ * data written under a different prefix survives logout on a shared device.
+ * This helper exists so `logout()` can purge those namespaces without knowing
+ * the exact keys (several are keyed dynamically, e.g. `@dr_draft_<id>_<date>`).
+ *
+ * It removes only keys that match a prefix it was explicitly given — it is not
+ * a blanket wipe, so device-level preferences (theme, notification rationale)
+ * and non-user-specific reference caches (sites, attendance statuses) survive.
+ */
+export async function clearStorageByPrefixes(prefixes: string[]) {
+  if (!prefixes.length) return;
+  const keys = (await AsyncStorage.getAllKeys()).filter(k =>
+    prefixes.some(p => k.startsWith(p))
+  );
+  if (keys.length) await AsyncStorage.multiRemove(keys);
+}

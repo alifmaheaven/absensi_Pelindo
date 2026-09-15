@@ -11,13 +11,29 @@ import appJson from "../app.json";
 
 describe("ADR-267 QA Adversarial Verification & Edge Cases", () => {
   // 1. Audit Versi (OD267-11 & TSK-267-15)
-  it("VERIFIES FIX: app.json version and versionCode should be current release", () => {
-    // Versi dinaikkan ke 1.0.30 / versionCode 44
+  it("VERIFIES: app.json version and versionCode are valid and release-ready", () => {
+    // DO NOT pin the literal version here.
+    //
+    // This assertion originally read `toBe("1.0.29")` and has now broken on THREE
+    // consecutive release bumps (1.0.29 -> 1.0.30 -> 1.0.31). A release counter is
+    // mutable by definition, so pinning it makes every legitimate version bump a
+    // red suite — and the observed "fix" each time was to rewrite the expectation,
+    // which trains people to edit tests instead of reading them.
+    //
+    // The durable invariants are what actually protect a release: the values exist,
+    // are well-formed, and the versionCode cannot go backwards (Play Store rejects
+    // an upload whose versionCode is not strictly greater than the live one).
     const version = appJson.expo.version;
     const versionCode = appJson.expo.android.versionCode;
 
-    expect(version).toBe("1.0.30");
-    expect(versionCode).toBe(44);
+    expect(typeof version).toBe("string");
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(Number.isInteger(versionCode)).toBe(true);
+    expect(versionCode).toBeGreaterThan(0);
+
+    // Monotonicity floor: never ship a versionCode below the highest already
+    // published. Raise this floor when a new build is released.
+    expect(versionCode).toBeGreaterThanOrEqual(45);
   });
 
   // 2. Audit Perhitungan Kontras WCAG AA pada Disabled Button (OD267-4 & OI-3)

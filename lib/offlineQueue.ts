@@ -2,7 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { Alert } from "react-native";
 import apiClient from "./axios";
-import { saveCheckInId } from "./storage";
+import { getToken, saveCheckInId } from "./storage";
+import { useAuthStore } from "@/stores/auth";
 
 const OFFLINE_QUEUE_KEY = "@offline_queue";
 const FAILED_ATTENDANCE_KEY = "@failed_attendance_queue";
@@ -17,20 +18,194 @@ export interface FailedAttendanceItem {
   failedAt: number;
   errorCode: number;
   errorMessage: string;
+  /** MOB-02: owner of the queued evidence; see {@link OfflineAction.owner_user_id}. */
+  owner_user_id?: string;
 }
 
-export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
+/* ------------------------------------------------------------------------- *
+ * MOB-02 — queue ownership (shared-device identity isolation)
+ *
+ * The queue is a single AsyncStorage key (`@offline_queue`) shared by every
+ * user of the device. Before this change nothing tied an item to the user who
+ * created it, so on a shared port terminal user A could queue an offline
+ * check-in, log out, and have the item submitted under user B's bearer token
+ * on B's next sync. The server (attendanceControllers.ts:468) *forces*
+ * `user_id = req.auth_data.id` for callers without `attendance_create`, so the
+ * record was silently written against B — a confused-identity payroll write.
+ *
+ * Two independent controls now prevent that:
+ *   1. every item is stamped with `owner_user_id` when it is queued;
+ *   2. `syncQueuedRequests()` refuses to submit an item whose owner (stamp or
+ *      payload `user_id`) is not the currently authenticated identity.
+ *
+ * Items belonging to another user are left untouched in the queue rather than
+ * deleted — see `logout()` in stores/auth.ts for why we preserve them.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Decode the `id` claim out of a JWT without verifying the signature.
+ *
+ * We deliberately read the token rather than only the auth store: the token is
+ * exactly what the server will use to attribute the write
+ * (`req.user = { id: auth_data.id }`, middlewares/authentication.ts), and it is
+ * available on cold start before `getProfile()` has populated the store.
+ */
+function decodeJwtSubject(token: string): string | null {
+  try {
+    const segment = token.split(".")[1];
+    if (!segment) return null;
+
+    const base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
+
+    let text: string;
+    if (typeof atob === "function") {
+      const raw = atob(padded);
+      try {
+        // UTF-8 safe decode of the binary string returned by atob.
+        text = decodeURIComponent(
+          Array.prototype.map
+            .call(raw, (c: string) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join("")
+        );
+      } catch {
+        text = raw;
+      }
+    } else {
+      // Hermes has atob; this branch covers a JS engine that does not (e.g. a
+      // Node test runner older than v16). `buffer` is already a dependency.
+      const NodeBuffer = (globalThis as any).Buffer;
+      if (typeof NodeBuffer?.from !== "function") return null;
+      text = NodeBuffer.from(padded, "base64").toString("utf-8");
+    }
+
+    const payload = JSON.parse(text);
+    const id = payload?.id ?? payload?.user_id ?? payload?.sub;
+    return typeof id === "string" && id.trim() ? id.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The identity the next outbound request will be attributed to.
+ *
+ * Order matters: the bearer token is authoritative (it is what the server
+ * trusts); the zustand store is only a fallback for the window before the
+ * profile fetch lands, and for the web/mocked-token path.
+ */
+export async function resolveCurrentUserId(): Promise<string | null> {
+  try {
+    const token = await getToken();
+    if (token) {
+      const fromToken = decodeJwtSubject(token);
+      if (fromToken) return fromToken;
+    }
+  } catch {}
+
+  try {
+    const user = useAuthStore.getState().user as { id?: string; user_id?: string } | null;
+    const id = user?.id ?? user?.user_id;
+    if (typeof id === "string" && id.trim()) return id.trim();
+  } catch {}
+
+  return null;
+}
+
+/** Whether any bearer token is stored at all. */
+async function hasStoredToken(): Promise<boolean> {
+  try {
+    return Boolean(await getToken());
+  } catch {
+    return false;
+  }
+}
+
+/** The owner stamped on a queue item, if any. Never derived from the payload. */
+function getStampedOwner(action: OfflineAction): string | null {
+  const owner = action.owner_user_id;
+  return typeof owner === "string" && owner.trim() ? owner.trim() : null;
+}
+
+/** The `user_id` carried inside a check-in payload, if any. */
+function getPayloadOwner(action: OfflineAction): string | null {
+  if (action.type !== "ATTENDANCE_CHECKIN") return null;
+  const id = (action.data as OfflineCheckInPayload | undefined)?.user_id;
+  return typeof id === "string" && id.trim() ? id.trim() : null;
+}
+
+/**
+ * May this queued item be submitted by the session identified by
+ * `currentUserId`?
+ *
+ * Pure and exported so the rule can be asserted directly. It is used both by
+ * `syncQueuedRequests()` (to decide what to POST) and by `getPendingCount()`
+ * (to decide what to display), so the banner can never claim a sync is pending
+ * for an item that sync would refuse to send.
+ *
+ * - Known session + mismatching owner  → false (the non-negotiable case).
+ * - Unknown session (token present but unreadable) + stamped item → false:
+ *   we cannot prove ownership, so we fail closed and leave it queued.
+ * - Unknown session + unstamped item → true: this is the pre-1.0.30 shape and
+ *   the only path that keeps an already-queued legacy item recoverable.
+ */
+export function isActionEligibleFor(
+  action: OfflineAction,
+  currentUserId: string | null
+): boolean {
+  const stampedOwner = getStampedOwner(action);
+  const payloadOwner = getPayloadOwner(action);
+
+  if (!currentUserId) {
+    return !stampedOwner;
+  }
+
+  const current = String(currentUserId);
+  if (stampedOwner && stampedOwner !== current) return false;
+  if (payloadOwner && payloadOwner !== current) return false;
+  return true;
+}
+
+/**
+ * Raw, unfiltered read of the failed-attendance bucket.
+ *
+ * Writers MUST use this: `saveFailedAttendance` appends to the stored list, so
+ * reading through the owner-filtered `getFailedAttendance()` would drop another
+ * user's abandoned evidence on the next write.
+ */
+async function readAllFailedAttendance(): Promise<FailedAttendanceItem[]> {
   try {
     const raw = await AsyncStorage.getItem(FAILED_ATTENDANCE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
   } catch {
     return [];
   }
 }
 
+/**
+ * MOB-02: read the failed-attendance bucket.
+ *
+ * When the current session identity is known, items owned by somebody else are
+ * hidden — B must not be shown a banner counting A's abandoned evidence. When
+ * the identity cannot be resolved (pre-login, malformed token) nothing is
+ * filtered, which preserves the previous behaviour exactly.
+ */
+export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
+  const list = await readAllFailedAttendance();
+
+  const currentUserId = await resolveCurrentUserId();
+  if (!currentUserId) return list;
+
+  return list.filter((item) => {
+    const owner = item?.owner_user_id;
+    return !owner || String(owner) === String(currentUserId);
+  });
+}
+
 export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<void> {
   try {
-    const list = await getFailedAttendance();
+    const list = await readAllFailedAttendance();
     list.push(item);
     await AsyncStorage.setItem(FAILED_ATTENDANCE_KEY, JSON.stringify(list));
   } catch (e) {
@@ -61,6 +236,17 @@ export interface OfflineCheckInPayload {
   description?: string;
   localImages: Array<{ uri: string; name: string; type: string }>;
   tolerance?: number;
+  /**
+   * Optional: the attendance row's `contract_id` (NOT NULL in the DB).
+   *
+   * Optional on purpose — a device that queued a check-in before this field
+   * existed will not have it, and older clients never sent it at all. When it is
+   * absent the SERVER derives it from the site or the user
+   * (`attendanceControllers.ts`, self-service branch), so the check-in still
+   * succeeds. It is sent when known so the row carries the contract that was
+   * active at check-in time rather than whatever the site points at later.
+   */
+  contract_id?: string | null;
 }
 
 export interface OfflineCheckOutPayload {
@@ -81,6 +267,14 @@ export interface OfflineAction {
   method?: string;
   data?: any;
   timestamp: number;
+  /**
+   * MOB-02: identity of the user who queued this item.
+   *
+   * Optional on purpose. Items written by app versions <= 1.0.29 have no such
+   * field, and their existing AsyncStorage records must keep deserialising
+   * unchanged (backward compatibility, see `migrateLegacyQueueOwnership`).
+   */
+  owner_user_id?: string;
 }
 
 let isSyncing = false;
@@ -99,6 +293,74 @@ async function saveQueue(queue: OfflineAction[]) {
 }
 
 /**
+ * MOB-02: best-effort owner stamp for a newly queued item.
+ *
+ * Returns `undefined` when no identity can be resolved, in which case the item
+ * is written unstamped and `isActionEligibleFor` falls back to the payload's
+ * own `user_id` (check-ins) — never to "whoever happens to be logged in".
+ */
+async function currentOwnerStamp(): Promise<string | undefined> {
+  try {
+    return (await resolveCurrentUserId()) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * MOB-02 migration — adopt queue items written by app versions <= 1.0.29.
+ *
+ * Those records have no `owner_user_id`. We stamp them **in place**, under the
+ * same AsyncStorage key and the same JSON shape, so no existing queued data is
+ * moved, rewritten into a new key, or orphaned:
+ *
+ * - a check-in carries the authoritative `data.user_id` → adopt that, whatever
+ *   session is currently open. This is what stops an A-owned legacy check-in
+ *   from being adopted by B after an upgrade.
+ * - a check-out / standard request carries no user id → adopt the session
+ *   identity resolved from the *stored bearer token*, i.e. the last user this
+ *   device authenticated as. With no token we leave the item unstamped rather
+ *   than guess.
+ *
+ * Idempotent, and only writes when something actually changed.
+ *
+ * Deferred entirely while no session identity can be resolved: stamping is only
+ * useful if we can later compare the stamp against a known session, and
+ * stamping an item under an unreadable token would make it unsubmittable.
+ */
+async function migrateLegacyQueueOwnership(): Promise<void> {
+  let queue: OfflineAction[];
+  try {
+    queue = await getQueue();
+  } catch {
+    return;
+  }
+  if (!queue.length) return;
+  if (!queue.some((a) => !getStampedOwner(a))) return;
+
+  const sessionUserId = await resolveCurrentUserId();
+  if (!sessionUserId) return;
+
+  let changed = false;
+
+  for (const action of queue) {
+    if (getStampedOwner(action)) continue;
+    const owner = getPayloadOwner(action) ?? sessionUserId;
+    if (!owner) continue;
+    action.owner_user_id = owner;
+    changed = true;
+  }
+
+  if (changed) {
+    try {
+      await saveQueue(queue);
+    } catch (e) {
+      console.error("[OfflineQueue] Gagal menandai kepemilikan antrean lama:", e);
+    }
+  }
+}
+
+/**
  * Queue a standard HTTP request for later when offline
  */
 export async function queueRequest(url: string, method: string, data?: any) {
@@ -110,6 +372,7 @@ export async function queueRequest(url: string, method: string, data?: any) {
     method: method.toUpperCase(),
     data,
     timestamp: Date.now(),
+    owner_user_id: await currentOwnerStamp(),
   };
   queue.push(action);
   await saveQueue(queue);
@@ -126,6 +389,7 @@ export async function queueOfflineCheckIn(payload: OfflineCheckInPayload): Promi
     type: "ATTENDANCE_CHECKIN",
     data: payload,
     timestamp: Date.now(),
+    owner_user_id: await currentOwnerStamp(),
   };
   queue.push(action);
   await saveQueue(queue);
@@ -142,6 +406,7 @@ export async function queueOfflineCheckOut(payload: OfflineCheckOutPayload): Pro
     type: "ATTENDANCE_CHECKOUT",
     data: payload,
     timestamp: Date.now(),
+    owner_user_id: await currentOwnerStamp(),
   };
   queue.push(action);
   await saveQueue(queue);
@@ -243,6 +508,17 @@ export async function syncQueuedRequests(): Promise<number> {
   isSyncing = true;
 
   try {
+    // MOB-02: with no bearer token nothing here can be authorised. Attempting
+    // anyway would make the server answer 401 and quarantine real attendance
+    // evidence into the "failed" bucket, so bail out before touching the queue.
+    if (!(await hasStoredToken())) return 0;
+
+    // MOB-02: stamp pre-1.0.30 records before deciding who may submit them.
+    await migrateLegacyQueueOwnership();
+
+    // MOB-02: the identity this sync's requests will actually be attributed to.
+    const currentUserId = await resolveCurrentUserId();
+
     const queue = await getQueue();
     if (!queue.length) return 0;
 
@@ -251,6 +527,30 @@ export async function syncQueuedRequests(): Promise<number> {
     const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
     for (const action of queue) {
+      // MOB-02 — the non-negotiable control.
+      //
+      // On a shared device user A can queue a check-in offline and log out. The
+      // queue is a single AsyncStorage key, so B's session would otherwise pick
+      // A's item up and POST it under B's bearer token. The backend forces
+      // `user_id = req.auth_data.id` for callers without `attendance_create`
+      // (attendanceControllers.ts:468), so the row would be written against B:
+      // a confused-identity payroll record, and A's real check-in silently lost.
+      //
+      // We keep the item instead of deleting or failing it, so it is still there
+      // when its rightful owner logs back in on this device.
+      if (!isActionEligibleFor(action, currentUserId)) {
+        remaining.push(action);
+        console.warn(
+          "[OfflineQueue] Melewati antrean milik pengguna lain (MOB-02):",
+          action.type,
+          "pemilik:",
+          action.owner_user_id ?? getPayloadOwner(action) ?? "(tidak diketahui)",
+          "sesi:",
+          currentUserId ?? "(tidak diketahui)"
+        );
+        continue;
+      }
+
       try {
         if (action.type === "ATTENDANCE_CHECKIN") {
           const payload = action.data as OfflineCheckInPayload;
@@ -292,6 +592,19 @@ export async function syncQueuedRequests(): Promise<number> {
             latitude: payload.checkin_latitude,
             longitude: payload.checkin_longitude,
             attendance_status_id: payload.attendance_status_id,
+            // W2 REGRESSION FIX (2026-09-15): the `attendance` table has NOT NULL
+            // constraints on `name` and `code`, and the SERVER does not derive them
+            // for a self-service caller — its defaults live inside the
+            // `if (hasCreate)` branch, and the self-service `else` branch only forces
+            // `user_id`. The online path supplies both (`checkin.tsx`); this offline
+            // path did not, so a queued check-in failed with
+            //   400 "null value in column \"name\" ... violates not-null constraint"
+            // and then retried indefinitely — the same false "will sync
+            // automatically" promise that OBS-V1 was raised to eliminate. Mirror the
+            // online path exactly. Verified live against production before/after.
+            name: "attendance",
+            code: `CHK-${Date.now()}`,
+            ...(payload.contract_id ? { contract_id: payload.contract_id } : {}),
             ...(payload.description ? { description: payload.description } : {}),
             ...(groupId ? { evidence_group_id: groupId } : {}),
           };
@@ -369,6 +682,9 @@ export async function syncQueuedRequests(): Promise<number> {
                 statusCode === 409
                   ? err?.message || defaultConflictMsg
                   : err?.message || "Non-retryable 4xx error",
+              // MOB-02: keep the failed bucket owner-scoped too, so B never reads
+              // a count or a banner describing A's abandoned evidence.
+              owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
             };
             await saveFailedAttendance(failedItem);
             newlyFailedAttendance.push(failedItem);
@@ -433,8 +749,15 @@ export function startOfflineSync() {
 
 /**
  * Get current offline queue length
+ *
+ * MOB-02: counts only the items this session is actually allowed to submit, so
+ * the offline banner can never promise a sync that `syncQueuedRequests()` will
+ * refuse to perform. With no resolvable identity we report the whole queue,
+ * which is the pre-1.0.30 behaviour.
  */
 export async function getPendingCount(): Promise<number> {
   const queue = await getQueue();
-  return queue.length;
+  const currentUserId = await resolveCurrentUserId();
+  if (!currentUserId) return queue.length;
+  return queue.filter((action) => isActionEligibleFor(action, currentUserId)).length;
 }

@@ -48,6 +48,15 @@ export interface IAttendance {
     name: string;
     code?: string;
     company_id?: string;
+    /**
+     * Koordinat pusat site (titik acuan geofence).
+     * Opsional: kolom ini baru ditambahkan ke `selectColumns` pada join site,
+     * sehingga bisa `null`/absen pada respons lama atau site yang belum diisi.
+     */
+    latitude?: number | null;
+    longitude?: number | null;
+    /** Radius geofence yang diizinkan, dalam meter. */
+    tolerance?: number | null;
   } | null;
 }
 

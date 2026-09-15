@@ -16,6 +16,7 @@ import { IAttendance, IAttendanceEvidGroupId } from "@/types";
 import { getEvidGroupId } from "@/services/attendance";
 import { IMAGE_BASE_PATH } from "@/constants";
 import ImageViewerModal from "@/components/ImageViewerModal";
+import AttendanceMapView from "@/components/attendance/AttendanceMapView";
 import StatusBadge, { type StatusBadgeTone } from "@/components/ui/StatusBadge";
 import {
   calculateAttendanceStatus,
@@ -209,6 +210,34 @@ export default function AttendanceDetailModal({
   const siteName =
     attendance.site?.name || "Site / Lokasi Terdaftar";
   const siteCode = attendance.site?.code;
+
+  // Payload peta presensi. `!= null` (bukan truthy) dipakai sengaja: koordinat
+  // 0 adalah nilai lintang/bujur yang sah dan tidak boleh dianggap "kosong".
+  // Validasi & degradasi (site null, radius <= 0, koordinat tidak lengkap)
+  // ditangani sepenuhnya oleh AttendanceMapView — modal hanya meneruskan data.
+  const checkinLocation =
+    attendance.latitude != null && attendance.longitude != null
+      ? { lat: attendance.latitude, lng: attendance.longitude }
+      : null;
+
+  const checkoutLocation =
+    attendance.checkout_latitude != null && attendance.checkout_longitude != null
+      ? { lat: attendance.checkout_latitude, lng: attendance.checkout_longitude }
+      : null;
+
+  const siteLocation =
+    attendance.site?.latitude != null && attendance.site?.longitude != null
+      ? { lat: attendance.site.latitude, lng: attendance.site.longitude }
+      : null;
+
+  const radiusMeters = attendance.site?.tolerance ?? null;
+
+  // True bila ada minimal satu koordinat yang bisa dipetakan. Sengaja TIDAK
+  // memakai `radiusMeters != null`: radius tanpa koordinat mana pun tetap tidak
+  // menghasilkan peta. Ini cerminan `canRenderMap` di attendance-map-logic.
+  const hasMapData = Boolean(
+    checkinLocation || checkoutLocation || siteLocation
+  );
 
   return (
     <Modal
@@ -454,6 +483,52 @@ export default function AttendanceDetailModal({
                 </View>
               </View>
             </View>
+
+            {/*
+              Peta hanya bermakna bila ada minimal satu koordinat. Kondisi
+              "tidak ada yang bisa ditampilkan" = check-in, check-out, DAN site
+              semuanya absen — sejalan dengan `canRenderMap` di
+              attendance-map-logic (Boolean(checkin || checkout || site)).
+              Gate ini sengaja di modal: AttendanceMapView selalu merender
+              container-nya (legenda + baris status), jadi tanpa gate ini
+              legenda kosong tetap muncul saat tidak ada data sama sekali.
+            */}
+            {hasMapData ? (
+              <View style={styles.sectionCard} testID="attendance-map-section">
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="map-outline" size={18} color={colors.primary} />
+                  <Text style={styles.sectionTitle}>Peta Lokasi Presensi</Text>
+                </View>
+                <Text style={styles.sectionCaption}>
+                  Titik presensi aktual dan batas radius site saat ini. Radius
+                  dapat berubah bila pengaturan site diperbarui setelah
+                  presensi.
+                </Text>
+
+                <AttendanceMapView
+                  checkinLocation={checkinLocation}
+                  checkoutLocation={checkoutLocation}
+                  siteLocation={siteLocation}
+                  radiusMeters={radiusMeters}
+                  siteName={attendance.site?.name ?? null}
+                />
+
+                {/*
+                  Badge di dalam peta membandingkan posisi terhadap radius
+                  TERKINI, bukan radius yang berlaku saat absen dicatat.
+                  Backend menyimpan vonis saat check-in di `check_in_audit_logs`
+                  (site_latitude/longitude, allowed_radius, within_radius), dan
+                  tabel itu belum punya endpoint baca. Tanpa catatan ini, badge
+                  "Di Luar Radius" bisa terbaca sebagai "server menolak absen
+                  ini" — padahal absennya justru diterima. Karena itu status di
+                  atas adalah INDIKATOR SAAT INI, bukan vonis historis.
+                */}
+                <Text style={styles.mapScopeNote}>
+                  Status di atas menunjukkan posisi terhadap radius site saat ini,
+                  bukan penilaian server saat presensi dicatat.
+                </Text>
+              </View>
+            ) : null}
 
             {/* Notes / Description Box */}
             {attendance.description ? (
@@ -702,6 +777,24 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "700",
       color: c.textStrong,
       flex: 1,
+    },
+    sectionCaption: {
+      fontSize: 11,
+      color: c.textMuted,
+      lineHeight: 15,
+      paddingLeft: 26,
+      marginTop: -4,
+    },
+    mapScopeNote: {
+      fontSize: 11,
+      color: c.textMuted,
+      lineHeight: 15,
+      fontStyle: "italic",
+      paddingLeft: 2,
+      paddingTop: 2,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      marginTop: 2,
     },
     shiftBody: {
       gap: 4,

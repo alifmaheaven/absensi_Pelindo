@@ -273,13 +273,24 @@ export async function syncQueuedRequests(): Promise<number> {
           }
 
           // 3. Submit Attendance
+          // OBS-V1 / MOB-01: the server contract for POST /attendance/ is
+          // `latitude` / `longitude` (see backend/src/controllers/attendanceControllers.ts
+          // and the online path in app/(no-tabs)/checkin.tsx). Sending
+          // `checkin_latitude` / `checkin_longitude` made the server see
+          // `latitude === undefined`, so the geofence gate never fired and the
+          // row was written with no coordinates at all. Use the server keys here.
+          //
+          // NOTE: `checkin_latitude` remains the key of the *local* queue payload
+          // type (OfflineCheckInPayload) and of the AsyncStorage record, so that
+          // already-queued records on users' devices keep deserialising unchanged.
+          // Only the outbound HTTP body is translated to the server contract.
           const attendancePayload: Record<string, any> = {
             user_id: payload.user_id,
             company_id: payload.company_id || null,
             site_id: payload.site_id,
             checkin: payload.checkin,
-            checkin_latitude: payload.checkin_latitude,
-            checkin_longitude: payload.checkin_longitude,
+            latitude: payload.checkin_latitude,
+            longitude: payload.checkin_longitude,
             attendance_status_id: payload.attendance_status_id,
             ...(payload.description ? { description: payload.description } : {}),
             ...(groupId ? { evidence_group_id: groupId } : {}),

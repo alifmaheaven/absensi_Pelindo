@@ -272,7 +272,7 @@ export default function CheckinScreen() {
       return;
     }
 
-    if (location.mocked) {
+    if (location?.mocked) {
       Alert.alert(
         "Peringatan Keamanan",
         "Terdeteksi Penggunaan Fake GPS / Mock Location. Harap matikan aplikasi Fake GPS untuk melanjutkan."
@@ -285,9 +285,20 @@ export default function CheckinScreen() {
       return;
     }
 
-    // Validasi inRange
+    // Validasi inRange — hanya bila koordinat tersedia.
+    //
+    // KM-3: bila perangkat gagal memperoleh fix (GPS mati / izin ditolak), kita
+    // TIDAK memblokir check-in di sini. Sebelumnya `!location` membuat check-in
+    // mustahil tanpa GPS. Sekarang jalur itu diteruskan ke server dengan
+    // `location_unavailable: true`, sehingga server MENERIMA lalu MENANDAI
+    // ([TANPA LOKASI]) untuk ditinjau admin.
+    //
+    // Ini TIDAK melemahkan gerbang radius: server tetap menolak bila situs tidak
+    // punya radius, dan gerbang radius hanya berlaku saat koordinat ada. Jalur
+    // offline (yang SEHARUSNYA membawa koordinat) tetap ditolak server bila
+    // koordinatnya hilang — lihat backend/src/controllers/attendanceControllers.ts.
     const selectedSite = sitesList.find(s => s.id === selectedLocation);
-    if (!selectedSite?.inRange) {
+    if (location && !selectedSite?.inRange) {
       Alert.alert('Error', 'You must be within range of the selected site to check in.');
       return;
     }
@@ -397,9 +408,18 @@ export default function CheckinScreen() {
         code: `CHK-${Date.now()}`,
         checkin: checkinTimeStr,
         attendance_status_id: effectiveStatusId,
-        longitude: location.coords.longitude,
-        latitude: location.coords.latitude,
       };
+
+      if (location) {
+        payload.longitude = location.coords.longitude;
+        payload.latitude = location.coords.latitude;
+      } else {
+        // KM-3: tandai secara EKSPLISIT bahwa perangkat gagal memperoleh fix.
+        // Server membedakan ini dari "jalur yang seharusnya membawa koordinat
+        // tetapi tidak" (mis. sinkronisasi offline) — yang tetap DITOLAK 400.
+        // Tanpa flag ini, server menolak 400; jadi flag wajib dikirim di sini.
+        payload.location_unavailable = true;
+      }
       if (user?.contract_id) payload.contract_id = user.contract_id;
       if (groupId) payload.evidence_group_id = groupId;
       const res = await createAttendance(payload as any);

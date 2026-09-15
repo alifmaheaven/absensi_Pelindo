@@ -48,6 +48,57 @@ import ImageViewerModal from "@/components/ImageViewerModal";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
 
+// Upload service adapter for useImagePicker
+const uploadService = {
+  uploadTemp: async (file: { uri: string; name: string; type: string }) => {
+    const formData = new FormData();
+    formData.append("files", {
+      uri: file.uri,
+      name: file.name,
+      type: file.type,
+    } as any);
+    const response = await axios.post("/api/v2/attendance/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+  deleteTemp: async (_payload: { links: string[] }) => {
+    // no-op for temp deletion
+  },
+};
+
+async function uploadSingleCheckoutEvidence(
+  img: { uri: string; path?: string },
+  groupId: string,
+  userName?: string
+) {
+  let permanentPath = img.path;
+  if (!permanentPath) {
+    try {
+      const tempRes = await uploadService.uploadTemp({
+        uri: img.uri,
+        name: `checkout_${Date.now()}.jpg`,
+        type: "image/jpeg",
+      });
+      permanentPath = tempRes.data?.[0]?.path ?? tempRes?.[0]?.path ?? "";
+    } catch (e) {
+      console.warn("Failed to upload temp image online:", e);
+    }
+  }
+  if (!permanentPath) return;
+
+  const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
+  const file = uploaded.data?.links?.[0];
+  if (file) {
+    await uploadEvidGroupId({
+      name: `Attendance ${userName || "User"}`,
+      description: "Checkout Evidence",
+      file,
+      evidence_group_id: groupId,
+    });
+  }
+}
+
 export default function CheckoutScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -228,25 +279,6 @@ export default function CheckoutScreen() {
     })();
   }, [activeCheckin]);
 
-  // Upload service adapter for useImagePicker
-  const uploadService = {
-    uploadTemp: async (file: { uri: string; name: string; type: string }) => {
-      const formData = new FormData();
-      formData.append("files", {
-        uri: file.uri,
-        name: file.name,
-        type: file.type,
-      } as any);
-      const response = await axios.post("/api/v2/attendance/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      return response.data;
-    },
-    deleteTemp: async (payload: { links: string[] }) => {
-      // no-op for temp deletion
-    },
-  };
-
   // Filter existing (check-in) vs new (check-out) images
   const existingCheckinImages = images.filter((img) => !!img.id);
   const newCheckoutImages = images.filter((img) => !img.id);
@@ -325,31 +357,7 @@ export default function CheckoutScreen() {
 
       // Upload ONLY new checkout evidence to group
       for (const img of newCheckoutImages) {
-        let permanentPath = img.path;
-        if (!permanentPath) {
-          try {
-            const tempRes = await uploadService.uploadTemp({
-              uri: img.uri,
-              name: `checkout_${Date.now()}.jpg`,
-              type: "image/jpeg",
-            });
-            permanentPath = tempRes.data?.[0]?.path ?? tempRes?.[0]?.path ?? "";
-          } catch (e) {
-            console.warn("Failed to upload temp image online:", e);
-          }
-        }
-        if (!permanentPath) continue;
-
-        const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
-        const file = uploaded.data?.links?.[0];
-        if (file) {
-          await uploadEvidGroupId({
-            name: `Attendance ${user?.name}`,
-            description: "Checkout Evidence",
-            file,
-            evidence_group_id: groupId,
-          });
-        }
+        await uploadSingleCheckoutEvidence(img, groupId, user?.name);
       }
 
       // Update attendance checkout with GPS location + notes

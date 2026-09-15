@@ -20,6 +20,8 @@ import ScreenContainer from "@/components/ui/ScreenContainer";
 import StandardSkeleton from "@/components/ui/StandardSkeleton";
 import StatusBadge, { StatusBadgeTone } from "@/components/ui/StatusBadge";
 import InteractiveButton from "@/components/ui/InteractiveButton";
+import ImageViewerModal from "@/components/ImageViewerModal";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState, useMemo } from "react";
 import {
@@ -37,7 +39,38 @@ import { useImagePicker } from "@/hooks/useImagePicker";
 import { useToast } from "@/components/ui/toast";
 import { IMAGE_BASE_PATH } from "@/constants";
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+function resolveEvidenceUrl(fileUriOrKey?: string | null): string {
+  if (!fileUriOrKey) return "";
+  if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(fileUriOrKey)) {
+    return fileUriOrKey;
+  }
+  const baseUrl = process.env.EXPO_PUBLIC_API_URL || "";
+  const cleanKey = fileUriOrKey.startsWith("/") ? fileUriOrKey.slice(1) : fileUriOrKey;
+  if (cleanKey.startsWith("public/images/")) {
+    try {
+      return new URL(`/${cleanKey}`, baseUrl).toString();
+    } catch {
+      return `${baseUrl}/${cleanKey}`;
+    }
+  }
+  try {
+    return new URL(`${IMAGE_BASE_PATH}${cleanKey}`, baseUrl).toString();
+  } catch {
+    return `${baseUrl}${IMAGE_BASE_PATH}${cleanKey}`;
+  }
+}
+
+function calculateLeaveDays(startDateStr?: string | null, endDateStr?: string | null): number {
+  if (!startDateStr) return 1;
+  const cleanStart = startDateStr.split(/[T ]/)[0];
+  const cleanEnd = (endDateStr || startDateStr).split(/[T ]/)[0];
+  if (!cleanEnd || cleanEnd === cleanStart) return 1;
+  const start = parseWIBDate(cleanStart);
+  const end = parseWIBDate(cleanEnd);
+  if (!start || !end) return 1;
+  const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(1, diff + 1);
+}
 
 const getStatusTone = (status: string): StatusBadgeTone => {
   switch (status.toLowerCase()) {
@@ -54,6 +87,17 @@ const getStatusTone = (status: string): StatusBadgeTone => {
       return "neutral";
   }
 };
+
+type FilterCategory = "semua" | "izin" | "cuti" | "disetujui" | "pending" | "ditolak";
+
+const FILTER_CHIPS: { id: FilterCategory; label: string }[] = [
+  { id: "semua", label: "Semua" },
+  { id: "izin", label: "Izin" },
+  { id: "cuti", label: "Cuti" },
+  { id: "disetujui", label: "Disetujui" },
+  { id: "pending", label: "Pending" },
+  { id: "ditolak", label: "Ditolak" },
+];
 
 interface MergedItem {
   id: string;
@@ -73,14 +117,17 @@ export default function IzinScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();
-  // Diekstrak ke variabel primitif agar dependency `useCallback` cocok
-  // dengan yang di-inferensi React Compiler (closure membaca `userId`).
   const userId = user?.id;
   const { showToast } = useToast();
+
   const [mergedData, setMergedData] = useState<MergedItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>("semua");
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isError, setIsError] = useState(false);
+
+  // Full-screen image preview state
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!userId) return;
@@ -105,9 +152,11 @@ export default function IzinScreen() {
 
       const statusMap: Record<string, string> = {};
       const attendId = status.find((s) => s.name?.toLowerCase() === "attend")?.id || "";
-      status.forEach((s) => { statusMap[s.id] = s.name; });
+      status.forEach((s) => {
+        statusMap[s.id] = s.name;
+      });
 
-      // 1. Leave requests milik sendiri (pending, approved, rejected)
+      // 1. Leave requests milik sendiri
       const leaveItems: MergedItem[] = leaves.map((lr) => {
         const leaveTypeLabel = lr.leave_type === "cuti" ? "Cuti" : "Izin";
         return {
@@ -116,7 +165,12 @@ export default function IzinScreen() {
           title: leaveTypeLabel,
           date: lr.leave_date,
           end_date: lr.end_date,
-          status: lr.status === "approved" ? "Disetujui" : lr.status === "rejected" ? "Ditolak" : "Pending",
+          status:
+            lr.status === "approved"
+              ? "Disetujui"
+              : lr.status === "rejected"
+              ? "Ditolak"
+              : "Pending",
           rawStatus: lr.status,
           reason: lr.reason,
           leave_type: lr.leave_type,
@@ -125,7 +179,7 @@ export default function IzinScreen() {
         };
       });
 
-      // Helper untuk mengecek apakah attendance record checkin jatuh pada rentang leave request yang sudah di-approve
+      // Helper mengecek apakah attendance record checkin sudah tercover cuti approved
       const isCoveredByApprovedLeave = (checkinStr?: string | null) => {
         if (!checkinStr) return false;
         const checkinDay = checkinStr.split(/[T ]/)[0];
@@ -137,7 +191,7 @@ export default function IzinScreen() {
         });
       };
 
-      // 2. Attendance records non-Attend (misal CRUD manual attendance oleh admin web)
+      // 2. Attendance records non-Attend
       const attendanceItems: MergedItem[] = attendance
         .filter(
           (item) =>
@@ -155,7 +209,7 @@ export default function IzinScreen() {
 
       const merged: MergedItem[] = [...leaveItems, ...attendanceItems];
 
-      // Sort by date desc — parse WIB (andal di Hermes), NaN → 0 (stabil)
+      // Sort by date desc (parseWIBDate)
       const dateVal = (d?: string) => {
         const parsed = parseWIBDate(d);
         return parsed ? parsed.getTime() : 0;
@@ -190,18 +244,21 @@ export default function IzinScreen() {
     setImages,
   } = useImagePicker();
 
-  // Upload service untuk useImagePicker — upload ke temp dulu (sama pola
-  // checkin/checkout), lalu handleResubmit memindahkan ke permanent.
   const imageUploadService = {
     uploadTemp: uploadEvid,
     deleteTemp: deleteEvidtmp,
   };
 
   const openDetail = async (item: MergedItem) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // safe fallback
+    }
     setDetailItem(item);
     setDetailEvidence([]);
     setDetailLoading(true);
-    // Fetch evidence bila item punya evidence_group_id (leave_request)
+
     if (item.type === "leave_request" && item.evidence_group_id) {
       try {
         const res = await getEvidGroupId({
@@ -210,7 +267,7 @@ export default function IzinScreen() {
           evidence_group_id_exact: [item.evidence_group_id],
         });
         const evs = (res?.data?.data || []).filter(
-          (e) => e.evidence_group_id === item.evidence_group_id,
+          (e) => e.evidence_group_id === item.evidence_group_id
         );
         setDetailEvidence(evs);
       } catch (e) {
@@ -221,6 +278,84 @@ export default function IzinScreen() {
     setDetailLoading(false);
   };
 
+  const handleFilterChange = (filterId: FilterCategory) => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // safe fallback
+    }
+    setActiveFilter(filterId);
+  };
+
+  const filterCounts = useMemo(() => {
+    return {
+      semua: mergedData.length,
+      izin: mergedData.filter(
+        (it) =>
+          it.leave_type === "izin" ||
+          (it.type === "attendance" && !it.title.toLowerCase().includes("cuti"))
+      ).length,
+      cuti: mergedData.filter(
+        (it) =>
+          it.leave_type === "cuti" || it.title.toLowerCase().includes("cuti")
+      ).length,
+      disetujui: mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "disetujui" ||
+          it.rawStatus?.toLowerCase() === "approved"
+      ).length,
+      pending: mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "pending" ||
+          it.rawStatus?.toLowerCase() === "pending"
+      ).length,
+      ditolak: mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "ditolak" ||
+          it.rawStatus?.toLowerCase() === "rejected"
+      ).length,
+    };
+  }, [mergedData]);
+
+  const filteredData = useMemo(() => {
+    if (activeFilter === "semua") return mergedData;
+    if (activeFilter === "izin") {
+      return mergedData.filter(
+        (it) =>
+          it.leave_type === "izin" ||
+          (it.type === "attendance" && !it.title.toLowerCase().includes("cuti"))
+      );
+    }
+    if (activeFilter === "cuti") {
+      return mergedData.filter(
+        (it) =>
+          it.leave_type === "cuti" || it.title.toLowerCase().includes("cuti")
+      );
+    }
+    if (activeFilter === "disetujui") {
+      return mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "disetujui" ||
+          it.rawStatus?.toLowerCase() === "approved"
+      );
+    }
+    if (activeFilter === "pending") {
+      return mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "pending" ||
+          it.rawStatus?.toLowerCase() === "pending"
+      );
+    }
+    if (activeFilter === "ditolak") {
+      return mergedData.filter(
+        (it) =>
+          it.status.toLowerCase() === "ditolak" ||
+          it.rawStatus?.toLowerCase() === "rejected"
+      );
+    }
+    return mergedData;
+  }, [mergedData, activeFilter]);
+
   const handleResubmit = async () => {
     if (!detailItem || detailItem.type !== "leave_request") return;
     if (images.length === 0) {
@@ -229,8 +364,6 @@ export default function IzinScreen() {
     }
     setResubmitting(true);
     try {
-      // Upload evidence ke group. Bila leave tidak punya evidence_group_id
-      // (dibuat tanpa bukti), buat group baru dulu.
       let groupId = detailItem.evidence_group_id;
       if (!groupId) {
         const group = await createGroupId({
@@ -268,7 +401,6 @@ export default function IzinScreen() {
     }
   };
 
-  // R-LZ-4: Hapus pengajuan izin milik sendiri (pending/rejected)
   const confirmDelete = (item: MergedItem) => {
     if (item.type !== "leave_request") return;
 
@@ -331,8 +463,6 @@ export default function IzinScreen() {
     }
   };
 
-
-  // Refresh every time this tab gets focus
   useFocusEffect(
     useCallback(() => {
       fetchAll();
@@ -350,9 +480,7 @@ export default function IzinScreen() {
         title="Gagal Memuat Pengajuan"
         description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
         actionLabel="Coba Lagi"
-        onAction={() => {
-          fetchAll();
-        }}
+        onAction={() => fetchAll()}
       />
     );
   } else if (mergedData.length === 0) {
@@ -365,8 +493,19 @@ export default function IzinScreen() {
         icon={<DocumentCheck color={colors.primary} width={36} height={36} />}
       />
     );
+  } else if (filteredData.length === 0) {
+    const activeLabel = FILTER_CHIPS.find((c) => c.id === activeFilter)?.label || "Kategori ini";
+    content = (
+      <EmptyState
+        title="Tidak Ada Pengajuan"
+        description={`Tidak ditemukan data pengajuan untuk filter "${activeLabel}".`}
+        actionLabel="Tampilkan Semua"
+        onAction={() => handleFilterChange("semua")}
+        icon={<Ionicons name="filter-outline" size={36} color={colors.primary} />}
+      />
+    );
   } else {
-    content = mergedData.map((item) => {
+    content = filteredData.map((item) => {
       const isApprovedLeave =
         item.type === "leave_request" &&
         (item.status === "Disetujui" || item.rawStatus === "approved");
@@ -376,6 +515,9 @@ export default function IzinScreen() {
           item.status === "Ditolak" ||
           item.rawStatus === "pending" ||
           item.rawStatus === "rejected");
+
+      const isCuti = item.leave_type === "cuti" || item.title.toLowerCase().includes("cuti");
+      const days = calculateLeaveDays(item.date, item.end_date);
 
       const dateLabel =
         item.end_date && item.end_date !== item.date
@@ -390,17 +532,56 @@ export default function IzinScreen() {
           activeOpacity={0.7}
         >
           <View style={styles.izinHeader}>
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Text style={styles.izinType}>
-                {item.title}
-                {item.leave_type === "cuti" && item.type === "leave_request" ? " (Cuti)" : item.leave_type === "izin" && item.type === "leave_request" ? " (Izin)" : ""}
-              </Text>
-              {item.type === "leave_request" && item.status === "Pending" && (
-                <Ionicons name="time-outline" size={14} color={colors.warning} />
-              )}
+            <View style={styles.headerLeftWrap}>
+              {/* Type Icon Box */}
+              <View
+                style={[
+                  styles.typeIconBox,
+                  isCuti ? styles.cutiIconBox : styles.izinIconBox,
+                ]}
+              >
+                <Ionicons
+                  name={isCuti ? "airplane-outline" : "document-text-outline"}
+                  size={18}
+                  color={isCuti ? colors.primaryText : colors.textStrong}
+                />
+              </View>
+
+              <View style={styles.headerTitleWrap}>
+                <View style={styles.typeTitleRow}>
+                  <Text style={styles.izinType} numberOfLines={1}>
+                    {item.title}
+                    {item.leave_type === "cuti" && item.type === "leave_request"
+                      ? " (Cuti)"
+                      : item.leave_type === "izin" && item.type === "leave_request"
+                      ? " (Izin)"
+                      : ""}
+                  </Text>
+                  {/* Duration Chip */}
+                  <View style={styles.durationBadge}>
+                    <Ionicons name="time-outline" size={11} color={colors.primaryText} />
+                    <Text style={styles.durationBadgeText}>{days} Hari</Text>
+                  </View>
+                </View>
+
+                {/* Date Label */}
+                <View style={styles.dateRow}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={13}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.izinDate}>{dateLabel}</Text>
+                </View>
+              </View>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <StatusBadge label={item.status} tone={getStatusTone(item.status)} size="small" />
+
+            <View style={styles.headerRightWrap}>
+              <StatusBadge
+                label={item.status}
+                tone={getStatusTone(item.status)}
+                size="small"
+              />
               {canDelete ? (
                 <TouchableOpacity
                   onPress={(e) => {
@@ -414,26 +595,32 @@ export default function IzinScreen() {
                   {deletingId === item.id ? (
                     <ActivityIndicator size="small" color={colors.danger} />
                   ) : (
-                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
                   )}
                 </TouchableOpacity>
               ) : isApprovedLeave ? (
                 <View style={styles.cardLockedBadge}>
-                  <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={14}
+                    color={colors.textMuted}
+                  />
                 </View>
               ) : null}
             </View>
           </View>
-          <View style={styles.izinDetails}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
-              <Text style={styles.izinDate}>{dateLabel}</Text>
-            </View>
-          </View>
+
           {item.reason ? (
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 8 }}>
-              <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} style={{ marginTop: 2 }} />
-              <Text style={styles.reasonText} numberOfLines={2}>{item.reason}</Text>
+            <View style={styles.reasonWrap}>
+              <Ionicons
+                name="chatbubble-outline"
+                size={12}
+                color={colors.textMuted}
+                style={{ marginTop: 2 }}
+              />
+              <Text style={styles.reasonText} numberOfLines={2}>
+                {item.reason}
+              </Text>
             </View>
           ) : null}
         </TouchableOpacity>
@@ -454,13 +641,81 @@ export default function IzinScreen() {
       {/* Apply Button */}
       <InteractiveButton
         title="Ajukan Izin / Cuti"
-        icon={<Ionicons name="add" size={20} color={colors.onGradient} style={{ marginRight: 6 }} />}
+        icon={
+          <Ionicons
+            name="add"
+            size={20}
+            color={colors.onGradient}
+            style={{ marginRight: 6 }}
+          />
+        }
         onPress={() => router.push("/(no-tabs)/leave/create")}
-        style={{ marginBottom: 20 }}
+        style={{ marginBottom: 16 }}
       />
 
-      {/* History */}
-      <Text style={styles.sectionTitle}>Riwayat Pengajuan</Text>
+      {/* Category Filter Chips */}
+      <View style={styles.filterChipsWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterChipsContent}
+        >
+          {FILTER_CHIPS.map((chip) => {
+            const isActive = activeFilter === chip.id;
+            const count = filterCounts[chip.id];
+            return (
+              <TouchableOpacity
+                key={chip.id}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                style={[
+                  styles.filterChip,
+                  isActive ? styles.filterChipActive : styles.filterChipInactive,
+                ]}
+                onPress={() => handleFilterChange(chip.id)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
+                  ]}
+                >
+                  {chip.label}
+                </Text>
+                <View
+                  style={[
+                    styles.filterBadge,
+                    isActive
+                      ? styles.filterBadgeActive
+                      : styles.filterBadgeInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterBadgeText,
+                      isActive
+                        ? styles.filterBadgeTextActive
+                        : styles.filterBadgeTextInactive,
+                    ]}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* History Section Title */}
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionTitle}>Riwayat Pengajuan</Text>
+        <Text style={styles.sectionCountText}>
+          {filteredData.length} dari {mergedData.length}
+        </Text>
+      </View>
 
       {content}
 
@@ -474,77 +729,186 @@ export default function IzinScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalIndicator} />
-            <Text style={styles.modalTitle}>Detail Pengajuan</Text>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Detail Pengajuan</Text>
+              <TouchableOpacity
+                style={styles.modalCloseIconBtn}
+                onPress={() => setDetailItem(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
             {detailItem ? (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Tipe</Text>
-                  <Text style={styles.detailValue}>
-                    {detailItem.title}
-                    {detailItem.leave_type === "cuti" ? " (Cuti)" : detailItem.leave_type === "izin" ? " (Izin)" : ""}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Tanggal</Text>
-                  <Text style={styles.detailValue}>
-                    {detailItem.end_date && detailItem.end_date !== detailItem.date
-                      ? `${formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "short", year: "numeric" })} s/d ${formatAttendanceDate(detailItem.end_date, false, { day: "numeric", month: "short", year: "numeric" })}`
-                      : formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "long", year: "numeric" })}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Status</Text>
-                  <StatusBadge label={detailItem.status} tone={getStatusTone(detailItem.status)} size="medium" />
-                </View>
-                {detailItem.reason ? (
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
+                {/* Information Card Box */}
+                <View style={styles.detailCardBox}>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Alasan</Text>
-                    <Text style={styles.detailValue}>{detailItem.reason}</Text>
+                    <Text style={styles.detailLabel}>Tipe Pengajuan</Text>
+                    <Text style={styles.detailValue}>
+                      {detailItem.title}
+                      {detailItem.leave_type === "cuti"
+                        ? " (Cuti)"
+                        : detailItem.leave_type === "izin"
+                        ? " (Izin)"
+                        : ""}
+                    </Text>
                   </View>
-                ) : null}
-                {detailItem.rejection_reason ? (
+
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Alasan Ditolak</Text>
-                    <Text style={[styles.detailValue, { color: colors.danger }]}>{detailItem.rejection_reason}</Text>
+                    <Text style={styles.detailLabel}>Durasi</Text>
+                    <Text style={styles.detailValue}>
+                      {calculateLeaveDays(detailItem.date, detailItem.end_date)} Hari Kerja
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Periode Tanggal</Text>
+                    <Text style={styles.detailValue}>
+                      {detailItem.end_date && detailItem.end_date !== detailItem.date
+                        ? `${formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "short", year: "numeric" })} s/d ${formatAttendanceDate(detailItem.end_date, false, { day: "numeric", month: "short", year: "numeric" })}`
+                        : formatAttendanceDate(detailItem.date, false, { day: "numeric", month: "long", year: "numeric" })}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.detailRow,
+                      { borderBottomWidth: 0, paddingBottom: 0 },
+                    ]}
+                  >
+                    <Text style={styles.detailLabel}>Status</Text>
+                    <StatusBadge
+                      label={detailItem.status}
+                      tone={getStatusTone(detailItem.status)}
+                      size="medium"
+                    />
+                  </View>
+                </View>
+
+                {detailItem.reason ? (
+                  <View style={styles.detailSectionBox}>
+                    <Text style={styles.detailSectionLabel}>Alasan Pengajuan</Text>
+                    <Text style={styles.detailSectionValue}>{detailItem.reason}</Text>
                   </View>
                 ) : null}
 
-                {/* Evidence */}
-                <Text style={styles.sectionTitle}>Bukti</Text>
-                {detailLoading ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : detailEvidence.length > 0 ? (
-                  <View style={styles.evidenceGrid}>
-                    {detailEvidence.map((ev) => (
-                      <Image
-                        key={ev.id}
-                        source={{ uri: new URL(`${IMAGE_BASE_PATH}${ev.file}`, BASE_URL).toString() }}
-                        style={styles.evidenceThumb}
+                {detailItem.rejection_reason ? (
+                  <View style={[styles.detailSectionBox, styles.rejectionSectionBox]}>
+                    <View style={styles.rejectionHeaderRow}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={16}
+                        color={colors.danger}
                       />
-                    ))}
+                      <Text style={styles.rejectionLabel}>Alasan Ditolak</Text>
+                    </View>
+                    <Text style={styles.rejectionValue}>
+                      {detailItem.rejection_reason}
+                    </Text>
                   </View>
-                ) : (
-                  <Text style={styles.noEvidenceText}>Tidak ada bukti</Text>
-                )}
+                ) : null}
+
+                {/* Evidence Section */}
+                <View style={styles.evidenceSectionWrap}>
+                  <View style={styles.evidenceSectionHeader}>
+                    <Text style={styles.evidenceSectionTitle}>
+                      Foto Bukti Terlampir
+                    </Text>
+                    {detailEvidence.length > 0 && (
+                      <Text style={styles.evidenceCountHint}>
+                        {detailEvidence.length} Foto (Ketuk untuk perbesar)
+                      </Text>
+                    )}
+                  </View>
+
+                  {detailLoading ? (
+                    <View style={styles.evidenceLoadingWrap}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.evidenceLoadingText}>Memuat lampiran...</Text>
+                    </View>
+                  ) : detailEvidence.length > 0 ? (
+                    <View style={styles.evidenceGrid}>
+                      {detailEvidence.map((ev) => {
+                        const imgUrl = resolveEvidenceUrl(ev.file);
+                        return (
+                          <TouchableOpacity
+                            key={ev.id}
+                            style={styles.evidenceThumbWrap}
+                            activeOpacity={0.8}
+                            onPress={() => setPreviewImageUri(imgUrl)}
+                          >
+                            <Image
+                              source={{ uri: imgUrl }}
+                              style={styles.evidenceThumb}
+                              resizeMode="cover"
+                            />
+                            <View style={styles.thumbZoomPill}>
+                              <Ionicons
+                                name="scan-outline"
+                                size={12}
+                                color={colors.onGradient}
+                              />
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyEvidenceWrap}>
+                      <Ionicons
+                        name="images-outline"
+                        size={22}
+                        color={colors.textMuted}
+                      />
+                      <Text style={styles.noEvidenceText}>
+                        Tidak ada bukti foto terlampir
+                      </Text>
+                    </View>
+                  )}
+                </View>
 
                 {/* Update evidence bila ditolak */}
                 {detailItem.type === "leave_request" && detailItem.status === "Ditolak" ? (
                   <View style={styles.resubmitSection}>
                     <Text style={styles.resubmitHint}>
-                      Pengajuan ditolak. Upload ulang bukti untuk mengajukan ulang.
+                      Pengajuan ditolak. Silakan unggah bukti baru untuk mengajukan ulang.
                     </Text>
                     {images.length > 0 ? (
                       <View style={styles.evidenceGrid}>
                         {images.map((img, i) => (
                           <View key={i} style={styles.newEvidenceWrap}>
-                            <Image source={{ uri: img.uri }} style={styles.evidenceThumb} />
+                            <TouchableOpacity
+                              activeOpacity={0.8}
+                              onPress={() => setPreviewImageUri(img.uri)}
+                            >
+                              <Image
+                                source={{ uri: img.uri }}
+                                style={styles.evidenceThumb}
+                                resizeMode="cover"
+                              />
+                              <View style={styles.thumbZoomPill}>
+                                <Ionicons
+                                  name="scan-outline"
+                                  size={12}
+                                  color={colors.onGradient}
+                                />
+                              </View>
+                            </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.removeBtn}
                               onPress={() => removeImage(i, imageUploadService)}
                               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                             >
-                              <Ionicons name="close" size={14} color="#fff" />
+                              <Ionicons
+                                name="close"
+                                size={14}
+                                color={colors.onGradient}
+                              />
                             </TouchableOpacity>
                           </View>
                         ))}
@@ -556,16 +920,19 @@ export default function IzinScreen() {
                       disabled={loadingImage || resubmitting}
                     >
                       <Text style={styles.uploadBtnText}>
-                        {loadingImage ? "Memproses..." : "+ Tambah Bukti"}
+                        {loadingImage ? "Memproses..." : "+ Tambah Bukti Foto"}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.resubmitBtn, (resubmitting || images.length === 0) && { opacity: 0.5 }]}
+                      style={[
+                        styles.resubmitBtn,
+                        (resubmitting || images.length === 0) && { opacity: 0.5 },
+                      ]}
                       onPress={handleResubmit}
                       disabled={resubmitting || images.length === 0}
                     >
                       {resubmitting ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={colors.onGradient} />
                       ) : (
                         <Text style={styles.resubmitBtnText}>Ajukan Ulang</Text>
                       )}
@@ -573,17 +940,22 @@ export default function IzinScreen() {
                   </View>
                 ) : null}
 
-                {/* R-LZ-4: Action Hapus untuk pending/rejected atau Info untuk approved */}
+                {/* Notice untuk approved */}
                 {detailItem.type === "leave_request" &&
                 (detailItem.status === "Disetujui" || detailItem.rawStatus === "approved") ? (
                   <View style={styles.approvedNoticeContainer}>
-                    <InfoOutlineRounded color={colors.warning} width={20} height={20} />
+                    <InfoOutlineRounded
+                      color={colors.warning}
+                      width={20}
+                      height={20}
+                    />
                     <Text style={styles.approvedNoticeText}>
                       Izin yang sudah disetujui hanya bisa dihapus oleh approver.
                     </Text>
                   </View>
                 ) : null}
 
+                {/* Hapus pengajuan untuk pending/rejected */}
                 {detailItem.type === "leave_request" &&
                 (detailItem.status === "Pending" ||
                   detailItem.status === "Ditolak" ||
@@ -598,17 +970,28 @@ export default function IzinScreen() {
                     disabled={deletingId === detailItem.id}
                   >
                     {deletingId === detailItem.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={colors.onGradient} />
                     ) : (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Ionicons name="trash-outline" size={18} color="#fff" />
-                        <Text style={styles.deleteModalBtnText}>Hapus Pengajuan</Text>
+                      <View
+                        style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={colors.onGradient}
+                        />
+                        <Text style={styles.deleteModalBtnText}>
+                          Hapus Pengajuan
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 ) : null}
 
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setDetailItem(null)}>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setDetailItem(null)}
+                >
                   <Text style={styles.closeBtnText}>Tutup</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -617,305 +1000,564 @@ export default function IzinScreen() {
         </View>
       </Modal>
 
-      {/* Image source modal (untuk update evidence) */}
+      {/* Image Source Selection Modal */}
       <Modal
         visible={isModalVisible}
         transparent={true}
         animationType="fade"
         onRequestClose={closeModal}
       >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeModal}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeModal}
+        >
           <View style={styles.modalContent}>
             <View style={styles.modalIndicator} />
-            <Text style={styles.modalTitle}>Pilih sumber Gambar</Text>
+            <Text style={styles.modalTitle}>Pilih Sumber Gambar</Text>
             <TouchableOpacity
-              style={[styles.sourceBtnPrimary, { opacity: loadingImage ? 0.7 : 1 }]}
+              style={[
+                styles.sourceBtnPrimary,
+                { opacity: loadingImage ? 0.7 : 1 },
+              ]}
               onPress={() => pickImage("camera", imageUploadService)}
               disabled={loadingImage}
             >
               <Text style={styles.sourceBtnTextPrimary}>Ambil Dari Kamera</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.sourceBtnSecondary, { opacity: loadingImage ? 0.7 : 1 }]}
+              style={[
+                styles.sourceBtnSecondary,
+                { opacity: loadingImage ? 0.7 : 1 },
+              ]}
               onPress={() => pickImage("gallery", imageUploadService)}
               disabled={loadingImage}
             >
               <Text style={styles.sourceBtnTextSecondary}>Ambil Dari Galeri</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.sourceBtnCancel} onPress={closeModal}>
+            <TouchableOpacity
+              style={styles.sourceBtnCancel}
+              onPress={closeModal}
+            >
               <Text style={styles.sourceBtnTextCancel}>Kembali</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Fullscreen Image Preview Lightbox */}
+      <ImageViewerModal
+        visible={Boolean(previewImageUri)}
+        uri={previewImageUri}
+        onClose={() => setPreviewImageUri(null)}
+      />
     </ScreenContainer>
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: c.textStrong,
-    marginBottom: 12,
-  },
-  izinCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: c.border,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  izinHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  izinType: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: c.textStrong,
-  },
-  izinDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  izinDate: {
-    fontSize: 13,
-    color: c.textSecondary,
-  },
-  reasonText: {
-    fontSize: 12,
-    color: c.textSecondary,
-    lineHeight: 18,
-    flex: 1,
-  },
-  // Detail modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: c.overlay,
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: c.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "85%",
-  },
-  modalIndicator: {
-    width: 40,
-    height: 4,
-    backgroundColor: c.border,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
-    color: c.textStrong,
-  },
-  detailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-    gap: 12,
-  },
-  detailLabel: {
-    fontSize: 13,
-    color: c.textMuted,
-    width: 100,
-  },
-  detailValue: {
-    fontSize: 13,
-    color: c.text,
-    fontWeight: "500",
-    flex: 1,
-    textAlign: "right",
-  },
-  evidenceGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
-  },
-  evidenceThumb: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    backgroundColor: c.border,
-  },
-  noEvidenceText: {
-    fontSize: 13,
-    color: c.textMuted,
-    marginBottom: 8,
-  },
-  resubmitSection: {
-    marginTop: 8,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: c.border,
-  },
-  resubmitHint: {
-    fontSize: 13,
-    color: c.danger,
-    marginBottom: 12,
-  },
-  newEvidenceWrap: {
-    position: "relative",
-  },
-  removeBtn: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    backgroundColor: c.overlay,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  removeBtnText: {
-    color: c.onGradient,
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-  uploadBtn: {
-    borderWidth: 1.5,
-    borderColor: c.borderStrong,
-    borderStyle: "dashed",
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-    marginBottom: 12,
-    backgroundColor: c.inputBg,
-  },
-  uploadBtnText: {
-    fontSize: 14,
-    color: c.textSecondary,
-    fontWeight: "600",
-  },
-  resubmitBtn: {
-    backgroundColor: c.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  resubmitBtnText: {
-    color: c.onGradient,
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  closeBtn: {
-    backgroundColor: c.surface,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  closeBtnText: {
-    color: c.textSecondary,
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  sourceBtnPrimary: {
-    backgroundColor: c.primary,
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sourceBtnTextPrimary: {
-    color: c.onGradient,
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-  sourceBtnSecondary: {
-    backgroundColor: c.card,
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: c.border,
-  },
-  sourceBtnTextSecondary: {
-    color: c.text,
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  sourceBtnCancel: {
-    backgroundColor: c.surface,
-    padding: 18,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  sourceBtnTextCancel: {
-    color: c.textSecondary,
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  // R-LZ-4 Styles
-  cardDeleteBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: c.dangerSoft,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  cardLockedBadge: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: c.surface,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  approvedNoticeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: c.warningSoft,
-    borderColor: c.warning,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    marginBottom: 8,
-    gap: 8,
-  },
-  approvedNoticeText: {
-    flex: 1,
-    fontSize: 13,
-    color: c.textStrong,
-    fontWeight: "500",
-    lineHeight: 18,
-  },
-  deleteModalBtn: {
-    backgroundColor: c.danger,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  deleteModalBtnText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 15,
-  },
-});
-
+const makeStyles = (c: ThemeColors) =>
+  StyleSheet.create({
+    filterChipsWrapper: {
+      marginBottom: 16,
+      marginHorizontal: -16,
+    },
+    filterChipsContent: {
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    filterChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1,
+    },
+    filterChipActive: {
+      backgroundColor: c.primary,
+      borderColor: c.primary,
+    },
+    filterChipInactive: {
+      backgroundColor: c.card,
+      borderColor: c.border,
+    },
+    filterChipText: {
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    filterChipTextActive: {
+      color: c.onGradient,
+    },
+    filterChipTextInactive: {
+      color: c.textSecondary,
+    },
+    filterBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 10,
+    },
+    filterBadgeActive: {
+      backgroundColor: c.primarySoft,
+    },
+    filterBadgeInactive: {
+      backgroundColor: c.surface,
+    },
+    filterBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+    },
+    filterBadgeTextActive: {
+      color: c.primaryText,
+    },
+    filterBadgeTextInactive: {
+      color: c.textMuted,
+    },
+    sectionHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "bold",
+      color: c.textStrong,
+    },
+    sectionCountText: {
+      fontSize: 12,
+      color: c.textMuted,
+      fontWeight: "500",
+    },
+    izinCard: {
+      backgroundColor: c.card,
+      borderRadius: 16,
+      padding: 15,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 12,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    izinHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    headerLeftWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+      gap: 12,
+      marginRight: 10,
+    },
+    typeIconBox: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cutiIconBox: {
+      backgroundColor: c.primarySoft,
+    },
+    izinIconBox: {
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    headerTitleWrap: {
+      flex: 1,
+    },
+    typeTitleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      flexWrap: "wrap",
+      marginBottom: 3,
+    },
+    izinType: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: c.textStrong,
+    },
+    durationBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 3,
+      backgroundColor: c.primarySoft,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    durationBadgeText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.primaryText,
+    },
+    dateRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    izinDate: {
+      fontSize: 12,
+      color: c.textSecondary,
+    },
+    headerRightWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    reasonWrap: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 6,
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    reasonText: {
+      fontSize: 12,
+      color: c.textSecondary,
+      lineHeight: 18,
+      flex: 1,
+    },
+    cardDeleteBtn: {
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: c.dangerSoft,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cardLockedBadge: {
+      padding: 6,
+      borderRadius: 8,
+      backgroundColor: c.surface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // Detail modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: c.overlay,
+      justifyContent: "flex-end",
+    },
+    modalContent: {
+      backgroundColor: c.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      paddingBottom: 36,
+      maxHeight: "88%",
+    },
+    modalIndicator: {
+      width: 40,
+      height: 4,
+      backgroundColor: c.border,
+      borderRadius: 2,
+      alignSelf: "center",
+      marginBottom: 16,
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: c.textStrong,
+    },
+    modalCloseIconBtn: {
+      padding: 4,
+      borderRadius: 16,
+      backgroundColor: c.surface,
+    },
+    detailCardBox: {
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 14,
+    },
+    detailRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      gap: 12,
+    },
+    detailLabel: {
+      fontSize: 13,
+      color: c.textSecondary,
+      fontWeight: "500",
+    },
+    detailValue: {
+      fontSize: 13,
+      color: c.textStrong,
+      fontWeight: "600",
+      textAlign: "right",
+      flexShrink: 1,
+    },
+    detailSectionBox: {
+      backgroundColor: c.surface,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      marginBottom: 14,
+    },
+    detailSectionLabel: {
+      fontSize: 12,
+      color: c.textMuted,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      marginBottom: 6,
+      letterSpacing: 0.5,
+    },
+    detailSectionValue: {
+      fontSize: 14,
+      color: c.textStrong,
+      lineHeight: 20,
+    },
+    rejectionSectionBox: {
+      backgroundColor: c.dangerSoft,
+      borderColor: c.danger,
+    },
+    rejectionHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 6,
+    },
+    rejectionLabel: {
+      fontSize: 12,
+      color: c.danger,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    rejectionValue: {
+      fontSize: 13,
+      color: c.danger,
+      lineHeight: 18,
+      fontWeight: "500",
+    },
+    evidenceSectionWrap: {
+      marginBottom: 16,
+    },
+    evidenceSectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    evidenceSectionTitle: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: c.textStrong,
+    },
+    evidenceCountHint: {
+      fontSize: 11,
+      color: c.textMuted,
+    },
+    evidenceLoadingWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingVertical: 12,
+    },
+    evidenceLoadingText: {
+      fontSize: 13,
+      color: c.textMuted,
+    },
+    evidenceGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+    },
+    evidenceThumbWrap: {
+      position: "relative",
+      borderRadius: 12,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    evidenceThumb: {
+      width: 84,
+      height: 84,
+      borderRadius: 12,
+      backgroundColor: c.surface,
+    },
+    thumbZoomPill: {
+      position: "absolute",
+      right: 4,
+      bottom: 4,
+      backgroundColor: c.overlay,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    emptyEvidenceWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: 14,
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    noEvidenceText: {
+      fontSize: 13,
+      color: c.textMuted,
+    },
+    resubmitSection: {
+      marginTop: 6,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      marginBottom: 10,
+    },
+    resubmitHint: {
+      fontSize: 13,
+      color: c.danger,
+      marginBottom: 12,
+      lineHeight: 18,
+    },
+    newEvidenceWrap: {
+      position: "relative",
+    },
+    removeBtn: {
+      position: "absolute",
+      top: 4,
+      right: 4,
+      backgroundColor: c.overlay,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    uploadBtn: {
+      borderWidth: 1.5,
+      borderColor: c.borderStrong,
+      borderStyle: "dashed",
+      borderRadius: 12,
+      padding: 14,
+      alignItems: "center",
+      marginBottom: 12,
+      marginTop: 10,
+      backgroundColor: c.inputBg,
+    },
+    uploadBtnText: {
+      fontSize: 14,
+      color: c.textSecondary,
+      fontWeight: "600",
+    },
+    resubmitBtn: {
+      backgroundColor: c.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    resubmitBtnText: {
+      color: c.onGradient,
+      fontWeight: "bold",
+      fontSize: 15,
+    },
+    approvedNoticeContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: c.warningSoft,
+      borderColor: c.warning,
+      borderWidth: 1,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+      gap: 8,
+    },
+    approvedNoticeText: {
+      flex: 1,
+      fontSize: 13,
+      color: c.textStrong,
+      fontWeight: "500",
+      lineHeight: 18,
+    },
+    deleteModalBtn: {
+      backgroundColor: c.danger,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    deleteModalBtnText: {
+      color: c.onGradient,
+      fontWeight: "bold",
+      fontSize: 15,
+    },
+    closeBtn: {
+      backgroundColor: c.surface,
+      borderColor: c.border,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginTop: 4,
+    },
+    closeBtnText: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 15,
+    },
+    sourceBtnPrimary: {
+      backgroundColor: c.primary,
+      padding: 16,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    sourceBtnTextPrimary: {
+      color: c.onGradient,
+      fontWeight: "bold",
+      fontSize: 15,
+    },
+    sourceBtnSecondary: {
+      backgroundColor: c.card,
+      padding: 16,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 10,
+      borderWidth: 1.5,
+      borderColor: c.border,
+    },
+    sourceBtnTextSecondary: {
+      color: c.text,
+      fontWeight: "600",
+      fontSize: 15,
+    },
+    sourceBtnCancel: {
+      backgroundColor: c.surface,
+      padding: 16,
+      borderRadius: 14,
+      alignItems: "center",
+    },
+    sourceBtnTextCancel: {
+      color: c.textSecondary,
+      fontWeight: "600",
+      fontSize: 15,
+    },
+  });

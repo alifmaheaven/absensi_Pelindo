@@ -26,4 +26,17 @@ describe("getAttendanceList", () => {
       params: expect.objectContaining({ include: "shift" }),
     });
   });
+
+  it("sends shift and site include when requested", async () => {
+    await getAttendanceList({
+      page: 1,
+      per_page: 10,
+      order_by_desc: ["created_at"],
+      include: "shift,site",
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith("/api/v2/attendance/", {
+      params: expect.objectContaining({ include: "shift,site" }),
+    });
+  });
 });

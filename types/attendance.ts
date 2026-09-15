@@ -42,6 +42,13 @@ export interface IAttendance {
   attendance_status_id: string;
   shift_id?: string | null;
   shift?: Ishift | null;
+  /** Joined relation via include="site" */
+  site?: {
+    id: string;
+    name: string;
+    code?: string;
+    company_id?: string;
+  } | null;
 }
 
 export interface IUpload {

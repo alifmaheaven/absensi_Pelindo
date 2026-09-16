@@ -30,6 +30,7 @@
 
 import { create } from "zustand";
 import { IMAGE_BASE_PATH } from "@/constants";
+import api from "@/lib/axios";
 
 type TokenEntry = { token: string; expiresAt: number };
 
@@ -59,8 +60,28 @@ export function useRenderTokenVersion(): number {
   return useStore((s) => s.version);
 }
 
+/**
+ * API base including the version segment — e.g. `https://host/api/v1`.
+ * Used for API calls (axios joins `baseURL` + path).
+ */
 function baseUrl(): string {
   return (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/+$/, "");
+}
+
+/**
+ * ORIGIN of the API host, WITHOUT the `/api/v1` segment — e.g. `https://host`.
+ *
+ * WHY THIS EXISTS (bug found in dev, 2026-09-16): stored files are served by
+ * `r2RedirectMiddleware`, which is mounted at APP level — i.e. at the ROOT path
+ * `/public/images/<key>`, NOT under `/api/v1`. String-concatenating `baseUrl`
+ * with the image path produced `https://host/api/v1/public/images/<key>`, which
+ * is a 404 (verified live), so every image stayed blank even after a token was
+ * minted. The pre-existing per-screen helpers used `new URL(path, BASE_URL)`,
+ * where a leading `/` correctly resolves against the ORIGIN — that is the
+ * behaviour this restores.
+ */
+function originUrl(): string {
+  return (process.env.EXPO_PUBLIC_API_URL || "").replace(/\/api\/v\d+\/?$/, "").replace(/\/+$/, "");
 }
 
 /** Extract the object key from a bare URL or a raw key. Returns null if not a server key. */
@@ -91,10 +112,11 @@ export async function ensureRenderTokens(keys: Array<string | null | undefined>)
   wanted.forEach((k) => inFlight.add(k));
 
   try {
-    // Lazy import avoids a static cycle: some components import this module and
-    // also the axios instance that reads the auth store.
-    const { default: axios } = await import("@/lib/axios");
-    const res = await axios.post("/api/v1/signed-url/render", { keys: wanted });
+    // Path TANPA prefix /api/v1: baseURL sudah memuatnya. Memakai
+    // "/api/v1/signed-url/render" menghasilkan /api/v1/api/v1/... (404) karena
+    // request interceptor hanya me-rewrite baseURL untuk path /api/v2/. Itu
+    // membuat mint selalu gagal senyap -> token tak pernah ada -> gambar kosong.
+    const res = await api.post("/signed-url/render", { keys: wanted });
     const urls: Record<string, string> = res.data?.data?.urls ?? {};
     const expiresIn: number = res.data?.data?.expires_in ?? 300;
     const now = Date.now();
@@ -141,7 +163,7 @@ export function fileUrl(uriOrKey: string): string {
   if (!key) return uriOrKey;
 
   const entry = cache.get(key);
-  const base = baseUrl();
+  const base = originUrl();
 
   // Preserve the original per-screen semantics exactly: a key that already
   // carries the public/images/ segment maps to `/<key>` and must NOT be

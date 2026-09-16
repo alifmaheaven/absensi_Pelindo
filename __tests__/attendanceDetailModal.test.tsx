@@ -6,6 +6,21 @@ jest.mock("@react-native-community/netinfo", () => ({
   fetch: jest.fn().mockResolvedValue({ isConnected: true, isInternetReachable: true }),
 }));
 
+// `lib/renderToken` (dipakai modal untuk membangun URL gambar di bawah SEC-01)
+// mengimpor `lib/axios` secara statis. Itu menyeret `expo-router` ->
+// `standard-navigation` (ESM) ke dalam test ini dan membuat suite gagal parse.
+// Modal tidak menguji jaringan, jadi lapisan HTTP di-stub di sini.
+jest.mock("@/lib/axios", () => ({
+  __esModule: true,
+  default: {
+    post: jest.fn().mockResolvedValue({
+      data: { data: { urls: {}, expires_in: 300 } },
+    }),
+    get: jest.fn(),
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  },
+}));
+
 // Modal kini menampilkan AttendanceMapView, yang mengimpor WebView. Native
 // module RNCWebViewModule tidak ada di lingkungan jest, jadi WebView di-stub.
 // Anak-anaknya tetap dirender agar isi peta/fallback tetap teruji.

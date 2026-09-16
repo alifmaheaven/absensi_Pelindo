@@ -36,6 +36,7 @@ import {
 } from "@/types";
 import { SeveritySelector } from "@/components/ticketing/SeveritySelector";
 import { useImagePicker, IImage } from "@/hooks/useImagePicker";
+import { appendRenderToken, ensureRenderTokens } from "@/lib/renderToken";
 import { useImagePreview } from "@/hooks/useImagePreview";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -243,9 +244,10 @@ useFocusEffect(
           const evidsData = evids.data?.data || [];
 
           if (evidsData?.length) {
+            ensureRenderTokens(evidsData.map((e) => e.file));
             const evidencesData = evidsData?.map((e) => ({
               id: e?.id,
-              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
+              uri: appendRenderToken(new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString()),
               path: e.file,
               link: e.file,
             }));
@@ -912,7 +914,7 @@ useFocusEffect(
                           log.action === 'FILE_ATTACH' ? (
                             <View style={styles.imageChangesContainer}>
                               {Object.entries(log.field_changes).map(([key, info]: [string, any]) => {
-                                const fileUrl = new URL(`${IMAGE_BASE_PATH}${info.url || info}`, BASE_URL).toString();
+                                const fileUrl = appendRenderToken(new URL(`${IMAGE_BASE_PATH}${info.url || info}`, BASE_URL).toString());
                                 return (
                                   <TouchableOpacity key={key} onPress={() => showPreview(fileUrl)}>
                                     <Image

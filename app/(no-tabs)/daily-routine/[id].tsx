@@ -2,6 +2,7 @@ import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded, Device } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { IMAGE_BASE_PATH, IMAGE_MAX_WIDTH, IMAGE_QUALITY } from "@/constants";
+import { appendRenderToken, ensureRenderTokens, useRenderTokenVersion } from "@/lib/renderToken";
 import {
   getDailyRoutineById,
   getTodayRoutines,
@@ -74,6 +75,8 @@ const getDraftKey = (routineId: string, logDate?: string | null) => {
 };
 
 export default function DailyRoutineDetailScreen() {
+  // SEC-01: langganan versi cache render-token agar bukti re-render saat token di-mint.
+  useRenderTokenVersion();
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
@@ -216,6 +219,8 @@ export default function DailyRoutineDetailScreen() {
                   type: ef.file?.toLowerCase().endsWith(".pdf") ? "pdf" : "image",
                   upload_failed: false,
                 }));
+                // SEC-01: mint render token untuk bukti yang akan dirender layar ini.
+                ensureRenderTokens(existingLogItem.evidence_files.map((ef: any) => ef.file));
               } else if (existingLogItem?.evidence_file) {
                 const ef = existingLogItem.evidence_file;
                 initialFiles = [
@@ -1388,7 +1393,8 @@ export default function DailyRoutineDetailScreen() {
   };
 
   const getImageUrl = (file: string) => {
-    return new URL(`${IMAGE_BASE_PATH}${file}`, BASE_URL).toString();
+    // SEC-01: URL membawa render token bila sudah di-cache; fallback = URL polos.
+    return appendRenderToken(new URL(`${IMAGE_BASE_PATH}${file}`, BASE_URL).toString());
   };
 
   const getDeviceProgress = (deviceId: string) => {

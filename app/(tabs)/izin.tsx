@@ -37,27 +37,15 @@ import {
 } from "react-native";
 import { useImagePicker } from "@/hooks/useImagePicker";
 import { useToast } from "@/components/ui/toast";
-import { IMAGE_BASE_PATH } from "@/constants";
+import { fileUrl, ensureRenderTokens, useRenderTokenVersion } from "@/lib/renderToken";
 
 function resolveEvidenceUrl(fileUriOrKey?: string | null): string {
   if (!fileUriOrKey) return "";
-  if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(fileUriOrKey)) {
+  if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(fileUriOrKey) && !fileUriOrKey.includes("/public/images/")) {
     return fileUriOrKey;
   }
-  const baseUrl = process.env.EXPO_PUBLIC_API_URL || "";
-  const cleanKey = fileUriOrKey.startsWith("/") ? fileUriOrKey.slice(1) : fileUriOrKey;
-  if (cleanKey.startsWith("public/images/")) {
-    try {
-      return new URL(`/${cleanKey}`, baseUrl).toString();
-    } catch {
-      return `${baseUrl}/${cleanKey}`;
-    }
-  }
-  try {
-    return new URL(`${IMAGE_BASE_PATH}${cleanKey}`, baseUrl).toString();
-  } catch {
-    return `${baseUrl}${IMAGE_BASE_PATH}${cleanKey}`;
-  }
+  // SEC-01: hasil membawa render token bila sudah di-cache; fallback = URL polos.
+  return fileUrl(fileUriOrKey);
 }
 
 function calculateLeaveDays(startDateStr?: string | null, endDateStr?: string | null): number {
@@ -114,6 +102,8 @@ interface MergedItem {
 }
 
 export default function IzinScreen() {
+  // SEC-01: langganan versi cache render-token agar bukti re-render saat token di-mint.
+  useRenderTokenVersion();
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();

@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { IAttendance, IAttendanceEvidGroupId } from "@/types";
 import { getEvidGroupId } from "@/services/attendance";
-import { IMAGE_BASE_PATH } from "@/constants";
+import { fileUrl, ensureRenderTokens, useRenderTokenVersion } from "@/lib/renderToken";
 import ImageViewerModal from "@/components/ImageViewerModal";
 import AttendanceMapView from "@/components/attendance/AttendanceMapView";
 import StatusBadge, { type StatusBadgeTone } from "@/components/ui/StatusBadge";
@@ -67,27 +67,12 @@ export function calculateWorkDuration(
  */
 export function resolveEvidenceUrl(fileUriOrKey?: string | null): string {
   if (!fileUriOrKey) return "";
-  if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(fileUriOrKey)) {
+  if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(fileUriOrKey) && !fileUriOrKey.includes("/public/images/")) {
     return fileUriOrKey;
   }
-  const baseUrl = process.env.EXPO_PUBLIC_API_URL || "";
-  const cleanKey = fileUriOrKey.startsWith("/")
-    ? fileUriOrKey.slice(1)
-    : fileUriOrKey;
-
-  const relativePath = cleanKey.startsWith("public/images/")
-    ? `/${cleanKey}`
-    : `${IMAGE_BASE_PATH}${cleanKey}`;
-
-  if (baseUrl) {
-    try {
-      return new URL(relativePath, baseUrl).toString();
-    } catch {
-      return `${baseUrl.replace(/\/+$/, "")}${relativePath}`;
-    }
-  }
-
-  return relativePath;
+  // SEC-01: hasil membawa render token bila sudah di-cache; fallback = URL polos
+  // (perilaku pra-SEC-01) sehingga render tidak pernah memblokir jaringan.
+  return fileUrl(fileUriOrKey);
 }
 
 export default function AttendanceDetailModal({
@@ -98,6 +83,9 @@ export default function AttendanceDetailModal({
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
+  // SEC-01: langganan versi cache render-token agar thumbnail re-render
+  // begitu token di-mint (lihat lib/renderToken.ts).
+  useRenderTokenVersion();
   const [evidenceList, setEvidenceList] = useState<IAttendanceEvidGroupId[]>([]);
   const [loadingEvidence, setLoadingEvidence] = useState(false);
   const [evidenceError, setEvidenceError] = useState(false);
@@ -138,6 +126,8 @@ export default function AttendanceDetailModal({
             (e) => e.evidence_group_id === attendanceProp.evidence_group_id
           );
           setEvidenceList(items);
+          // SEC-01: mint render token untuk keys yang akan dirender layar ini.
+          ensureRenderTokens(items.map((e) => e.file));
         }
       } catch (err) {
         if (!isCancelled) {

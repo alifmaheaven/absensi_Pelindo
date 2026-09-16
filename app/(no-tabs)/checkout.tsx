@@ -8,6 +8,7 @@ import {
   TIMEZONE,
 } from "@/constants";
 import { useImagePicker } from "@/hooks/useImagePicker";
+import { appendRenderToken, ensureRenderTokens } from "@/lib/renderToken";
 import { useRequest } from "@/hooks/use-request";
 import axios from "@/lib/axios";
 import {
@@ -264,9 +265,10 @@ export default function CheckoutScreen() {
           (e) => e.evidence_group_id === activeCheckin.evidence_group_id,
         );
         if (evidences?.length) {
+          ensureRenderTokens(evidences.map((e) => e.file));
           setImages(
             evidences.map((e) => ({
-              uri: new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString(),
+              uri: appendRenderToken(new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString()),
               path: e.file,
               link: e.file,
               id: e.id,

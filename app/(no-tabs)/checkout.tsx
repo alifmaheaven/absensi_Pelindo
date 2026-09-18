@@ -23,8 +23,10 @@ import { IAttendance, THttpErrorResult } from "@/types";
 import { parseWIBDate, getOperationalDateWIB, formatHourMinute } from "@/utils/utils";
 import {
   LOCATION_FIX_TIMEOUT_MS,
+  LOCATION_PENDING_MESSAGE,
   classifyLocationFailure,
   getLocationFailureCopy,
+  getFixWaitingCopy,
   type LocationFailureCause,
 } from "@/utils/location-diagnostics";
 import NetInfo from "@react-native-community/netinfo";
@@ -354,7 +356,14 @@ export default function CheckoutScreen() {
       return;
     }
     if (!location) {
-      showToast("Tunggu deteksi lokasi...", "info");
+      // GPS-07a identik checkin.tsx: tanpa janji penyelesaian-diri; menunjuk
+      // kartu diagnosis atau copy progres ber-detik (satu sumber).
+      showToast(
+        locationFailure
+          ? "Belum ada posisi — ikuti panduan pada kartu diagnosis"
+          : getFixWaitingCopy(),
+        "info",
+      );
       return;
     }
 
@@ -626,14 +635,26 @@ export default function CheckoutScreen() {
                 ) : loadingLocation ? (
                   // GPS-07b: varian ketiga pesan menunggu ("Menunggu posisi
                   // GPS — silakan coba lagi...") dihapus — idem checkin.tsx.
-                  // Cabang itu terrender saat TIDAK memuat dan tanpa penyebab
-                  // terklasifikasi; keadaan itu tidak lagi ada sejak
-                  // classifier jadi gerbang tunggal (GPS-10).
+                  // GPS-07a: angka detik dari modul (satu sumber dgn timeout).
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
+                    <Text style={styles.loadingText}>{getFixWaitingCopy()}</Text>
                   </View>
-                ) : null
+                ) : (
+                  // Panel pending jujur + tombol 'Cari Ulang' sungguhan —
+                  // idem checkin.tsx; kontainer tidak pernah render KOSONG.
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>{LOCATION_PENDING_MESSAGE}</Text>
+                    <TouchableOpacity
+                      style={styles.retryButton}
+                      onPress={requestLocation}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cari Ulang"
+                    >
+                      <Text style={styles.retryButtonText}>Cari Ulang</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
               ) : (
                 <MapEmbed location={location} />
               )}
@@ -938,7 +959,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   loadingText: { marginTop: 10, color: c.textSecondary },
   locationDeniedEmoji: { fontSize: 40, marginBottom: 10 },
   locationDeniedTitle: { fontSize: 16, fontWeight: "bold", color: c.text, marginBottom: 4 },
-  locationDeniedText: { fontSize: 13, color: c.textMuted, textAlign: "center", marginBottom: 16, paddingHorizontal: 20 },
+  // locationDeniedText (0 rujukan sejak GPS-01) DIHAPUS — dead style; idem checkin.tsx.
   retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },

@@ -72,6 +72,23 @@ export interface LocationFailureCopy {
 
 const COPY_SECONDS = Math.round(LOCATION_FIX_TIMEOUT_MS / 1000);
 
+/**
+ * GPS-07a — copy progres tunggu SATU SUMBER angka: detik yang tampil selalu
+ * = konstanta timeout (aturan C.3#4). Dipakai spinner peta DAN toast Submit,
+ * sehingga satu keadaan tidak lagi punya dua pesan berbeda.
+ */
+export function getFixWaitingCopy(): string {
+  return `Mendeteksi lokasi (±${COPY_SECONDS} detik)...`;
+}
+
+/**
+ * GPS-07b/kontainer kosong — copy utk keadaan tanpa fix, tanpa penyebab
+ * terklasifikasi, dan tanpa probe berjalan (mis. setelah Alert mock ditutup).
+ * Jujur: tidak menjanjikan penyelesaian-diri; aksi nyata ('Cari Ulang')
+ * disediakan layar sebagai tombol sungguhan.
+ */
+export const LOCATION_PENDING_MESSAGE = "Lokasi belum tersedia.";
+
 /** Pemetaan tunggal penyebab → copy. Layar TIDAK menulis pesan sendiri. */
 export function getLocationFailureCopy(cause: LocationFailureCause): LocationFailureCopy {
   switch (cause) {
@@ -109,10 +126,12 @@ export function getLocationFailureCopy(cause: LocationFailureCause): LocationFai
       };
     case "OUT_OF_RANGE":
       // dipakai lewat formatOutOfRangeCopy; pesan generik ini fallback.
+      // GPS-06: istilah kanonik 'area presensi' — 'radius' hanya boleh
+      // berdampingan dengan angka meter (lihat varian terformat di bawah).
       return {
         title: "Di Luar Area Presensi",
         message:
-          "Posisi Anda masih di luar radius lokasi presensi yang dipilih. Mendekatlah ke titik lokasi. " +
+          "Posisi Anda masih di luar area presensi yang dipilih. Mendekatlah ke titik lokasi. " +
           "Bila Anda sudah berada di lokasi namun tetap ditolak, hubungi pengawas Anda.",
         actions: ["RETRY"],
       };
@@ -134,13 +153,19 @@ export interface OutOfRangeInfo {
  * Ambang UIUX-02 (diamandemen): kalimat pertama ≤80 char berdiri sendiri
  * ("Posisi Anda N m dari <site>."), total ≤220 char — dipegang oleh
  * assertion CI di __tests__/locationDiagnostics.test.ts.
+ * GPS-08: panjang copy TIDAK boleh bergantung master data — server boleh
+ * menyimpan nama site s.d. 255 char, jadi penyisipan dibatasi 40 + elipsis.
  */
 export function formatOutOfRangeCopy(info: OutOfRangeInfo): LocationFailureCopy {
   const base = getLocationFailureCopy("OUT_OF_RANGE");
   const distance = Number.isFinite(info.distanceMeters)
     ? Math.round(info.distanceMeters)
     : null;
-  const where = info.siteName ? `"${info.siteName}"` : "site terpilih";
+  const cappedName =
+    info.siteName && info.siteName.length > 40
+      ? `${info.siteName.slice(0, 39)}…`
+      : info.siteName;
+  const where = cappedName ? `"${cappedName}"` : "site terpilih";
   const first = `Posisi Anda ${distance == null ? "?" : distance} m dari ${where}.`;
   const rest =
     info.toleranceMeters == null

@@ -509,7 +509,8 @@ export default function AttendanceDetailModal({
                   Backend menyimpan vonis saat check-in di `check_in_audit_logs`
                   (site_latitude/longitude, allowed_radius, within_radius), dan
                   tabel itu belum punya endpoint baca. Tanpa catatan ini, badge
-                  "Di Luar Radius" bisa terbaca sebagai "server menolak absen
+                  "Di Luar Area Presensi" (istilah kanonik GPS-06) bisa terbaca
+                  sebagai "server menolak absen
                   ini" — padahal absennya justru diterima. Karena itu status di
                   atas adalah INDIKATOR SAAT INI, bukan vonis historis.
                 */}

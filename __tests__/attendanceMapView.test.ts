@@ -379,9 +379,11 @@ describe("attendance-map-logic", () => {
     });
 
     it("memberi label badge Bahasa Indonesia yang benar", () => {
-      expect(getGeofenceStatusLabel("inside")).toBe("Di Dalam Radius");
-      expect(getGeofenceStatusLabel("outside")).toBe("Di Luar Radius");
-      expect(getGeofenceStatusLabel("unknown")).toBe("Radius Tidak Diketahui");
+      // GPS-06: istilah kanonik 'area presensi' — 'radius' di UI hanya boleh
+      // berdampingan dengan angka meter.
+      expect(getGeofenceStatusLabel("inside")).toBe("Di Dalam Area Presensi");
+      expect(getGeofenceStatusLabel("outside")).toBe("Di Luar Area Presensi");
+      expect(getGeofenceStatusLabel("unknown")).toBe("Area Presensi Tidak Diketahui");
     });
 
     it("memformat pasangan koordinat untuk kartu fallback", () => {

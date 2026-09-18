@@ -189,7 +189,15 @@ export default function HomeScreen() {
       } else {
         const remaining = await getPendingCount();
         if (remaining === 0) {
-          showToast("Semua absensi telah disinkronkan", "info");
+          // OB-2: antrean bisa kosong karena item KEDALUWARSA dipindah ke
+          // keranjang gagal (UIUX-31/7221d15) — bukan karena terkirim.
+          // 'Semua absensi telah disinkronkan' akan berbohong; cermin angka.
+          showToast(
+            outcome.expired > 0
+              ? `0 tersinkron, ${outcome.expired} perlu ditinjau`
+              : "Semua absensi telah disinkronkan",
+            outcome.expired > 0 ? "warning" : "info",
+          );
         } else {
           showToast("Koneksi belum stabil untuk sinkronisasi", "error");
         }

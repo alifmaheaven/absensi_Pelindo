@@ -33,8 +33,10 @@ import {
 } from "@/utils/utils";
 import {
   LOCATION_FIX_TIMEOUT_MS,
+  LOCATION_PENDING_MESSAGE,
   classifyLocationFailure,
   formatOutOfRangeCopy,
+  getFixWaitingCopy,
   getLocationFailureCopy,
   type LocationFailureCause,
 } from "@/utils/location-diagnostics";
@@ -321,7 +323,17 @@ export default function CheckinScreen() {
     }
     // Validasi lokasi GPS
     if (!location) {
-      showToast("Tunggu deteksi lokasi...", "info");
+      // GPS-07a: toast tidak lagi menjanjikan penyelesaian-diri ("Tunggu
+      // deteksi lokasi..." — kebijakan GPS-wajib tidak menjamin itu). Bila
+      // sudah ada penyebab terklasifikasi ia menunjuk kartu diagnosis; bila
+      // masih berupaya ia memakai copy progres dengan angka detik yang sama
+      // dengan konstanta timeout (satu keadaan, satu pesan).
+      showToast(
+        locationFailure
+          ? "Belum ada posisi — ikuti panduan pada kartu diagnosis"
+          : getFixWaitingCopy(),
+        "info",
+      );
       return;
     }
 
@@ -363,7 +375,17 @@ export default function CheckinScreen() {
         toleranceMeters: selectedSite?.tolerance ?? null,
         siteName: selectedSite?.name ?? null,
       });
-      Alert.alert(rangeCopy.title, rangeCopy.message, [{ text: "Mengerti" }]);
+      // GPS-04: hormati rangeCopy.actions — modul mendeklarasikan ["RETRY"]
+      // utk penyebab D, jadi dialog tidak boleh hanya berisi 'Mengerti'.
+      // Teknisi yang sudah melangkah masuk radius butuh pemicu muat-ulang
+      // posisi. Label 'Coba Lagi' = kata yang sama dengan teks copy D
+      // ('tekan Coba Lagi') — aturan GPS-05: rujukan label wajib persis.
+      Alert.alert(rangeCopy.title, rangeCopy.message, [
+        { text: "Mengerti", style: "cancel" },
+        ...(rangeCopy.actions.includes("RETRY")
+          ? [{ text: "Coba Lagi", onPress: () => requestLocation() }]
+          : []),
+      ]);
       return;
     }
 
@@ -717,12 +739,29 @@ export default function CheckinScreen() {
                   // saat TIDAK memuat dan tanpa penyebab terklasifikasi —
                   // keadaan yang tidak lagi ada sejak classifier jadi gerbang
                   // tunggal (GPS-10), dan menjanjikan aksi saat aplikasi sedang
-                  // tidak mencoba.
+                  // tidak mencoba. GPS-07a: hitungan detik dari modul (satu
+                  // sumber dgn konstanta timeout).
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
+                    <Text style={styles.loadingText}>{getFixWaitingCopy()}</Text>
                   </View>
-                ) : null
+                ) : (
+                  // Kosong yang dulu mustahil kini punya wajah jujur: panel
+                  // pending + tombol 'Cari Ulang' SUNGGUHAN (bukan kalimat
+                  // tanpa aksi ala GPS-07b). Terjangkau mis. setelah Alert
+                  // mock ditutup.
+                  <View style={styles.loadingContainer}>
+                    <Text style={styles.loadingText}>{LOCATION_PENDING_MESSAGE}</Text>
+                    <TouchableOpacity
+                      style={styles.retryButton}
+                      onPress={requestLocation}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cari Ulang"
+                    >
+                      <Text style={styles.retryButtonText}>Cari Ulang</Text>
+                    </TouchableOpacity>
+                  </View>
+                )
               ) : (
                 <MapEmbed
                   location={location}
@@ -876,7 +915,9 @@ export default function CheckinScreen() {
                     <View style={styles.locationTitleRow}>
                       <Text style={styles.locationTitle}>{item.name}</Text>
                       {item.inRange === false && (
-                        <Text style={styles.outOfRangeBadge}>Di luar jangkauan</Text>
+                        // GPS-06: satu istilah kanonik 'area presensi' di semua
+                        // permukaan (badge site, badge peta, pesan D).
+                        <Text style={styles.outOfRangeBadge}>Di luar area presensi</Text>
                       )}
                     </View>
                     <Text style={styles.locationAddress}>
@@ -1114,13 +1155,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.text,
     marginBottom: 4,
   },
-  locationDeniedText: {
-    fontSize: 13,
-    color: c.textMuted,
-    textAlign: "center",
-    marginBottom: 16,
-    paddingHorizontal: 20,
-  },
+  // locationDeniedText (kontras 2.70:1, 0 rujukan sejak GPS-01) DIHAPUS —
+  // dead style; badan pesan kini dirender locationFailureBody (c.text).
   retryButton: {
     backgroundColor: c.primary,
     paddingVertical: 12,

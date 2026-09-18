@@ -90,8 +90,8 @@ export function toRadiusMeters(radius?: number | null): number | null {
  * Aturan (konsisten dengan `app/(no-tabs)/checkin.tsx:209`):
  *   inRange === getDistanceInMeters(...) <= tolerance
  * Perbandingan memakai `<=` sehingga tepat di tepi radius dihitung DI DALAM.
- * Ini penting: peta tidak boleh menyatakan "Di Luar Radius" untuk titik yang
- * diterima sebagai sah oleh gerbang check-in.
+ * Ini penting: peta tidak boleh menyatakan "Di Luar Area Presensi" untuk titik
+ * yang diterima sebagai sah oleh gerbang check-in.
  */
 export function evaluateGeofencePoint(
   point: GeoPoint | null,
@@ -167,16 +167,19 @@ export function formatDistanceMeters(distanceMeters?: number | null): string {
   return `${km.toFixed(2).replace(".", ",")} km`;
 }
 
-/** Teks badge status geofence (Bahasa Indonesia, sesuai spesifikasi UX). */
+/** Teks badge status geofence (Bahasa Indonesia, sesuai spesifikasi UX).
+ *  GPS-06: satu istilah kanonik 'area presensi' — kata 'radius' di UI hanya
+ *  boleh berdampingan dengan angka meter (rubrik C.3#1), jadi keluarga label
+ *  ini tidak memakainya. */
 export function getGeofenceStatusLabel(status: GeofenceStatus): string {
   switch (status) {
     case "inside":
-      return "Di Dalam Radius";
+      return "Di Dalam Area Presensi";
     case "outside":
-      return "Di Luar Radius";
+      return "Di Luar Area Presensi";
     case "unknown":
     default:
-      return "Radius Tidak Diketahui";
+      return "Area Presensi Tidak Diketahui";
   }
 }
 

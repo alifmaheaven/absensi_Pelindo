@@ -10,6 +10,7 @@ import {
   classifyLocationFailure,
   containsLegacyEnglish,
   formatOutOfRangeCopy,
+  getFixWaitingCopy,
   getLocationFailureCopy,
 } from "@/utils/location-diagnostics";
 
@@ -80,6 +81,13 @@ describe("copy per penyebab (rubrik C.2 / gerbang U-16)", () => {
     expect(C.message).toContain(`±${LOCATION_FIX_TIMEOUT_MS / 1000} detik`);
   });
 
+  it("GPS-07a: copy tunggu progres memakai angka detik yang sama dgn konstanta", () => {
+    // Aturan C.3#4: angka pada pesan = angka pada kode. Copy ini dipakai
+    // spinner peta DAN toast Submit, jadi satu keadaan satu pesan satu angka.
+    expect(getFixWaitingCopy()).toContain(`±${LOCATION_FIX_TIMEOUT_MS / 1000} detik`);
+    expect(getFixWaitingCopy()).toMatch(/^Mendeteksi lokasi/);
+  });
+
   it("semua pesan menyebut konsekuensi tanpa bypass + kontak pengawas sebagai PROSA", () => {
     for (const copy of [A, B, C]) {
       expect(copy.message).toMatch(/pengawas/i);
@@ -120,6 +128,20 @@ describe("formatOutOfRangeCopy (UIUX-04, penyebab D)", () => {
     const copy = formatOutOfRangeCopy({ distanceMeters: NaN, toleranceMeters: 50 });
     expect(copy.message).not.toMatch(/NaN/);
   });
+
+  it("GPS-08: nama site panjang dipotong 40 char + elipsis (ambang tak bergantung master data)", () => {
+    // Server menyimpan nama s.d. 255 char (crud.validator requiredString);
+    // tanpa batas di tempat penyisipan, CI hijau tapi copy nyata melanggar.
+    const longName = "Gedung Terminal Penumpang Internasional Tanjung Priok Blok C Lantai Dua";
+    expect(longName.length).toBeGreaterThanOrEqual(55);
+    const copy = formatOutOfRangeCopy({
+      distanceMeters: 140,
+      toleranceMeters: 100,
+      siteName: longName,
+    });
+    expect(copy.message).toContain(`${longName.slice(0, 39)}…`);
+    expect(copy.message).not.toContain(longName);
+  });
 });
 
 /**
@@ -146,6 +168,16 @@ describe("UIUX-02 ambang copy (assertion CI)", () => {
     {
       name: "D varian tanpa radius",
       copy: formatOutOfRangeCopy({ distanceMeters: 60, toleranceMeters: null, siteName: "Gudang" }),
+    },
+    // GPS-08: ambang harus bertahan untuk master data terburuk (nama 70 char,
+    // jarak 3 digit, dua-dua varian radius) — batas yang dihitung F.3.
+    {
+      name: "D nama site 70 char (radius terisi)",
+      copy: formatOutOfRangeCopy({ distanceMeters: 999, toleranceMeters: 150, siteName: "T".repeat(70) }),
+    },
+    {
+      name: "D nama site 70 char (tanpa radius)",
+      copy: formatOutOfRangeCopy({ distanceMeters: 999, toleranceMeters: null, siteName: "T".repeat(70) }),
     },
   ];
 
@@ -186,6 +218,56 @@ describe("GPS-10 wiring: layar memanggil classifier, bukan varian inline", () =>
       expect(inlineCauses).toEqual(['setLocationFailure("NO_FIX"']);
       // GPS-07b: varian ketiga pesan menunggu sudah mati — haram bangkit lagi.
       expect(src).not.toContain("Menunggu posisi GPS");
+      // GPS-09 (syarat tutup F.3): steps dirender BENAR-BENAR sebagai baris —
+      // data saja tidak cukup; kunci call-site `.map` dan bentuk barisnya.
+      expect(src).toContain("locationFailureCopy.steps.map(");
+      expect(src).toContain("{i + 1}. {step}");
+      // GPS-07a: layar memakai copy tunggu dari modul (angka detik satu
+      // sumber) dan haram kembali menjanjikan penyelesaian-diri di Submit.
+      expect(src).toContain("getFixWaitingCopy()");
+      expect(src).not.toContain("Tunggu deteksi lokasi");
+      // Kosmetika backup-0b92bda: kontainer tak pernah render null — panel
+      // pending dari modul + tombol 'Cari Ulang' nyata yang menutup cabang.
+      expect(src).toContain("LOCATION_PENDING_MESSAGE");
     });
   }
+
+  it("GPS-04: dialog D memetakan actions=['RETRY'] jadi tombol 'Coba Lagi' nyata", () => {
+    const src = fs.readFileSync(path.join(ROOT, "app/(no-tabs)/checkin.tsx"), "utf8");
+    // Tombol diturunkan dari deklarasi modul, bukan ditulis bebas di layar.
+    expect(src).toContain('rangeCopy.actions.includes("RETRY")');
+    expect(src).toContain('onPress: () => requestLocation()');
+    // Dialog lama yang cuma menutup (satu-satunya 'Mengerti' tanpa aksi) mati.
+    expect(src).not.toMatch(/Alert\.alert\(rangeCopy\.title, rangeCopy\.message, \[\{ text: "Mengerti" \}\]\)/);
+  });
+
+  it("GPS-06: satu istilah kanonik 'area presensi' di semua permukaan", () => {
+    const surfaces = [
+      "app/(no-tabs)/checkin.tsx",
+      "app/(no-tabs)/checkout.tsx",
+      "components/attendance/attendance-map-logic.ts",
+      "utils/location-diagnostics.ts",
+    ];
+    for (const rel of surfaces) {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      // String UI terlarang (varian lama); 'radius' hanya boleh berdampingan
+      // dengan angka meter — dicek lewat pesan terformat di atas.
+      expect(src).not.toContain('"Di luar jangkauan"');
+      expect(src).not.toContain('"Di Luar Radius"');
+      expect(src).not.toContain('"Radius Tidak Diketahui"');
+      expect(src).not.toContain("di luar radius lokasi presensi");
+    }
+    // Kanonik benar-benar dipakai (bukan cuma yang lama dihapus):
+    const mapLogic = fs.readFileSync(
+      path.join(ROOT, "components/attendance/attendance-map-logic.ts"),
+      "utf8",
+    );
+    expect(mapLogic).toContain('"Di Luar Area Presensi"');
+    const diagnostics = fs.readFileSync(
+      path.join(ROOT, "utils/location-diagnostics.ts"),
+      "utf8",
+    );
+    expect(diagnostics).toContain("Di Luar Area Presensi");
+    expect(diagnostics).toContain("di luar area presensi yang dipilih");
+  });
 });

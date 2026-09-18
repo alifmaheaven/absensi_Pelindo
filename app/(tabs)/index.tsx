@@ -167,13 +167,22 @@ export default function HomeScreen() {
     try {
       const outcome = await syncQueuedRequests();
       await refreshPendingCount();
-      if (outcome.synced > 0 || outcome.evidenceRetrying > 0) {
-        const extra =
-          outcome.evidenceRetrying > 0
-            ? ` — ${outcome.evidenceRetrying} foto bukti sedang dicoba ulang otomatis`
-            : "";
+      const evidenceNotes: string[] = [];
+      if (outcome.evidenceResynced > 0) {
+        evidenceNotes.push(`${outcome.evidenceResynced} foto bukti terkirim susulan`);
+      }
+      if (outcome.evidenceRetrying > 0) {
+        evidenceNotes.push(`${outcome.evidenceRetrying} foto bukti masih dicoba ulang`);
+      }
+      if (
+        outcome.synced > 0 ||
+        outcome.evidenceResynced > 0 ||
+        outcome.evidenceRetrying > 0
+      ) {
         showToast(
-          `Berhasil menyinkronkan ${outcome.synced} absensi${extra}`,
+          `Berhasil menyinkronkan ${outcome.synced} absensi${
+            evidenceNotes.length > 0 ? ` — ${evidenceNotes.join(", ")}` : ""
+          }`,
           outcome.evidenceRetrying > 0 ? "info" : "success",
         );
         fetchAttendance();

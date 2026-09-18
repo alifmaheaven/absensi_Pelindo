@@ -374,7 +374,7 @@ export default function CheckinScreen() {
       // TIDAK boleh lagi `continue` diam-diam lalu layar melaporkan "Berhasil
       // Check In!" penuh: foto yang gagal masuk item ATTENDANCE_EVIDENCE agar
       // dicoba ulang di latar, dan user diberi pesan parsial yang jujur.
-      const failedEvidence: Array<{ uri: string; name: string; type: string }> = [];
+      const failedEvidence: { uri: string; name: string; type: string }[] = [];
       const uploadedLocalUris: string[] = [];
       for (const img of images) {
         let permanentPath = img.path;
@@ -393,7 +393,7 @@ export default function CheckinScreen() {
         if (!permanentPath) {
           failedEvidence.push({
             uri: img.uri,
-            name: img.name || `checkin_${Date.now()}.jpg`,
+            name: img.name || "checkin-evidence.jpg",
             type: "image/jpeg",
           });
           continue;
@@ -406,7 +406,7 @@ export default function CheckinScreen() {
           if (!file) {
             failedEvidence.push({
               uri: img.uri,
-              name: img.name || `checkin_${Date.now()}.jpg`,
+              name: img.name || "checkin-evidence.jpg",
               type: "image/jpeg",
             });
             continue;
@@ -424,7 +424,7 @@ export default function CheckinScreen() {
           console.warn("Failed to link evidence online:", e);
           failedEvidence.push({
             uri: img.uri,
-            name: img.name || `checkin_${Date.now()}.jpg`,
+            name: img.name || "checkin-evidence.jpg",
             type: "image/jpeg",
           });
         }

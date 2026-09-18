@@ -369,7 +369,7 @@ export default function CheckoutScreen() {
       const groupId = activeCheckin?.evidence_group_id ?? "";
 
       // WAVE-0 P0-0.6 / CHECK-1 — catat hasil tiap unggahan bukti.
-      const failedEvidence: Array<{ uri: string; name: string; type: string }> = [];
+      const failedEvidence: { uri: string; name: string; type: string }[] = [];
       const uploadedLocalUris: string[] = [];
       for (const img of newCheckoutImages) {
         const ok = await uploadSingleCheckoutEvidence(img, groupId, user?.name);
@@ -377,7 +377,7 @@ export default function CheckoutScreen() {
         else
           failedEvidence.push({
             uri: img.uri,
-            name: img.name || `checkout_${Date.now()}.jpg`,
+            name: img.name || "checkout-evidence.jpg",
             type: img.type || "image/jpeg",
           });
       }

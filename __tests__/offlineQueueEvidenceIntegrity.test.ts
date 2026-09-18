@@ -15,14 +15,46 @@
  *   4. `cleanupOrphanedEvidence` punya tepat satu pemanggil produksi:
  *      dipanggil di akhir sync (CHECK-2b).
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Alert } from "react-native";
+import apiClient from "../lib/axios";
+import * as evidenceStorageMock from "../lib/evidenceStorage";
+import {
+  getFailedAttendance,
+  getQueue,
+  syncQueuedRequests,
+  type OfflineAction,
+} from "../lib/offlineQueue";
+
+let mockToken: string | null = null;
+
+// Notifikasi lokal utk item kedaluwarsa (item 2 WAVE-0) — divisikan lewat mock.
+const mockScheduleNotification = jest.fn(async (_payload?: unknown): Promise<string> => "notif-1");
+
+/** State filesystem tiruan yang bisa diatur per-skenario. */
+const mockEvidenceState = {
+  /** uri -> ada/tidaknya file di perangkat (default: ada). */
+  exists: new Map<string, boolean>(),
+  /** uri yang dipromosikan dari cache ke penyimpanan persisten. */
+  promoted: [] as string[],
+  /** uri yang dihapus (terkonfirmasi server / keputusan user). */
+  removed: [] as string[],
+  /** daftar `keep` setiap panggilan cleanup yatim. */
+  cleanupKeep: [] as string[],
+};
 
 jest.mock("@react-native-async-storage/async-storage", () =>
-  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+  jest.requireActual("@react-native-async-storage/async-storage/jest/async-storage-mock")
 );
 
 jest.mock("@react-native-community/netinfo", () => ({
   fetch: jest.fn().mockResolvedValue({ isConnected: true, isInternetReachable: true }),
   addEventListener: jest.fn(),
+}));
+
+jest.mock("expo-notifications", () => ({
+  scheduleNotificationAsync: (payload: unknown) => mockScheduleNotification(payload),
+  SchedulableTriggerInputTypes: { DATE: "date" },
 }));
 
 jest.mock("../lib/axios", () => {
@@ -31,10 +63,15 @@ jest.mock("../lib/axios", () => {
   instance.post = jest.fn();
   instance.put = jest.fn();
   instance.get = jest.fn();
-  return instance;
+  // offlineQueue memanggil instance itu sendiri utk STANDARD_REQUEST —
+  // bungkus sebagai jest.fn (default: gagal jaringan) sambil mewarisi
+  // post/put/get mock di atas.
+  const callable = jest.fn(() =>
+    Promise.reject(Object.assign(new Error("offline"), { code: "ERR_NETWORK" })),
+  );
+  Object.assign(callable, instance);
+  return callable;
 });
-
-let mockToken: string | null = null;
 
 jest.mock("../lib/storage", () => ({
   getToken: jest.fn(async () => mockToken),
@@ -51,18 +88,6 @@ jest.mock("../lib/storage", () => ({
   getVersionCode: jest.fn().mockResolvedValue(null),
   removeVersionCode: jest.fn().mockResolvedValue(undefined),
 }));
-
-/** State filesystem tiruan yang bisa diatur per-skenario. */
-const mockEvidenceState = {
-  /** uri -> ada/tidaknya file di perangkat (default: ada). */
-  exists: new Map<string, boolean>(),
-  /** uri yang dipromosikan dari cache ke penyimpanan persisten. */
-  promoted: [] as string[],
-  /** uri yang dihapus (terkonfirmasi server / keputusan user). */
-  removed: [] as string[],
-  /** daftar `keep` setiap panggilan cleanup yatim. */
-  cleanupKeep: [] as string[],
-};
 
 jest.mock("../lib/evidenceStorage", () => ({
   evidenceFileExists: jest.fn(async (uri: string) => {
@@ -86,17 +111,6 @@ jest.mock("../lib/evidenceStorage", () => ({
   }),
 }));
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Alert } from "react-native";
-import apiClient from "../lib/axios";
-import * as evidenceStorageMock from "../lib/evidenceStorage";
-import {
-  getFailedAttendance,
-  getQueue,
-  syncQueuedRequests,
-  type OfflineAction,
-} from "../lib/offlineQueue";
-
 /**
  * tsconfig men-pin `types: ["jest"]` (tanpa @types/node); deklarasi simbol
  * tunggal ini menjaga `tsc --noEmit` bersih untuk helper JWT saja.
@@ -119,7 +133,7 @@ async function seedQueue(actions: OfflineAction[]): Promise<void> {
   await AsyncStorage.setItem("@offline_queue", JSON.stringify(actions));
 }
 
-function checkInAction(images: Array<{ uri: string; name: string; type: string }>): OfflineAction {
+function checkInAction(images: { uri: string; name: string; type: string }[]): OfflineAction {
   return {
     id: "checkin_t1",
     type: "ATTENDANCE_CHECKIN",
@@ -139,7 +153,7 @@ function checkInAction(images: Array<{ uri: string; name: string; type: string }
   };
 }
 
-function evidenceAction(images: Array<{ uri: string; name: string; type: string }>): OfflineAction {
+function evidenceAction(images: { uri: string; name: string; type: string }[]): OfflineAction {
   return {
     id: "evidence_t1",
     type: "ATTENDANCE_EVIDENCE",
@@ -272,7 +286,7 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
     ]);
   });
 
-  it("retry anak bukti: tuntas → item hilang & dihitung synced; masih gagal → bertahan dengan daftar menyusut", async () => {
+  it("retry anak bukti: tuntas → item hilang & terhitung evidenceResynced; masih gagal → bertahan dengan daftar menyusut", async () => {
     await seedQueue([
       evidenceAction([
         { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
@@ -290,11 +304,67 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
     expect(queue[0].data.images).toHaveLength(1);
     expect(queue[0].data.images[0].uri).toBe("file:///doc/attendance-evidence/a.jpg");
 
-    // putaran 2: a sukses → anak selesai, tidak ada lagi rujukan
+    // putaran 2: a sukses → anak tuntas. BUKAN `synced` (record induk sudah
+    // dihitung saat dibuat); dihitung sebagai bukti pulih.
     routePosts(["ok"]);
     const r2 = await syncQueuedRequests();
-    expect(r2.synced).toBe(1);
+    expect(r2.synced).toBe(0);
+    expect(r2.evidenceResynced).toBe(1);
     expect(await getQueue()).toHaveLength(0);
+  });
+
+  it("item attendance gagal-retryable melewati 48 jam: TIDAK dibuang senyap — keranjang gagal + notifikasi lokal + expired di outcome", async () => {
+    const stale = checkInAction([
+      { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
+    ]);
+    stale.timestamp = Date.now() - 49 * 60 * 60 * 1000; // melewati jendela
+    await seedQueue([stale]);
+    // grup dibuat OK, tapi POST attendance gagal karena jaringan murni (retryable)
+    (apiClient.post as jest.Mock).mockImplementation(async (url: string) => {
+      if (url.includes("/evidence-group/")) return { data: { data: { id: "group-1" } } };
+      if (url === "/api/v2/attendance/") {
+        throw Object.assign(new Error("network down"), { code: "ERR_NETWORK" });
+      }
+      return { data: {} };
+    });
+
+    const outcome = await syncQueuedRequests();
+
+    expect(outcome.synced).toBe(0);
+    expect(outcome.expired).toBe(1);
+    const failed = await getFailedAttendance();
+    expect(failed).toHaveLength(1);
+    expect(failed[0].errorMessage).toMatch(/48 jam/);
+    // SURFACE: notifikasi lokal dijadwalkan
+    expect(mockScheduleNotification).toHaveBeenCalledTimes(1);
+    const notifArg = mockScheduleNotification.mock.calls[0][0] as {
+      content: { title: string; body: string };
+    };
+    expect(notifArg.content.title).toMatch(/kadaluarsa/i);
+    // antrean bersih (item dipindah ke keranjang, bukan di-retry selamanya)
+    expect(await getQueue()).toHaveLength(0);
+  });
+
+  it("STANDARD_REQUEST kedaluwarsa 48 jam: dibuang dengan log, TIDAK masuk keranjang attendance", async () => {
+    const stale: OfflineAction = {
+      id: "std_t1",
+      type: "STANDARD_REQUEST",
+      url: "/some/non-attendance/endpoint",
+      method: "POST",
+      data: {},
+      timestamp: Date.now() - 49 * 60 * 60 * 1000,
+      owner_user_id: "u1",
+    };
+    await seedQueue([stale]);
+    // callable mock axios sudah default reject ERR_NETWORK utk pemanggilan
+    // langsung (jalur STANDARD_REQUEST)
+
+    const outcome = await syncQueuedRequests();
+
+    expect(outcome.expired).toBe(0);
+    expect(await getFailedAttendance()).toHaveLength(0);
+    expect(await getQueue()).toHaveLength(0);
+    expect(mockScheduleNotification).not.toHaveBeenCalled();
   });
 
   it("grup bukti gagal dibuat (respons tanpa id): item check-in TIDAK dibakar diam-diam — retryable, tidak synced", async () => {

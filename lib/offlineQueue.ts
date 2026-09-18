@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 import apiClient from "./axios";
 import { getToken, saveCheckInId } from "./storage";
 import { useAuthStore } from "@/stores/auth";
@@ -16,6 +17,31 @@ const OFFLINE_QUEUE_KEY = "@offline_queue";
 const FAILED_ATTENDANCE_KEY = "@failed_attendance_queue";
 const CACHED_SITES_KEY = "@cached_attendance_sites";
 const CACHED_STATUS_KEY = "@cached_attendance_statuses";
+
+/** Jendela retensi item retryable dalam antrean (keputusan 2026-09-18: tetap 48 jam). */
+const QUEUE_RETENTION_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * WAVE-0 item 2 — notifikasi lokal saat item attendance kedaluwarsa dari
+ * antrean (sync bisa terjadi saat aplikasi di latar; Alert tidak cukup).
+ */
+async function notifyAttendanceExpired(count: number): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Absensi Offline Kadaluarsa",
+        body: `${count} data absensi belum berhasil terkirim setelah 48 jam dan dipindahkan ke daftar gagal di aplikasi. Data bukti masih tersimpan di perangkat — hubungi pengawas atau administrator Anda.`,
+        ...(Platform.OS === "android" ? { channelId: "shift-reminders" } : {}),
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(Date.now() + 2000),
+      },
+    });
+  } catch (err) {
+    console.warn("[OfflineQueue] Notifikasi kadaluarsa gagal:", err);
+  }
+}
 
 export interface FailedAttendanceItem {
   id: string;
@@ -241,7 +267,7 @@ export interface OfflineCheckInPayload {
   checkin_longitude: number;
   attendance_status_id: string;
   description?: string;
-  localImages: Array<{ uri: string; name: string; type: string }>;
+  localImages: { uri: string; name: string; type: string }[];
   tolerance?: number;
   /**
    * Optional: the attendance row's `contract_id` (NOT NULL in the DB).
@@ -264,7 +290,7 @@ export interface OfflineCheckOutPayload {
   checkout_latitude?: number;
   checkout_longitude?: number;
   description?: string;
-  localImages: Array<{ uri: string; name: string; type: string }>;
+  localImages: { uri: string; name: string; type: string }[];
 }
 
 export interface OfflineEvidenceRetryPayload {
@@ -275,7 +301,7 @@ export interface OfflineEvidenceRetryPayload {
   /** id attendance terkait (informasi pelaporan; bukan kunci link). */
   attendance_id?: string | null;
   /** Foto yang belum terkonfirmasi di server (uri persisten dari P0-0.6). */
-  images: Array<{ uri: string; name: string; type: string }>;
+  images: { uri: string; name: string; type: string }[];
 }
 
 export interface OfflineAction {
@@ -575,18 +601,18 @@ async function uploadLocalImage(
  * atau lost (file sudah tidak ada di perangkat, tak dapat dipulihkan).
  */
 async function uploadImagesWithAccounting(
-  images: Array<{ uri: string; name: string; type: string }>,
+  images: { uri: string; name: string; type: string }[],
   groupId: string,
   userName: string,
   label: string,
 ): Promise<{
   uploadedUris: string[];
-  retryImages: Array<{ uri: string; name: string; type: string }>;
-  lostImages: Array<{ uri: string; name: string; type: string }>;
+  retryImages: { uri: string; name: string; type: string }[];
+  lostImages: { uri: string; name: string; type: string }[];
 }> {
   const uploadedUris: string[] = [];
-  const retryImages: Array<{ uri: string; name: string; type: string }> = [];
-  const lostImages: Array<{ uri: string; name: string; type: string }> = [];
+  const retryImages: { uri: string; name: string; type: string }[] = [];
+  const lostImages: { uri: string; name: string; type: string }[] = [];
   for (const img of images) {
     const outcome = await uploadLocalImage(img, groupId, userName, label);
     if (outcome.status === "ok") uploadedUris.push(img.uri);
@@ -617,13 +643,23 @@ export interface SyncOutcome {
   evidenceRetrying: number;
   /** Foto bukti yang hilang permanen dari perangkat (masuk keranjang gagal). */
   evidenceLost: number;
+  /** Foto retry yang akhirnya TUNTAS terkirim pada putaran ini. */
+  evidenceResynced: number;
+  /** Item attendance yang kedaluwarsa dari jendela 48 jam (masuk keranjang gagal). */
+  expired: number;
 }
 
 /**
  * Sync queued requests when back online
  */
 export async function syncQueuedRequests(): Promise<SyncOutcome> {
-  const EMPTY: SyncOutcome = { synced: 0, evidenceRetrying: 0, evidenceLost: 0 };
+  const EMPTY: SyncOutcome = {
+    synced: 0,
+    evidenceRetrying: 0,
+    evidenceLost: 0,
+    evidenceResynced: 0,
+    expired: 0,
+  };
   if (isSyncing) return EMPTY;
   isSyncing = true;
 
@@ -645,6 +681,8 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
     let synced = 0;
     let evidenceRetrying = 0;
     let evidenceLost = 0;
+    let evidenceResynced = 0;
+    let expiredAttendance = 0;
     const remaining: OfflineAction[] = [];
     const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
@@ -674,6 +712,11 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
       }
 
       try {
+        // Uri bukti yang terunggah putaran ini; baru boleh dihapus dari
+        // perangkat SETELAH record induk dikonfirmasi server (lihat akhir
+        // cabang check-in/check-out).
+        let deferredEvidenceCleanup: string[] = [];
+
         if (action.type === "ATTENDANCE_CHECKIN") {
           const payload = action.data as OfflineCheckInPayload;
           const images = payload.localImages || [];
@@ -704,7 +747,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
               payload.user_name,
               "Checkin Evidence (Offline Sync)",
             );
-            await removePersistedEvidence(acc.uploadedUris);
+            // HAPUS HANYA SETELAH RECORD TERKONFIRMASI (lihat POST di bawah):
+            // bila POST gagal, item parent di-requeue utuh dan fotonya masih
+            // harus ada di perangkat untuk percobaan berikutnya.
+            deferredEvidenceCleanup = acc.uploadedUris;
             retryImages = acc.retryImages;
             if (acc.lostImages.length) {
               evidenceIssue = true;
@@ -768,6 +814,9 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           if (createdId) {
             await saveCheckInId(createdId);
           }
+          // Record TERKONFIRMASI server — salinan lokal yang sudah terunggah
+          // boleh dibuang sekarang (foto gagal tetap dipertahankan utk retry).
+          await removePersistedEvidence(deferredEvidenceCleanup);
           // WAVE-0 CHECK-1 — record sudah diterima server, tapi bila masih ada
           // foto retry atau foto hilang, item TIDAK dihitung `synced`: bukti
           // yang bisa dipulihkan diserahkan ke anak ATTENDANCE_EVIDENCE dan
@@ -803,7 +852,8 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
               payload.user_name,
               "Checkout Evidence (Offline Sync)",
             );
-            await removePersistedEvidence(acc.uploadedUris);
+            // HAPUS HANYA SETELAH RECORD TERKONFIRMASI (lihat PUT di bawah)
+            deferredEvidenceCleanup = acc.uploadedUris;
             retryImages = acc.retryImages;
             if (acc.lostImages.length) {
               evidenceIssue = true;
@@ -838,6 +888,9 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
             },
             { timeout: 20000 }
           );
+          // Checkout TERKONFIRMASI server — buang salinan lokal yang sudah
+          // terkonfirmasi (foto gagal dipertahankan utk retry anak).
+          await removePersistedEvidence(deferredEvidenceCleanup);
           // WAVE-0 CHECK-1 — sama seperti check-in: checkout tercatat, bukti
           // susulan lewat anak antrean; tidak dilaporkan "synced" penuh bila
           // ada bukti yang belum terkonfirmasi server.
@@ -855,7 +908,6 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
             );
             evidenceRetrying += retryImages.length;
           } else if (!evidenceIssue) {
-            await removePersistedEvidence(images.map((i) => i.uri));
             synced++;
           }
         } else if (action.type === "ATTENDANCE_EVIDENCE") {
@@ -864,9 +916,9 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           const images = payload.images || [];
 
           if (!images.length) {
-            // item kosong — tidak ada yang ditunggu; drop diam-diam AMAN
-            // (tidak ada bukti tersisa yang dirujuk).
-            synced++;
+            // item kosong — tidak ada yang ditunggu; drop AMAN (tak ada bukti
+            // yang dirujuk). BUKAN record absensi, jadi tidak menambah `synced`.
+            // (sudah dihitung sebagai "bersih" oleh call-site lewat queue kosong)
           } else {
             if (!groupId) {
               const groupRes = await apiClient.post("/evidence-group/", {
@@ -905,8 +957,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
               payload.images = acc.retryImages; // coba lagi putaran sync berikutnya
               remaining.push(action);
               evidenceRetrying += acc.retryImages.length;
-            } else if (!acc.lostImages.length) {
-              synced++;
+            } else if (acc.uploadedUris.length) {
+              // seluruh foto retry tuntas — dihitung sebagai bukti pulih,
+              // BUKAN `synced` (record absensi induk sudah dihitung saat itu)
+              evidenceResynced += acc.uploadedUris.length;
             }
           }
         } else {
@@ -976,10 +1030,46 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
             );
           }
         } else {
-          // Simpan item gagal untuk di-retry nanti (buang jika lebih tua dari 48 jam)
+          // Retry bila masih dalam jendela retensi. WAVE-0 item 2 (keputusan
+          // koordinator 2026-09-18): retensi TETAP 48 jam, tapi item attendance
+          // yang melewatinya TIDAK dibuang senyap — SURFACE lewat keranjang
+          // gagal + notifikasi lokal + field `expired` di outcome.
           const age = Date.now() - action.timestamp;
-          if (age < 48 * 60 * 60 * 1000) {
+          if (age < QUEUE_RETENTION_MS) {
             remaining.push(action);
+          } else if (
+            action.type === "ATTENDANCE_CHECKIN" ||
+            action.type === "ATTENDANCE_CHECKOUT" ||
+            action.type === "ATTENDANCE_EVIDENCE"
+          ) {
+            // WAVE-0 item 2 (keputusan koordinator 2026-09-18): jendela 48 jam
+            // TETAP ada, tapi kejadiannya SURFACE — tidak pernah hilang senyap.
+            // Jalur surfacing: (1) keranjang gagal -> banner OfflineBanner
+            // (sudah menampilkan jumlah), (2) notifikasi lokal untuk saat sync
+            // berjalan di latar, (3) Alert ringkasan di akhir putaran ini.
+            const expiredItem: FailedAttendanceItem = {
+              id: action.id,
+              type: action.type,
+              data: action.data,
+              timestamp: action.timestamp,
+              failedAt: Date.now(),
+              errorCode: 0,
+              errorMessage:
+                "Belum berhasil terkirim setelah 48 jam — perangkat tidak terhubung kembali ke server",
+              owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
+            };
+            await saveFailedAttendance(expiredItem);
+            newlyFailedAttendance.push(expiredItem);
+            expiredAttendance++;
+            console.error(
+              "[OfflineQueue] Item attendance kadaluarsa 48 jam → keranjang gagal:",
+              action.type,
+            );
+          } else {
+            console.warn(
+              "[OfflineQueue] STANDARD_REQUEST kadaluarsa 48 jam dibuang (non-critical):",
+              action.url || "",
+            );
           }
         }
       }
@@ -1018,9 +1108,13 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
       const message =
         first.errorCode === 409
           ? `Data absensi (${jenis}) tidak dapat disinkronkan karena presensi untuk Hari Operasional ini sudah terdaftar di server (batas cut-off pukul 04:00 WIB). Bukti kerja Anda tetap tersimpan aman di perangkat.`
-          : count === 1
-          ? `Data absensi offline (${jenis}) gagal disinkronkan ke server (Error ${first.errorCode}: ${first.errorMessage}). Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`
-          : `${count} data absensi offline gagal disinkronkan ke server. Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`;
+          : first.errorCode === 0
+            ? count === 1
+              ? `Data absensi offline (${jenis}) tidak dapat dikirim: ${first.errorMessage}. Bukti kerja tetap tersimpan di perangkat dan ditandai pada banner merah. Harap laporkan ke atasan/administrator.`
+              : `${count} data absensi offline tidak dapat dikirim. Bukti kerja tetap tersimpan di perangkat dan ditandai pada banner merah. Harap laporkan ke atasan/administrator.`
+            : count === 1
+              ? `Data absensi offline (${jenis}) gagal disinkronkan ke server (Error ${first.errorCode}: ${first.errorMessage}). Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`
+              : `${count} data absensi offline gagal disinkronkan ke server. Bukti kerja Anda tetap tersimpan aman di perangkat. Harap laporkan ke atasan/administrator.`;
 
       Alert.alert("Perhatian: Sinkronisasi Absensi Gagal", message, [
         { text: "Mengerti" },
@@ -1034,7 +1128,13 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
       );
     }
 
-    return { synced, evidenceRetrying, evidenceLost };
+    // WAVE-0 item 2 — kedaluwarsa 48 jam harus terdengar walau app di latar.
+    // Di-AWAIT (bukan fire-and-forget) agar deterministic & teruji.
+    if (expiredAttendance > 0) {
+      await notifyAttendanceExpired(expiredAttendance);
+    }
+
+    return { synced, evidenceRetrying, evidenceLost, evidenceResynced, expired: expiredAttendance };
   } finally {
     isSyncing = false;
   }

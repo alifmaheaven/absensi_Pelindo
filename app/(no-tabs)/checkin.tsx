@@ -1,7 +1,6 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import EmptyState from "@/components/ui/EmptyState";
 import {
@@ -32,6 +31,13 @@ import {
   getOperationalDateWIB,
   resolveAttendanceSession,
 } from "@/utils/utils";
+import {
+  LOCATION_FIX_TIMEOUT_MS,
+  classifyLocationFailure,
+  formatOutOfRangeCopy,
+  getLocationFailureCopy,
+  type LocationFailureCause,
+} from "@/utils/location-diagnostics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
@@ -79,7 +85,9 @@ export default function CheckinScreen() {
     null,
   );
   const [loadingLocation, setLoadingLocation] = useState(true);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  // WAVE-0 GPS-diagnosis: penyebab kegagalan dibedakan (A izin / B layanan /
+  // C tanpa-fix) alih-alih `permissionDenied` boolean yang menelan semuanya.
+  const [locationFailure, setLocationFailure] = useState<LocationFailureCause | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [siteData, setSiteData] = useState<IAttendanceSite[]>([]);
@@ -223,19 +231,40 @@ export default function CheckinScreen() {
 
   const requestLocation = async () => {
     setLoadingLocation(true);
-    setPermissionDenied(false);
+    setLocationFailure(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== "granted") {
-        setPermissionDenied(true);
-        setLoadingLocation(false);
+        // A — izin aplikasi belum diberikan. Tanpa 'Coba Lagi' buta (steer
+        // UI/UX): tombol utama layar adalah Buka Pengaturan.
+        setLocationFailure("PERMISSION");
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // B — layanan lokasi perangkat (probe non-fatal; undefined = tak terbukti)
+      let servicesEnabled: boolean | undefined;
+      try {
+        servicesEnabled = await Location.hasServicesEnabledAsync();
+      } catch {
+        servicesEnabled = undefined;
+      }
+      if (servicesEnabled === false) {
+        setLocationFailure("SERVICES");
+        return;
+      }
+
+      // C — fix dalam batas waktu eksplisit (LOCATION_FIX_TIMEOUT_MS; angka
+      // yang sama muncul di pesan NO_FIX lewat konstanta bersama).
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_FIX_TIMEOUT_MS)),
+      ]);
+
+      if (!loc) {
+        setLocationFailure("NO_FIX");
+        return;
+      }
 
       if (loc.mocked) {
         setLocation(null);
@@ -249,9 +278,24 @@ export default function CheckinScreen() {
       setLocation(loc);
     } catch (e) {
       console.debug("Location error:", e);
-      setPermissionDenied(true);
+      // Error provider (mis. unauthorized saat resolve) — klasifikasi ulang
+      // konservatif: bila izin terbukti granted, ini C (sinyal), bukan A.
+      setLocationFailure("NO_FIX");
     } finally {
       setLoadingLocation(false);
+    }
+  };
+
+  // Aksi utk panel kegagalan lokasi (WAVE-0 GPS-diagnosis)
+  const locationFailureCopy = locationFailure ? getLocationFailureCopy(locationFailure) : null;
+
+  const handleEnableServices = async () => {
+    try {
+      await Location.enableNetworkProviderAsync();
+      await requestLocation();
+    } catch {
+      // user menolak dialog / unsupported — fallback ke Pengaturan
+      Linking.openSettings();
     }
   };
 
@@ -301,7 +345,14 @@ export default function CheckinScreen() {
     // koordinatnya hilang — lihat backend/src/controllers/attendanceControllers.ts.
     const selectedSite = sitesList.find(s => s.id === selectedLocation);
     if (location && !selectedSite?.inRange) {
-      Alert.alert('Error', 'You must be within range of the selected site to check in.');
+      // WAVE-0 UIUX-04 (penyebab D, rubrik C.2): copy Indonesia + ANGKA JARAK
+      // aktual yang sudah dihitung di sitesList (bukan Alert Inggris mentah).
+      const rangeCopy = formatOutOfRangeCopy({
+        distanceMeters: selectedSite?.distance ?? NaN,
+        toleranceMeters: selectedSite?.tolerance ?? null,
+        siteName: selectedSite?.name ?? null,
+      });
+      Alert.alert(rangeCopy.title, rangeCopy.message, [{ text: "Mengerti" }]);
       return;
     }
 
@@ -627,44 +678,69 @@ export default function CheckinScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : loadingLocation ? (
-            <FormSkeleton />
           ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Map View */}
+            {/* Map View — WAVE-0 GPS-diagnosis: form di bawah (site, catatan,
+                foto, submit) TIDAK lagi ditelan skeleton saat loading; hanya
+                area peta yang menampilkan progres/kegagalan per-penyebab. */}
             <View style={styles.mapContainer}>
               {!location ? (
-                permissionDenied ? (
+                locationFailure && locationFailureCopy ? (
                   <View style={styles.loadingContainer}>
                     <Ionicons name="location-outline" size={40} color={colors.danger} style={{ marginBottom: 10 }} />
                     <Text style={styles.locationDeniedTitle}>
-                      Izin lokasi diperlukan
+                      {locationFailureCopy.title}
                     </Text>
                     <Text style={styles.locationDeniedText}>
-                      Aktifkan izin lokasi untuk melakukan check-in
+                      {locationFailureCopy.message}
                     </Text>
-                    <TouchableOpacity
-                      style={styles.retryButton}
-                      onPress={requestLocation}
-                    >
-                      <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.settingsButton}
-                      onPress={() => Linking.openSettings()}
-                    >
-                      <Text style={styles.settingsButtonText}>
-                        Buka Pengaturan
-                      </Text>
-                    </TouchableOpacity>
+                    {locationFailureCopy.actions.map((action) =>
+                      action === "RETRY" ? (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.retryButton}
+                          onPress={requestLocation}
+                          accessibilityRole="button"
+                          accessibilityLabel="Coba Lagi"
+                        >
+                          <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                        </TouchableOpacity>
+                      ) : action === "ENABLE_SERVICES" ? (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.settingsButton}
+                          onPress={handleEnableServices}
+                          accessibilityRole="button"
+                          accessibilityLabel="Aktifkan Layanan Lokasi"
+                        >
+                          <Text style={styles.settingsButtonText}>
+                            Aktifkan Layanan Lokasi
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.settingsButton}
+                          onPress={() => Linking.openSettings()}
+                          accessibilityRole="button"
+                          accessibilityLabel="Buka Pengaturan"
+                        >
+                          <Text style={styles.settingsButtonText}>
+                            Buka Pengaturan
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
                   </View>
                 ) : (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
+                    <Text style={styles.loadingText}>
+                      {loadingLocation ? "Mendeteksi lokasi..." : "Menunggu posisi GPS — silakan coba lagi bila lama tidak muncul."}
+                    </Text>
                   </View>
                 )
               ) : (
@@ -1008,6 +1084,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     marginBottom: 10,
+    // WAVE-0 UI/UX: target sentuh minimal 48dp (steer #2.4)
+    minHeight: 48,
   },
   retryButtonText: {
     color: c.onGradient,
@@ -1017,6 +1095,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   settingsButton: {
     paddingVertical: 10,
     paddingHorizontal: 24,
+    // WAVE-0 UI/UX: target sentuh minimal 48dp (steer #2.4)
+    minHeight: 48,
   },
   settingsButtonText: {
     color: c.primary,

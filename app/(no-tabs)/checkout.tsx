@@ -1,7 +1,6 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
 import { useToast } from "@/components/ui/toast";
 import {
   IMAGE_BASE_PATH,
@@ -22,6 +21,11 @@ import { getActiveCheckins } from "@/services/ticket";
 import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
 import { parseWIBDate, getOperationalDateWIB, formatHourMinute } from "@/utils/utils";
+import {
+  LOCATION_FIX_TIMEOUT_MS,
+  getLocationFailureCopy,
+  type LocationFailureCause,
+} from "@/utils/location-diagnostics";
 import NetInfo from "@react-native-community/netinfo";
 import { queueOfflineCheckOut, queueOfflineEvidence } from "@/lib/offlineQueue";
 import { removePersistedEvidence } from "@/lib/evidenceStorage";
@@ -121,7 +125,9 @@ export default function CheckoutScreen() {
   // --- Location state ---
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  // WAVE-0 GPS-diagnosis: penyebab kegagalan dibedakan (A izin / B layanan /
+  // C tanpa-fix) alih-alih `permissionDenied` boolean yang menelan semuanya.
+  const [locationFailure, setLocationFailure] = useState<LocationFailureCause | null>(null);
 
   const {
     images,
@@ -228,18 +234,37 @@ export default function CheckoutScreen() {
     fetchCheckIn();
   }, [params.attendance_id, user?.id]);
 
-  // Get GPS location
+  // Get GPS location — WAVE-0 GPS-diagnosis (identik dgn checkin.tsx: 4 penyebab)
   const requestLocation = async () => {
     setLoadingLocation(true);
-    setPermissionDenied(false);
+    setLocationFailure(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setPermissionDenied(true);
-        setLoadingLocation(false);
+        // A — izin aplikasi belum diberikan; tanpa 'Coba Lagi' buta (steer UI/UX)
+        setLocationFailure("PERMISSION");
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      // B — layanan lokasi perangkat (probe non-fatal)
+      let servicesEnabled: boolean | undefined;
+      try {
+        servicesEnabled = await Location.hasServicesEnabledAsync();
+      } catch {
+        servicesEnabled = undefined;
+      }
+      if (servicesEnabled === false) {
+        setLocationFailure("SERVICES");
+        return;
+      }
+      // C — fix dalam batas waktu eksplisit (satu sumber angka dgn pesan NO_FIX)
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_FIX_TIMEOUT_MS)),
+      ]);
+      if (!loc) {
+        setLocationFailure("NO_FIX");
+        return;
+      }
       if (loc.mocked) {
         setLocation(null);
         Alert.alert(
@@ -251,9 +276,20 @@ export default function CheckoutScreen() {
       setLocation(loc);
     } catch (e) {
       console.debug("Location error:", e);
-      setPermissionDenied(true);
+      setLocationFailure("NO_FIX");
     } finally {
       setLoadingLocation(false);
+    }
+  };
+
+  const locationFailureCopy = locationFailure ? getLocationFailureCopy(locationFailure) : null;
+
+  const handleEnableServices = async () => {
+    try {
+      await Location.enableNetworkProviderAsync();
+      await requestLocation();
+    } catch {
+      Linking.openSettings();
     }
   };
 
@@ -555,44 +591,67 @@ export default function CheckoutScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : loadingLocation ? (
-            <FormSkeleton />
           ) : (
           <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Map */}
+            {/* Map — WAVE-0 GPS-diagnosis: form tidak lagi ditelan skeleton */}
             <View style={styles.mapContainer}>
               {!location ? (
-                permissionDenied ? (
+                locationFailure && locationFailureCopy ? (
                   <View style={styles.loadingContainer}>
                     <Ionicons name="location-outline" size={40} color={colors.danger} style={{ marginBottom: 10 }} />
                     <Text style={styles.locationDeniedTitle}>
-                      Izin lokasi diperlukan
+                      {locationFailureCopy.title}
                     </Text>
                     <Text style={styles.locationDeniedText}>
-                      Aktifkan izin lokasi untuk melakukan check-out
+                      {locationFailureCopy.message}
                     </Text>
-                    <TouchableOpacity
-                      style={styles.retryButton}
-                      onPress={requestLocation}
-                    >
-                      <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.settingsButton}
-                      onPress={() => Linking.openSettings()}
-                    >
-                      <Text style={styles.settingsButtonText}>
-                        Buka Pengaturan
-                      </Text>
-                    </TouchableOpacity>
+                    {locationFailureCopy.actions.map((action) =>
+                      action === "RETRY" ? (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.retryButton}
+                          onPress={requestLocation}
+                          accessibilityRole="button"
+                          accessibilityLabel="Coba Lagi"
+                        >
+                          <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                        </TouchableOpacity>
+                      ) : action === "ENABLE_SERVICES" ? (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.settingsButton}
+                          onPress={handleEnableServices}
+                          accessibilityRole="button"
+                          accessibilityLabel="Aktifkan Layanan Lokasi"
+                        >
+                          <Text style={styles.settingsButtonText}>
+                            Aktifkan Layanan Lokasi
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          key={action}
+                          style={styles.settingsButton}
+                          onPress={() => Linking.openSettings()}
+                          accessibilityRole="button"
+                          accessibilityLabel="Buka Pengaturan"
+                        >
+                          <Text style={styles.settingsButtonText}>
+                            Buka Pengaturan
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
                   </View>
                 ) : (
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
+                    <Text style={styles.loadingText}>
+                      {loadingLocation ? "Mendeteksi lokasi..." : "Menunggu posisi GPS — silakan coba lagi bila lama tidak muncul."}
+                    </Text>
                   </View>
                 )
               ) : (
@@ -838,9 +897,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   locationDeniedEmoji: { fontSize: 40, marginBottom: 10 },
   locationDeniedTitle: { fontSize: 16, fontWeight: "bold", color: c.text, marginBottom: 4 },
   locationDeniedText: { fontSize: 13, color: c.textMuted, textAlign: "center", marginBottom: 16, paddingHorizontal: 20 },
-  retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10 },
+  retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
-  settingsButton: { paddingVertical: 10, paddingHorizontal: 24 },
+  settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },
   settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
   locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600" },

@@ -60,7 +60,12 @@ export function classifyLocationFailure(
 
 export interface LocationFailureCopy {
   title: string;
+  /** Ambang UIUX-02 (diamandemen 2026-09-18): total ≤220 char SAH bila
+   *  langkah dirender via `steps` (baris ≤40 char) dan kalimat pertama
+   *  mandiri ≤80 char. */
   message: string;
+  /** Rangkuman langkah utk dirender SEBAGAI LIST BARIS PENDEK (bukan paragraf). */
+  steps?: string[];
   /** Aksi yang ditawarkan, berurutan. 'RETRY' sengaja tidak muncul utk A. */
   actions: LocationAction[];
 }
@@ -74,29 +79,32 @@ export function getLocationFailureCopy(cause: LocationFailureCause): LocationFai
       return {
         title: "Izin Lokasi Belum Diberikan",
         message:
-          "Aplikasi ini belum diizinkan mengakses lokasi perangkat, padahal presensi wajib lokasi. " +
-          "Buka Pengaturan aplikasi, aktifkan izin lokasi, lalu kembali ke layar ini. " +
-          "Bila izin tidak dapat diaktifkan, hubungi pengawas Anda.",
+          "Aplikasi belum punya izin lokasi, padahal presensi wajib lokasi. " +
+          "Buka Pengaturan dan aktifkan izin lokasi, lalu kembali ke sini. " +
+          "Jika tetap gagal, hubungi pengawas Anda.",
         actions: ["OPEN_SETTINGS"],
       };
     case "SERVICES":
       return {
         title: "Layanan Lokasi Perangkat Mati",
         message:
-          "Izin aplikasi sudah ada, tetapi layanan lokasi (GPS) perangkat Anda dalam keadaan nonaktif. " +
-          "Nyalakan layanan lokasi, lalu tekan Aktifkan/Coba Lagi. " +
-          "Bila layanan tidak dapat dinyalakan, hubungi pengawas Anda.",
+          "Izin aplikasi sudah aktif, tetapi GPS perangkat Anda sedang mati. " +
+          "Nyalakan layanan lokasi, lalu tekan tombol di bawah. " +
+          "Jika tetap gagal, hubungi pengawas Anda.",
         actions: ["ENABLE_SERVICES", "OPEN_SETTINGS", "RETRY"],
       };
     case "NO_FIX":
       return {
         title: "Sinyal GPS Tidak Ditemukan",
         message:
-          `Posisi Anda belum berhasil dikunci setelah ±${COPY_SECONDS} detik. Coba tiga langkah ini: ` +
-          "1) pindah ke area terbuka atau dekat jendela; " +
-          "2) pastikan mode pesawat mati dan Wi-Fi/data aktif; " +
-          "3) matikan lalu nyalakan kembali GPS, lalu tekan Coba Lagi. " +
-          "Jika tetap gagal, presensi tidak dapat dilanjutkan — hubungi pengawas Anda.",
+          `Posisi Anda belum terkunci setelah ±${COPY_SECONDS} detik. ` +
+          "Lakukan langkah ini, lalu tekan Coba Lagi. " +
+          "Jika tetap gagal, presensi tidak bisa dilanjutkan — hubungi pengawas Anda.",
+        steps: [
+          "Pindah ke area terbuka/dekat jendela",
+          "Matikan mode pesawat, nyalakan Wi-Fi",
+          "Matikan lalu nyalakan kembali GPS",
+        ],
         actions: ["RETRY", "OPEN_SETTINGS"],
       };
     case "OUT_OF_RANGE":
@@ -122,6 +130,10 @@ export interface OutOfRangeInfo {
 /**
  * Copy gerbang radius (menggantikan Alert bahasa Inggris mentah). Jarak
  * aktual SELALU ditampilkan — angka yang sama dengan kartu site.
+ *
+ * Ambang UIUX-02 (diamandemen): kalimat pertama ≤80 char berdiri sendiri
+ * ("Posisi Anda N m dari <site>."), total ≤220 char — dipegang oleh
+ * assertion CI di __tests__/locationDiagnostics.test.ts.
  */
 export function formatOutOfRangeCopy(info: OutOfRangeInfo): LocationFailureCopy {
   const base = getLocationFailureCopy("OUT_OF_RANGE");
@@ -129,20 +141,16 @@ export function formatOutOfRangeCopy(info: OutOfRangeInfo): LocationFailureCopy 
     ? Math.round(info.distanceMeters)
     : null;
   const where = info.siteName ? `"${info.siteName}"` : "site terpilih";
-  let detail: string;
-  if (info.toleranceMeters == null) {
-    detail =
-      `Posisi Anda berjarak ${distance == null ? "?" : distance} m dari ${where}, ` +
-      "tetapi radius presensi lokasi ini belum diatur administrator — sistem menolak absensi di luar radius. ";
-  } else {
-    detail =
-      `Posisi Anda berjarak ${distance == null ? "?" : distance} m dari ${where}, ` +
-      `sedangkan batas radius presensi adalah ${Math.round(info.toleranceMeters)} m. ` +
-      "Mendekatlah ke titik lokasi presensi. ";
-  }
+  const first = `Posisi Anda ${distance == null ? "?" : distance} m dari ${where}.`;
+  const rest =
+    info.toleranceMeters == null
+      ? "Radius presensi lokasi ini belum diatur administrator sehingga absensi ditolak. " +
+        "Mendekatlah lalu tekan Coba Lagi, atau hubungi pengawas Anda."
+      : `Batas radius presensi ${Math.round(info.toleranceMeters)} m. ` +
+        "Mendekatlah ke titik lokasi. Bila tetap ditolak padahal sudah di lokasi, hubungi pengawas Anda.";
   return {
     ...base,
-    message: detail + base.message.replace(/^Posisi Anda[^.]*\.\s*/, ""),
+    message: `${first} ${rest}`,
   };
 }
 

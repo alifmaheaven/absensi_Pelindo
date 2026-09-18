@@ -113,3 +113,45 @@ describe("formatOutOfRangeCopy (UIUX-04, penyebab D)", () => {
     expect(copy.message).not.toMatch(/NaN/);
   });
 });
+
+/**
+ * Ambang UIUX-02 (diamandemen 2026-09-18) jadi ASSERTION CI, bukan mata
+ * manusia: total ≤220 char, kalimat pertama mandiri ≤80 char, tiap langkah
+ * list ≤40 char. Berlaku utk SEMUA pesan diagnosis (A/B/C/D) + varian D.
+ */
+describe("UIUX-02 ambang copy (assertion CI)", () => {
+  const firstSentence = (msg: string): string => {
+    // kalimat pertama = sampai '.' pertama yang diikuti spasi+kapital/akhir
+    const m = msg.match(/^(.*?\.)\s/);
+    return (m ? m[1] : msg).trim();
+  };
+
+  const cases: { name: string; copy: ReturnType<typeof getLocationFailureCopy> }[] = [
+    { name: "A PERMISSION", copy: getLocationFailureCopy("PERMISSION") },
+    { name: "B SERVICES", copy: getLocationFailureCopy("SERVICES") },
+    { name: "C NO_FIX", copy: getLocationFailureCopy("NO_FIX") },
+    { name: "D OUT_OF_RANGE basis", copy: getLocationFailureCopy("OUT_OF_RANGE") },
+    {
+      name: "D varian radius terisi",
+      copy: formatOutOfRangeCopy({ distanceMeters: 413, toleranceMeters: 150, siteName: "Terminal 3" }),
+    },
+    {
+      name: "D varian tanpa radius",
+      copy: formatOutOfRangeCopy({ distanceMeters: 60, toleranceMeters: null, siteName: "Gudang" }),
+    },
+  ];
+
+  it.each(cases)("$name: total ≤220 char", ({ copy }) => {
+    expect(copy.message.length).toBeLessThanOrEqual(220);
+  });
+
+  it.each(cases)("$name: kalimat pertama ≤80 char", ({ copy }) => {
+    expect(firstSentence(copy.message).length).toBeLessThanOrEqual(80);
+  });
+
+  it.each(cases)("$name: tiap langkah list ≤40 char", ({ copy }) => {
+    for (const step of copy.steps ?? []) {
+      expect(step.length).toBeLessThanOrEqual(40);
+    }
+  });
+});

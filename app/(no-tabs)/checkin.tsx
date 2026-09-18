@@ -331,18 +331,22 @@ export default function CheckinScreen() {
       return;
     }
 
-    // Validasi inRange — hanya bila koordinat tersedia.
+    // Validasi inRange — hanya berlaku bila koordinat tersedia.
     //
-    // KM-3: bila perangkat gagal memperoleh fix (GPS mati / izin ditolak), kita
-    // TIDAK memblokir check-in di sini. Sebelumnya `!location` membuat check-in
-    // mustahil tanpa GPS. Sekarang jalur itu diteruskan ke server dengan
-    // `location_unavailable: true`, sehingga server MENERIMA lalu MENANDAI
-    // ([TANPA LOKASI]) untuk ditinjau admin.
+    // KM-3 (KONDISI AKTUAL — diperjujur 2026-09-18): backend MEMANG mendukung
+    // escape-hatch check-in tanpa koordinat via flag `location_unavailable:
+    // true` (server menerima lalu MENANDAI [TANPA LOKASI] utk ditinjau admin;
+    // lihat backend/src/controllers/attendanceControllers.ts). KLIEN SENGAJA
+    // TIDAK memakainya: kebijakan GPS-WAJIB owner 2026-09-18, dan guard
+    // `if (!location) return` di atas (blok validasi lokasi handleSubmit)
+    // menahan cabang itu permanen — cabang `location_unavailable` di payload
+    // di bawah adalah dead code yang dipertahankan hanya bila owner kelak
+    // mencabut kebijakan. JANGAN 'memperbaiki' ini menjadi reachable tanpa
+    // keputusan owner.
     //
-    // Ini TIDAK melemahkan gerbang radius: server tetap menolak bila situs tidak
-    // punya radius, dan gerbang radius hanya berlaku saat koordinat ada. Jalur
-    // offline (yang SEHARUSNYA membawa koordinat) tetap ditolak server bila
-    // koordinatnya hilang — lihat backend/src/controllers/attendanceControllers.ts.
+    // Gerbang radius: server tetap menolak situs tanpa radius, dan radius
+    // hanya dievaluasi saat koordinat ada — jalur offline pun ditolak server
+    // bila koordinat hilang.
     const selectedSite = sitesList.find(s => s.id === selectedLocation);
     if (location && !selectedSite?.inRange) {
       // WAVE-0 UIUX-04 (penyebab D, rubrik C.2): copy Indonesia + ANGKA JARAK
@@ -497,10 +501,12 @@ export default function CheckinScreen() {
         payload.longitude = location.coords.longitude;
         payload.latitude = location.coords.latitude;
       } else {
-        // KM-3: tandai secara EKSPLISIT bahwa perangkat gagal memperoleh fix.
-        // Server membedakan ini dari "jalur yang seharusnya membawa koordinat
-        // tetapi tidak" (mis. sinkronisasi offline) — yang tetap DITOLAK 400.
-        // Tanpa flag ini, server menolak 400; jadi flag wajib dikirim di sini.
+        // KM-3 escape-hatch (DEAD CODE under GPS-WAJIB owner 2026-09-18):
+        // guard `if (!location) return` di blok validasi atas membuat cabang
+        // ini tidak pernah tercapai dari layar ini. Server tetap mendukung
+        // flag-nya (attendanceControllers.ts) — dipertahankan hanya bila owner
+        // kelak mengizinkan check-in tanpa fix. JANGAN membuat reachable
+        // tanpa keputusan owner; lihat komentar KM-3 di blok validasi.
         payload.location_unavailable = true;
       }
       if (user?.contract_id) payload.contract_id = user.contract_id;

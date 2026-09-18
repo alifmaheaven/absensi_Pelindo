@@ -193,14 +193,14 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       mockToken = makeToken("user-B");
       useAuthStore.setState({ user: { id: "user-B" } as any });
       captureAttendanceBodies();
-      expect(await syncQueuedRequests()).toBe(0);
+      expect((await syncQueuedRequests()).synced).toBe(0);
 
       // A returns to the device.
       mockToken = makeToken("user-A");
       useAuthStore.setState({ user: { id: "user-A" } as any });
 
       const bodies = captureAttendanceBodies();
-      const synced = await syncQueuedRequests();
+      const { synced } = await syncQueuedRequests();
 
       expect(synced).toBe(1);
       expect(bodies).toHaveLength(1);
@@ -231,7 +231,7 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       useAuthStore.setState({ user: null });
 
       const bodies = captureAttendanceBodies();
-      expect(await syncQueuedRequests()).toBe(0);
+      expect((await syncQueuedRequests()).synced).toBe(0);
       expect(bodies).toHaveLength(0);
       expect(await getQueue()).toHaveLength(1);
     });
@@ -448,7 +448,7 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       useAuthStore.setState({ user: { id: "user-B" } as any });
 
       const bodies = captureAttendanceBodies();
-      expect(await syncQueuedRequests()).toBe(0);
+      expect((await syncQueuedRequests()).synced).toBe(0);
       expect(bodies).toHaveLength(0);
 
       // The migration must have recorded A as the owner, so the item survives
@@ -465,7 +465,7 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       useAuthStore.setState({ user: { id: "user-A" } as any });
 
       const bodies = captureAttendanceBodies();
-      expect(await syncQueuedRequests()).toBe(1);
+      expect((await syncQueuedRequests()).synced).toBe(1);
       expect(bodies[0].user_id).toBe("user-A");
       expect(bodies[0].latitude).toBe(-6.175); // MOB-01 fix from a274e69 preserved
       expect(bodies[0].longitude).toBe(106.827);
@@ -503,7 +503,7 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       useAuthStore.setState({ user: { id: "user-A" } as any });
       (apiClient.put as jest.Mock).mockResolvedValue({ data: { data: {} } });
 
-      expect(await syncQueuedRequests()).toBe(1);
+      expect((await syncQueuedRequests()).synced).toBe(1);
       expect(apiClient.put).toHaveBeenCalledTimes(1);
       expect(await getQueue()).toHaveLength(0);
     });
@@ -537,7 +537,7 @@ describe("MOB-02 — offline queue must not cross user identity boundaries", () 
       await queueOfflineCheckIn(checkInPayload("user-A"));
       const bodies = captureAttendanceBodies();
 
-      expect(await syncQueuedRequests()).toBe(1);
+      expect((await syncQueuedRequests()).synced).toBe(1);
       expect(bodies).toHaveLength(1);
       expect(bodies[0]).toMatchObject({
         user_id: "user-A",

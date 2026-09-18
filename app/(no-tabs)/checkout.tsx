@@ -23,7 +23,8 @@ import { useAuthStore } from "@/stores/auth";
 import { IAttendance, THttpErrorResult } from "@/types";
 import { parseWIBDate, getOperationalDateWIB, formatHourMinute } from "@/utils/utils";
 import NetInfo from "@react-native-community/netinfo";
-import { queueOfflineCheckOut } from "@/lib/offlineQueue";
+import { queueOfflineCheckOut, queueOfflineEvidence } from "@/lib/offlineQueue";
+import { removePersistedEvidence } from "@/lib/evidenceStorage";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from "expo-location";
@@ -68,11 +69,16 @@ const uploadService = {
   },
 };
 
+// WAVE-0 P0-0.6 / CHECK-1 — helper mengembalikan status TRUE/FALSE (bukan void)
+// dan TIDAK melempar: kegagalan per-file dicatat pemanggil, tidak lagi hilang
+// di balik toast "Berhasil Check Out!". Grup bukti kosong = tidak ada tempat
+// menautkan file → false (foto diserahkan ke antrean retry yang membuat grupnya).
 async function uploadSingleCheckoutEvidence(
   img: { uri: string; path?: string },
   groupId: string,
   userName?: string
-) {
+): Promise<boolean> {
+  if (!groupId) return false;
   let permanentPath = img.path;
   if (!permanentPath) {
     try {
@@ -86,17 +92,22 @@ async function uploadSingleCheckoutEvidence(
       console.warn("Failed to upload temp image online:", e);
     }
   }
-  if (!permanentPath) return;
+  if (!permanentPath) return false;
 
-  const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
-  const file = uploaded.data?.links?.[0];
-  if (file) {
+  try {
+    const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
+    const file = uploaded.data?.links?.[0];
+    if (!file) return false;
     await uploadEvidGroupId({
       name: `Attendance ${userName || "User"}`,
       description: "Checkout Evidence",
       file,
       evidence_group_id: groupId,
     });
+    return true;
+  } catch (e) {
+    console.warn("Failed to link checkout evidence:", e);
+    return false;
   }
 }
 
@@ -357,9 +368,18 @@ export default function CheckoutScreen() {
 
       const groupId = activeCheckin?.evidence_group_id ?? "";
 
-      // Upload ONLY new checkout evidence to group
+      // WAVE-0 P0-0.6 / CHECK-1 — catat hasil tiap unggahan bukti.
+      const failedEvidence: Array<{ uri: string; name: string; type: string }> = [];
+      const uploadedLocalUris: string[] = [];
       for (const img of newCheckoutImages) {
-        await uploadSingleCheckoutEvidence(img, groupId, user?.name);
+        const ok = await uploadSingleCheckoutEvidence(img, groupId, user?.name);
+        if (ok) uploadedLocalUris.push(img.uri);
+        else
+          failedEvidence.push({
+            uri: img.uri,
+            name: img.name || `checkout_${Date.now()}.jpg`,
+            type: img.type || "image/jpeg",
+          });
       }
 
       // Update attendance checkout with GPS location + notes
@@ -373,8 +393,34 @@ export default function CheckoutScreen() {
         } : {}),
       });
 
-      showToast("Berhasil Check Out!", "success");
-      router.replace("/");
+      // WAVE-0 P0-0.6 / CHECK-1 — checkout tercatat: serahkan bukti yang gagal
+      // ke antrean retry latar, laporkan status parsial secara jujur.
+      if (failedEvidence.length) {
+        try {
+          await queueOfflineEvidence({
+            user_name: user?.name || "User",
+            evidence_group_id: groupId,
+            attendance_id: activeCheckin.id,
+            images: failedEvidence,
+          });
+        } catch (qErr) {
+          console.error("Gagal mendaftarkan retry bukti:", qErr);
+        }
+      }
+      if (uploadedLocalUris.length) {
+        void removePersistedEvidence(uploadedLocalUris);
+      }
+
+      if (failedEvidence.length) {
+        Alert.alert(
+          "Check Out Tercatat — Sebagian Bukti Belum Terkirim",
+          `Kepulangan Anda sudah tersimpan di server, tetapi ${failedEvidence.length} foto bukti belum berhasil diunggah. Foto tersebut tersimpan di perangkat dan akan dicoba kirim ulang secara otomatis. Harap cek kembali bukti pada riwayat absensi Anda.`,
+          [{ text: "Mengerti", onPress: () => router.replace("/") }],
+        );
+      } else {
+        showToast("Berhasil Check Out!", "success");
+        router.replace("/");
+      }
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(err);

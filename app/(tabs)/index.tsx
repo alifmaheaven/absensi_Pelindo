@@ -165,10 +165,17 @@ export default function HomeScreen() {
     if (isSyncingOffline) return;
     setIsSyncingOffline(true);
     try {
-      const synced = await syncQueuedRequests();
+      const outcome = await syncQueuedRequests();
       await refreshPendingCount();
-      if (synced > 0) {
-        showToast(`Berhasil menyinkronkan ${synced} absensi`, "success");
+      if (outcome.synced > 0 || outcome.evidenceRetrying > 0) {
+        const extra =
+          outcome.evidenceRetrying > 0
+            ? ` — ${outcome.evidenceRetrying} foto bukti sedang dicoba ulang otomatis`
+            : "";
+        showToast(
+          `Berhasil menyinkronkan ${outcome.synced} absensi${extra}`,
+          outcome.evidenceRetrying > 0 ? "info" : "success",
+        );
         fetchAttendance();
       } else {
         const remaining = await getPendingCount();

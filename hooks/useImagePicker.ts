@@ -209,8 +209,9 @@ export function useImagePicker() {
       }
       newImages.splice(index, 1);
       setImages(newImages);
-      // WAVE-0 P0-0.6 — file persisten yang tidak lagi dirujuk state layar
-      // dihapus agar penyimpanan perangkat tidak menumpuk. Best-effort.
+      // WAVE-0 P0-0.6 / CHECK-2a — konteks sah (b): user MEMBUANG fotonya
+      // sendiri sebelum submit, jadi uri ini tidak akan pernah terkirim.
+      // Kontrak lihat lib/evidenceStorage.ts. Best-effort.
       if (target?.uri) {
         void removePersistedEvidence([target.uri]);
       }

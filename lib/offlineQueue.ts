@@ -5,6 +5,7 @@ import apiClient from "./axios";
 import { getToken, saveCheckInId } from "./storage";
 import { useAuthStore } from "@/stores/auth";
 import {
+  cleanupOrphanedEvidence,
   evidenceFileExists,
   isPersistedEvidence,
   persistEvidenceImage,
@@ -18,8 +19,8 @@ const CACHED_STATUS_KEY = "@cached_attendance_statuses";
 
 export interface FailedAttendanceItem {
   id: string;
-  type: "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT";
-  data: OfflineCheckInPayload | OfflineCheckOutPayload;
+  type: "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT" | "ATTENDANCE_EVIDENCE";
+  data: OfflineCheckInPayload | OfflineCheckOutPayload | OfflineEvidenceRetryPayload | any;
   timestamp: number;
   failedAt: number;
   errorCode: number;
@@ -266,9 +267,20 @@ export interface OfflineCheckOutPayload {
   localImages: Array<{ uri: string; name: string; type: string }>;
 }
 
+export interface OfflineEvidenceRetryPayload {
+  /** Nama untuk label evidence server-side. */
+  user_name: string;
+  /** Grup bukti SUDAH ada di server (dibuat jalur online/sync induk). */
+  evidence_group_id: string;
+  /** id attendance terkait (informasi pelaporan; bukan kunci link). */
+  attendance_id?: string | null;
+  /** Foto yang belum terkonfirmasi di server (uri persisten dari P0-0.6). */
+  images: Array<{ uri: string; name: string; type: string }>;
+}
+
 export interface OfflineAction {
   id: string;
-  type: "STANDARD_REQUEST" | "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT";
+  type: "STANDARD_REQUEST" | "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT" | "ATTENDANCE_EVIDENCE";
   url?: string;
   method?: string;
   data?: any;
@@ -420,6 +432,29 @@ export async function queueOfflineCheckOut(payload: OfflineCheckOutPayload): Pro
 }
 
 /**
+ * WAVE-0 P0-0.6 / CHECK-1 — antrean ULANG BUKTI (retry latar).
+ *
+ * Dipakai ketika record absensi SUDAH ada di server (atau grupnya sudah ada)
+ * tetapi sebagian foto bukti gagal terunggah. Ini bukan request generik:
+ * item-nya menyimpan daftar foto yang belum terkonfirmasi dan akan dicoba
+ * ulang setiap sinkronisasi sampai tuntas atau kedaluwarsa (kebijakan 48 jam
+ * yang sama, dengan SURFACING di A3).
+ */
+export async function queueOfflineEvidence(payload: OfflineEvidenceRetryPayload): Promise<string> {
+  const queue = await getQueue();
+  const action: OfflineAction = {
+    id: `evidence_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    type: "ATTENDANCE_EVIDENCE",
+    data: payload,
+    timestamp: Date.now(),
+    owner_user_id: await currentOwnerStamp(),
+  };
+  queue.push(action);
+  await saveQueue(queue);
+  return action.id;
+}
+
+/**
  * Cache and retrieve attendance sites locally for offline geofencing
  */
 export async function cacheSites(sites: any[]) {
@@ -462,33 +497,40 @@ export async function getCachedAttendanceStatuses(): Promise<any[]> {
 /**
  * Upload single local image file to server and link to evidence.
  *
- * WAVE-0 P0-0.6 — sebelum membaca file, pastikan:
- *  - file BENAR-BENAR ADA (cache uri lama yang sudah di-evict OS → return null;
- *    pemanggil WAJIB menangani null secara LOUD, tidak boleh diam-diam);
- *  - bila uri masih menunjuk cache (item yang di-queue sebelum fix ini),
- *    salin dulu ke penyimpanan persisten agar tahan retry berikutnya.
+ * WAVE-0 P0-0.6 / CHECK-1 — hasil bertipe tiga-arah agar pemanggil TIDAK
+ * bisa lagi membedakan "berhasil" dari "bukti hilang di perangkat" secara
+ * diam-diam:
+ *  - ok      : file terunggah & ter-link ke grup bukti;
+ *  - missing : file sudah tidak ada di perangkat (uri cache ter-evict) —
+ *              tidak dapat di-retry, harus masuk keranjang gagal + LOUD;
+ *  - error   : gagal upload (HTTP/timeout) — file masih ada, retry berguna.
  */
+export type EvidenceUploadOutcome =
+  | { status: "ok"; file: string }
+  | { status: "missing" }
+  | { status: "error" };
+
 async function uploadLocalImage(
   img: { uri: string; name: string; type: string },
   groupId: string,
   userName: string,
   label: string
-): Promise<string | null> {
-  try {
-    if (!(await evidenceFileExists(img.uri))) {
-      console.warn("[OfflineQueue] File bukti tidak ditemukan di perangkat:", img.uri);
-      return null;
+): Promise<EvidenceUploadOutcome> {
+  if (!(await evidenceFileExists(img.uri))) {
+    console.warn("[OfflineQueue] File bukti tidak ditemukan di perangkat:", img.uri);
+    return { status: "missing" };
+  }
+  let readUri = img.uri;
+  if (!isPersistedEvidence(readUri)) {
+    try {
+      readUri = await persistEvidenceImage(readUri);
+    } catch (e) {
+      // cache uri masih ada tapi gagal dipromosikan — lanjut upload dari cache
+      console.warn("[OfflineQueue] Gagal persistensi bukti lama:", e);
     }
-    let readUri = img.uri;
-    if (!isPersistedEvidence(readUri)) {
-      try {
-        readUri = await persistEvidenceImage(readUri);
-      } catch (e) {
-        // cache uri masih ada tapi gagal dipromosikan — lanjut upload dari cache
-        console.warn("[OfflineQueue] Gagal persistensi bukti lama:", e);
-      }
-    }
+  }
 
+  try {
     const formData = new FormData();
     formData.append("files", {
       uri: readUri,
@@ -502,14 +544,14 @@ async function uploadLocalImage(
       timeout: 30000,
     });
     const tempLink = tempRes.data?.data?.[0]?.link || tempRes.data?.links?.[0];
-    if (!tempLink) return null;
+    if (!tempLink) return { status: "error" };
 
     // 2. Upload permanent
     const permRes = await apiClient.post("/api/v2/attendance/upload-permanent", {
       links: [tempLink],
     });
     const permFile = permRes.data?.data?.links?.[0] || permRes.data?.links?.[0];
-    if (!permFile) return null;
+    if (!permFile) return { status: "error" };
 
     // 3. Link to evidence group
     await apiClient.post("/evidence/", {
@@ -519,25 +561,77 @@ async function uploadLocalImage(
       evidence_group_id: groupId,
     });
 
-    return permFile;
+    return { status: "ok", file: permFile };
   } catch (error) {
     if (__DEV__) console.debug("Error uploading offline image:", error);
-    return null;
+    return { status: "error" };
   }
+}
+
+/**
+ * Accounting hasil upload bukti sebuah item (WAVE-0 CHECK-1).
+ * TIDAK ada jalur "diam-diam": tiap foto berakhir di tepat satu keranjang —
+ * uploaded (terkonfirmasi server), retry (gagal sementara, file masih ada),
+ * atau lost (file sudah tidak ada di perangkat, tak dapat dipulihkan).
+ */
+async function uploadImagesWithAccounting(
+  images: Array<{ uri: string; name: string; type: string }>,
+  groupId: string,
+  userName: string,
+  label: string,
+): Promise<{
+  uploadedUris: string[];
+  retryImages: Array<{ uri: string; name: string; type: string }>;
+  lostImages: Array<{ uri: string; name: string; type: string }>;
+}> {
+  const uploadedUris: string[] = [];
+  const retryImages: Array<{ uri: string; name: string; type: string }> = [];
+  const lostImages: Array<{ uri: string; name: string; type: string }> = [];
+  for (const img of images) {
+    const outcome = await uploadLocalImage(img, groupId, userName, label);
+    if (outcome.status === "ok") uploadedUris.push(img.uri);
+    else if (outcome.status === "missing") lostImages.push(img);
+    else retryImages.push(img);
+  }
+  return { uploadedUris, retryImages, lostImages };
+}
+
+function buildEvidenceAction(
+  payload: OfflineEvidenceRetryPayload,
+  ownerUserId?: string,
+): OfflineAction {
+  return {
+    id: `evidence_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    type: "ATTENDANCE_EVIDENCE",
+    data: payload,
+    timestamp: Date.now(),
+    owner_user_id: ownerUserId,
+  };
+}
+
+/** Ringkasan satu putaran sinkronisasi (WAVE-0: hasil tidak lagi sekadar angka). */
+export interface SyncOutcome {
+  /** Item yang TERKONFIRMASI PENUH oleh server (absensi + bukti, atau tanpa bukti). */
+  synced: number;
+  /** Foto bukti yang masih menunggu retry latar (item ATTENDANCE_EVIDENCE aktif). */
+  evidenceRetrying: number;
+  /** Foto bukti yang hilang permanen dari perangkat (masuk keranjang gagal). */
+  evidenceLost: number;
 }
 
 /**
  * Sync queued requests when back online
  */
-export async function syncQueuedRequests(): Promise<number> {
-  if (isSyncing) return 0;
+export async function syncQueuedRequests(): Promise<SyncOutcome> {
+  const EMPTY: SyncOutcome = { synced: 0, evidenceRetrying: 0, evidenceLost: 0 };
+  if (isSyncing) return EMPTY;
   isSyncing = true;
 
   try {
     // MOB-02: with no bearer token nothing here can be authorised. Attempting
     // anyway would make the server answer 401 and quarantine real attendance
     // evidence into the "failed" bucket, so bail out before touching the queue.
-    if (!(await hasStoredToken())) return 0;
+    if (!(await hasStoredToken())) return EMPTY;
 
     // MOB-02: stamp pre-1.0.30 records before deciding who may submit them.
     await migrateLegacyQueueOwnership();
@@ -546,9 +640,11 @@ export async function syncQueuedRequests(): Promise<number> {
     const currentUserId = await resolveCurrentUserId();
 
     const queue = await getQueue();
-    if (!queue.length) return 0;
+    if (!queue.length) return EMPTY;
 
     let synced = 0;
+    let evidenceRetrying = 0;
+    let evidenceLost = 0;
     const remaining: OfflineAction[] = [];
     const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
@@ -580,21 +676,51 @@ export async function syncQueuedRequests(): Promise<number> {
       try {
         if (action.type === "ATTENDANCE_CHECKIN") {
           const payload = action.data as OfflineCheckInPayload;
+          const images = payload.localImages || [];
 
-          // 1. Create Evidence Group
+          // 1. Create Evidence Group — WAVE-0 CHECK-1: kegagalan TIDAK lagi
+          // ditelan `catch {}`. Tanpa grup, POST attendance akan menghasilkan
+          // "sukses" tanpa bukti sama sekali — biarkan error naik ke kebijakan
+          // error umum di bawah (retryable / keranjang gagal), item tidak dibakar.
           let groupId = "";
-          try {
+          if (images.length) {
             const groupRes = await apiClient.post("/evidence-group/", {
               name: `Attendance ${payload.user_name}`,
               description: "Attendance evidence (Offline Sync)",
             });
             groupId = groupRes.data?.data?.id || groupRes.data?.id || "";
-          } catch {}
+            if (!groupId) {
+              throw new Error("Gagal membuat grup bukti (respons tanpa id)");
+            }
+          }
 
-          // 2. Upload all offline images
-          if (groupId && payload.localImages && payload.localImages.length) {
-            for (const img of payload.localImages) {
-              await uploadLocalImage(img, groupId, payload.user_name, "Checkin Evidence (Offline Sync)");
+          // 2. Upload semua foto offline dengan akuntansi penuh (ok / retry / lost)
+          let retryImages: OfflineEvidenceRetryPayload["images"] = [];
+          let evidenceIssue = false; // ada bukti yang TIDAK terkonfirmasi putaran ini
+          if (groupId && images.length) {
+            const acc = await uploadImagesWithAccounting(
+              images,
+              groupId,
+              payload.user_name,
+              "Checkin Evidence (Offline Sync)",
+            );
+            await removePersistedEvidence(acc.uploadedUris);
+            retryImages = acc.retryImages;
+            if (acc.lostImages.length) {
+              evidenceIssue = true;
+              const lostItem: FailedAttendanceItem = {
+                id: `${action.id}_evidence`,
+                type: "ATTENDANCE_CHECKIN",
+                data: { ...payload, localImages: acc.lostImages },
+                timestamp: action.timestamp,
+                failedAt: Date.now(),
+                errorCode: 0,
+                errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
+                owner_user_id: getStampedOwner(action) ?? undefined,
+              };
+              await saveFailedAttendance(lostItem);
+              newlyFailedAttendance.push(lostItem);
+              evidenceLost += acc.lostImages.length;
             }
           }
 
@@ -642,18 +768,62 @@ export async function syncQueuedRequests(): Promise<number> {
           if (createdId) {
             await saveCheckInId(createdId);
           }
-          // WAVE-0 P0-0.6 — server sudah menerima record; salinan persisten lokal
-          // tidak diperlukan lagi.
-          await removePersistedEvidence((payload.localImages || []).map((i) => i.uri));
-          synced++;
+          // WAVE-0 CHECK-1 — record sudah diterima server, tapi bila masih ada
+          // foto retry atau foto hilang, item TIDAK dihitung `synced`: bukti
+          // yang bisa dipulihkan diserahkan ke anak ATTENDANCE_EVIDENCE dan
+          // user diberi tahun LOUD ("absensi terkirim tanpa sebagian bukti").
+          if (retryImages.length) {
+            remaining.push(
+              buildEvidenceAction(
+                {
+                  user_name: payload.user_name,
+                  evidence_group_id: groupId,
+                  attendance_id: createdId ?? null,
+                  images: retryImages,
+                },
+                getStampedOwner(action) ?? undefined,
+              ),
+            );
+            evidenceRetrying += retryImages.length;
+          } else if (!evidenceIssue) {
+            synced++;
+          }
         } else if (action.type === "ATTENDANCE_CHECKOUT") {
           const payload = action.data as OfflineCheckOutPayload;
+          const images = payload.localImages || [];
 
-          // 1. Upload new checkout images to existing evidence group if present
-          if (payload.evidence_group_id && payload.localImages && payload.localImages.length) {
-            for (const img of payload.localImages) {
-              await uploadLocalImage(img, payload.evidence_group_id, payload.user_name, "Checkout Evidence (Offline Sync)");
+          // 1. Upload images ke grup bukti yang sudah ada (atau tanpa grup utk
+          // baris lama: anak retry akan membuat grupnya saat sync).
+          let retryImages: OfflineEvidenceRetryPayload["images"] = [];
+          let evidenceIssue = false;
+          if (images.length && payload.evidence_group_id) {
+            const acc = await uploadImagesWithAccounting(
+              images,
+              payload.evidence_group_id,
+              payload.user_name,
+              "Checkout Evidence (Offline Sync)",
+            );
+            await removePersistedEvidence(acc.uploadedUris);
+            retryImages = acc.retryImages;
+            if (acc.lostImages.length) {
+              evidenceIssue = true;
+              const lostItem: FailedAttendanceItem = {
+                id: `${action.id}_evidence`,
+                type: "ATTENDANCE_CHECKOUT",
+                data: { ...payload, localImages: acc.lostImages },
+                timestamp: action.timestamp,
+                failedAt: Date.now(),
+                errorCode: 0,
+                errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
+                owner_user_id: getStampedOwner(action) ?? undefined,
+              };
+              await saveFailedAttendance(lostItem);
+              newlyFailedAttendance.push(lostItem);
+              evidenceLost += acc.lostImages.length;
             }
+          } else if (images.length) {
+            // baris tanpa grup bukti (legacy) — semua foto ditahan utk grup baru
+            retryImages = images;
           }
 
           // 2. Update Attendance
@@ -668,9 +838,77 @@ export async function syncQueuedRequests(): Promise<number> {
             },
             { timeout: 20000 }
           );
-          // WAVE-0 P0-0.6 — checkout diterima server; bersihkan salinan lokal.
-          await removePersistedEvidence((payload.localImages || []).map((i) => i.uri));
-          synced++;
+          // WAVE-0 CHECK-1 — sama seperti check-in: checkout tercatat, bukti
+          // susulan lewat anak antrean; tidak dilaporkan "synced" penuh bila
+          // ada bukti yang belum terkonfirmasi server.
+          if (retryImages.length) {
+            remaining.push(
+              buildEvidenceAction(
+                {
+                  user_name: payload.user_name,
+                  evidence_group_id: payload.evidence_group_id || "",
+                  attendance_id: payload.attendance_id,
+                  images: retryImages,
+                },
+                getStampedOwner(action) ?? undefined,
+              ),
+            );
+            evidenceRetrying += retryImages.length;
+          } else if (!evidenceIssue) {
+            await removePersistedEvidence(images.map((i) => i.uri));
+            synced++;
+          }
+        } else if (action.type === "ATTENDANCE_EVIDENCE") {
+          const payload = action.data as OfflineEvidenceRetryPayload;
+          let groupId = payload.evidence_group_id || "";
+          const images = payload.images || [];
+
+          if (!images.length) {
+            // item kosong — tidak ada yang ditunggu; drop diam-diam AMAN
+            // (tidak ada bukti tersisa yang dirujuk).
+            synced++;
+          } else {
+            if (!groupId) {
+              const groupRes = await apiClient.post("/evidence-group/", {
+                name: `Attendance ${payload.user_name}`,
+                description: "Attendance evidence (Retry)",
+              });
+              groupId = groupRes.data?.data?.id || groupRes.data?.id || "";
+              if (!groupId) {
+                throw new Error("Gagal membuat grup bukti retry (respons tanpa id)");
+              }
+              payload.evidence_group_id = groupId;
+            }
+            const acc = await uploadImagesWithAccounting(
+              images,
+              groupId,
+              payload.user_name,
+              "Bukti Absensi (Unggah Ulang)",
+            );
+            await removePersistedEvidence(acc.uploadedUris);
+            if (acc.lostImages.length) {
+              const lostItem: FailedAttendanceItem = {
+                id: `${action.id}_lost`,
+                type: "ATTENDANCE_EVIDENCE",
+                data: { ...payload, images: acc.lostImages },
+                timestamp: action.timestamp,
+                failedAt: Date.now(),
+                errorCode: 0,
+                errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
+                owner_user_id: getStampedOwner(action) ?? undefined,
+              };
+              await saveFailedAttendance(lostItem);
+              newlyFailedAttendance.push(lostItem);
+              evidenceLost += acc.lostImages.length;
+            }
+            if (acc.retryImages.length) {
+              payload.images = acc.retryImages; // coba lagi putaran sync berikutnya
+              remaining.push(action);
+              evidenceRetrying += acc.retryImages.length;
+            } else if (!acc.lostImages.length) {
+              synced++;
+            }
+          }
         } else {
           // STANDARD_REQUEST
           await apiClient({
@@ -697,7 +935,11 @@ export async function syncQueuedRequests(): Promise<number> {
           statusCode === 422;
 
         if (isNonRetryable) {
-          if (action.type === "ATTENDANCE_CHECKIN" || action.type === "ATTENDANCE_CHECKOUT") {
+          if (
+            action.type === "ATTENDANCE_CHECKIN" ||
+            action.type === "ATTENDANCE_CHECKOUT" ||
+            action.type === "ATTENDANCE_EVIDENCE"
+          ) {
             // JANGAN HAPUS BUKTI KERJA DIAM-DIAM!
             // Pindahkan ke penampung absensi gagal permanen agar data kehadiran lapangan tidak hilang
             // dan tidak di-retry berulang (mencegah retry storm).
@@ -745,10 +987,34 @@ export async function syncQueuedRequests(): Promise<number> {
 
     await saveQueue(remaining);
 
+    // WAVE-0 CHECK-2b — sapu file bukti yatim (hasil promosi uri lama / crash
+    // sebelum upload) SETELAH antrean final tersimpan. keep = semua uri yang
+    // masih dirujuk item aktif + keranjang gagal (bukti tinjauan admin).
+    try {
+      const referenced: string[] = [];
+      for (const item of remaining) {
+        const d: any = item.data || {};
+        for (const img of d.localImages || d.images || []) referenced.push(img.uri);
+      }
+      const failedList = await readAllFailedAttendance();
+      for (const f of failedList) {
+        const d: any = f?.data || {};
+        for (const img of d.localImages || d.images || []) referenced.push(img.uri);
+      }
+      await cleanupOrphanedEvidence(referenced);
+    } catch (cleanupErr) {
+      if (__DEV__) console.debug("[OfflineQueue] cleanup bukti yatim gagal:", cleanupErr);
+    }
+
     if (newlyFailedAttendance.length > 0) {
       const count = newlyFailedAttendance.length;
       const first = newlyFailedAttendance[0];
-      const jenis = first.type === "ATTENDANCE_CHECKIN" ? "Check-in" : "Check-out";
+      const jenis =
+        first.type === "ATTENDANCE_CHECKIN"
+          ? "Check-in"
+          : first.type === "ATTENDANCE_CHECKOUT"
+            ? "Check-out"
+            : "Bukti absensi";
       const message =
         first.errorCode === 409
           ? `Data absensi (${jenis}) tidak dapat disinkronkan karena presensi untuk Hari Operasional ini sudah terdaftar di server (batas cut-off pukul 04:00 WIB). Bukti kerja Anda tetap tersimpan aman di perangkat.`
@@ -759,9 +1025,16 @@ export async function syncQueuedRequests(): Promise<number> {
       Alert.alert("Perhatian: Sinkronisasi Absensi Gagal", message, [
         { text: "Mengerti" },
       ]);
+    } else if (evidenceLost > 0) {
+      // jalur LOUD khusus "terkirim tanpa sebagian bukti" tanpa kegagalan record
+      Alert.alert(
+        "Perhatian: Sebagian Bukti Belum Terkirim",
+        `${evidenceLost} foto bukti tidak dapat diunggah (absensi tetap tercatat). Daftar tunggu tersimpan di perangkat; sebagian mungkin hilang permanen — cek kembali riwayat absensi Anda di layar Absensi.`,
+        [{ text: "Mengerti" }],
+      );
     }
 
-    return synced;
+    return { synced, evidenceRetrying, evidenceLost };
   } finally {
     isSyncing = false;
   }

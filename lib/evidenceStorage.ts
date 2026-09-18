@@ -16,10 +16,12 @@
  *    layar / antrean offline. Mengembalikan uri di
  *    `documentDirectory/attendance-evidence/` yang tidak di-evict OS.
  *    Kegagalan di-THROW (panggilan wajib LOUD, bukan `catch {}`).
- * 2. `removePersistedEvidence(uris)` — hanya dipanggil setelah bukti
- *    dikonfirmasi server (upload selesai / attendance tersinkron).
- *    Bersifat best-effort dan idempotent; file di luar direktori bukti
- *    tidak pernah dihapus.
+ * 2. `removePersistedEvidence(uris)` — hanya untuk (a) uri yang sudah
+ *    TERKONFIRMASI server (upload per-file sukses / attendance tersinkron)
+ *    atau (b) foto yang DIBUANG USER sendiri lewat removeImage() sebelum
+ *    submit. Di luar itu file hanya dihapus oleh `cleanupOrphanedEvidence`
+ *    bila tidak lagi dirujuk antrean aktif/keranjang gagal. Bersifat
+ *    best-effort; file di luar direktori bukti tidak pernah dihapus.
  * 3. `evidenceFileExists(uri)` — dipakai jalur sync untuk memutuskan
  *    bukti yang benar-benar hilang vs upload yang bisa diulang.
  *
@@ -93,10 +95,17 @@ export async function evidenceFileExists(uri?: string | null): Promise<boolean> 
 }
 
 /**
- * Hapus file bukti SETELAH server mengonfirmasi keberadaannya.
- * Best-effort: error dihapus diam-diam karena file sisa akan tertimpa
- * pada sesi berikutnya dan tidak memblokir alur apa pun. Uri di luar
- * direktori bukti tidak pernah disentuh.
+ * Hapus file bukti. Dipanggil oleh TEPAT dua konteks yang sah
+ * (CHECK-2a — kontrak diamandemen 2026-09-18, bukan "hanya pasca-server"):
+ *   1. KONFIRMASI SERVER — jalur sync/online memanggilnya hanya untuk uri yang
+ *      upload/attendance-nya SUDAH dikonfirmasi server (bukan bulk buta); dan
+ *   2. KEPUTUSAN USER — `removeImage()` di layar check-in/check-out saat user
+ *      MEMBUANG fotonya sendiri sebelum submit: uri yang dibuang tidak akan
+ *      pernah terkirim, menyimpannya selamanya justru membebani perangkat.
+ * Di luar dua konteks itu fungsi ini tidak boleh dipakai — file yang masih
+ * dirujuk antrean aktif dilindungi `cleanupOrphanedEvidence`. Best-effort:
+ * error hapus ditelan (sisa dibersihkan sweep). Uri di luar direktori bukti
+ * tidak pernah disentuh melalui API ini.
  */
 export async function removePersistedEvidence(
   uris: (string | null | undefined)[],

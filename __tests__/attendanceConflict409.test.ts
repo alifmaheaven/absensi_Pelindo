@@ -172,7 +172,7 @@ describe("HTTP 409 Conflict & Operational Day Handling Test Suite", () => {
       });
 
       // 3. Trigger sync
-      const synced = await syncQueuedRequests();
+      const { synced } = await syncQueuedRequests();
       expect(synced).toBe(0);
 
       // 4. Verify request was NOT kept in retry queue (preventing loop retry storm)

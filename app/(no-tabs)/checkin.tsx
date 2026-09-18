@@ -61,7 +61,9 @@ import {
   cacheAttendanceStatuses,
   getCachedAttendanceStatuses,
   queueOfflineCheckIn,
+  queueOfflineEvidence,
 } from "@/lib/offlineQueue";
+import { removePersistedEvidence } from "@/lib/evidenceStorage";
 
 const imageUploadService = {
   uploadTemp: uploadEvid,
@@ -368,6 +370,12 @@ export default function CheckinScreen() {
       const groupId = group.data?.id ?? "";
       console.debug("Group ID", groupId);
 
+      // WAVE-0 P0-0.6 / CHECK-1 — tiap foto dicatat hasilnya. Kegagalan upload
+      // TIDAK boleh lagi `continue` diam-diam lalu layar melaporkan "Berhasil
+      // Check In!" penuh: foto yang gagal masuk item ATTENDANCE_EVIDENCE agar
+      // dicoba ulang di latar, dan user diberi pesan parsial yang jujur.
+      const failedEvidence: Array<{ uri: string; name: string; type: string }> = [];
+      const uploadedLocalUris: string[] = [];
       for (const img of images) {
         let permanentPath = img.path;
         if (!permanentPath) {
@@ -382,20 +390,44 @@ export default function CheckinScreen() {
             console.warn("Failed to upload temp image online:", e);
           }
         }
-        if (!permanentPath) continue;
+        if (!permanentPath) {
+          failedEvidence.push({
+            uri: img.uri,
+            name: img.name || `checkin_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          });
+          continue;
+        }
 
-        const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
-        const file = uploaded.data?.links?.[0];
+        try {
+          const uploaded = await uploadEvidPermanent({ links: [permanentPath] });
+          const file = uploaded.data?.links?.[0];
 
-        if (!file) continue;
-        console.debug("File uploaded", file);
+          if (!file) {
+            failedEvidence.push({
+              uri: img.uri,
+              name: img.name || `checkin_${Date.now()}.jpg`,
+              type: "image/jpeg",
+            });
+            continue;
+          }
+          console.debug("File uploaded", file);
 
-        await uploadEvidGroupId({
-          name: `Attendance ${user?.name}`,
-          description: "Evidence",
-          file,
-          evidence_group_id: groupId,
-        });
+          await uploadEvidGroupId({
+            name: `Attendance ${user?.name}`,
+            description: "Evidence",
+            file,
+            evidence_group_id: groupId,
+          });
+          uploadedLocalUris.push(img.uri);
+        } catch (e) {
+          console.warn("Failed to link evidence online:", e);
+          failedEvidence.push({
+            uri: img.uri,
+            name: img.name || `checkin_${Date.now()}.jpg`,
+            type: "image/jpeg",
+          });
+        }
       }
 
       // Build payload — filter out empty UUID strings
@@ -428,9 +460,35 @@ export default function CheckinScreen() {
       // Simpan check-in id hanya jika server mengembalikannya
       if (res.data?.id) await saveCheckInId(res.data.id);
 
-      showToast("Berhasil Check In!", "success");
+      // WAVE-0 P0-0.6 / CHECK-1 — bukti yang gagal unggah TIDAK boleh hilang
+      // senyap di balik "Berhasil Check In!": serahkan ke item retry latar dan
+      // laporkan status parsial yang jujur.
+      if (failedEvidence.length) {
+        try {
+          await queueOfflineEvidence({
+            user_name: user?.name || "User",
+            evidence_group_id: groupId,
+            attendance_id: res.data?.id ?? null,
+            images: failedEvidence,
+          });
+        } catch (qErr) {
+          console.error("Gagal mendaftarkan retry bukti:", qErr);
+        }
+      }
+      if (uploadedLocalUris.length) {
+        void removePersistedEvidence(uploadedLocalUris);
+      }
 
-      router.replace("/");
+      if (failedEvidence.length) {
+        Alert.alert(
+          "Check In Tercatat — Sebagian Bukti Belum Terkirim",
+          `Absensi Anda sudah tersimpan di server, tetapi ${failedEvidence.length} foto bukti belum berhasil diunggah. Foto tersebut tersimpan di perangkat dan akan dicoba kirim ulang secara otomatis. Harap cek kembali bukti pada riwayat absensi Anda.`,
+          [{ text: "Mengerti", onPress: () => router.replace("/") }],
+        );
+      } else {
+        showToast("Berhasil Check In!", "success");
+        router.replace("/");
+      }
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error(JSON.stringify(err, null, 2));

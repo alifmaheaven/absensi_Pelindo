@@ -205,14 +205,20 @@ export function isActionEligibleFor(
  * Writers MUST use this: `saveFailedAttendance` appends to the stored list, so
  * reading through the owner-filtered `getFailedAttendance()` would drop another
  * user's abandoned evidence on the next write.
+ *
+ * M-1 (verdict reviewer G.3): FAILURE ≠ EMPTY. `null` menandai blob gagal
+ * dibaca/diparse atau bukan array. Sweep bukti yatim WAJIB menganggap null
+ * sebagai "keep-set tidak lengkap" — menafsirkan gagal-baca sebagai [] akan
+ * menghapus SEMUA bukti keranjang gagal secara senyap.
  */
-async function readAllFailedAttendance(): Promise<FailedAttendanceItem[]> {
+async function readAllFailedAttendance(): Promise<FailedAttendanceItem[] | null> {
   try {
     const raw = await AsyncStorage.getItem(FAILED_ATTENDANCE_KEY);
-    const list = raw ? JSON.parse(raw) : [];
-    return Array.isArray(list) ? list : [];
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -226,6 +232,15 @@ async function readAllFailedAttendance(): Promise<FailedAttendanceItem[]> {
  */
 export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
   const list = await readAllFailedAttendance();
+  if (list === null) {
+    // M-1: tampilan banner tetap 'kosong' seperti sebelumnya, tapi gagal-baca
+    // kini TERBEDA dari benar-benar kosong — yang menelan konsekuensi delete
+    // ada di sweep, bukan di sini.
+    console.warn(
+      "[OfflineQueue] Keranjang gagal tidak terbaca — daftar tampil kosong; sweep bukti dihambat (M-1)",
+    );
+    return [];
+  }
 
   const currentUserId = await resolveCurrentUserId();
   if (!currentUserId) return list;
@@ -236,13 +251,28 @@ export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
   });
 }
 
-export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<void> {
+/**
+ * M-1: mengembalikan `true` bila blob lama harus dibuang/diganti (tidak
+ * terbaca) ATAU penulisan itu sendiri gagal — artinya keep-set hasil
+ * pembacaan berikutnya Parsial dan sweep bukti yatim wajib dilompati.
+ * `false` = bucket sehat. Pemanggil lama yang mengabaikan nilai kembali
+ * tetap kompil (boolean hanya berarti bagi sync yang menyapu).
+ */
+export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<boolean> {
   try {
-    const list = await readAllFailedAttendance();
+    const existing = await readAllFailedAttendance();
+    if (existing === null) {
+      console.warn(
+        "[OfflineQueue] Blob keranjang gagal lama tidak terbaca — digantikan record baru; bukti milik record lama TIDAK boleh disapu ronde ini (M-1)",
+      );
+    }
+    const list = existing ?? [];
     list.push(item);
     await AsyncStorage.setItem(FAILED_ATTENDANCE_KEY, JSON.stringify(list));
+    return existing === null;
   } catch (e) {
     console.error("[OfflineQueue] Gagal menyimpan absensi gagal:", e);
+    return true; // record mungkin tidak tersimpan → keep-set tidak lengkap
   }
 }
 
@@ -683,6 +713,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
     let evidenceLost = 0;
     let evidenceResynced = 0;
     let expiredAttendance = 0;
+    // M-1: flag keep-set parsial — true bila ada penulisan keranjang gagal
+    // yang harus mengganti blob tak terbaca / gagal tulis. Sweep yatim wajib
+    // dilompati saat true (arah aman = SIMPAN).
+    let failedBucketPartial = false;
     const remaining: OfflineAction[] = [];
     const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
@@ -764,7 +798,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              await saveFailedAttendance(lostItem);
+              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
               newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
@@ -867,7 +901,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              await saveFailedAttendance(lostItem);
+              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
               newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
@@ -949,7 +983,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              await saveFailedAttendance(lostItem);
+              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
               newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
@@ -1013,7 +1047,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
               // a count or a banner describing A's abandoned evidence.
               owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
             };
-            await saveFailedAttendance(failedItem);
+            failedBucketPartial = (await saveFailedAttendance(failedItem)) || failedBucketPartial;
             newlyFailedAttendance.push(failedItem);
             console.error(
               `[OfflineQueue] Absensi offline gagal permanen (status ${statusCode}):`,
@@ -1058,7 +1092,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 "Belum berhasil terkirim setelah 48 jam — perangkat tidak terhubung kembali ke server",
               owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
             };
-            await saveFailedAttendance(expiredItem);
+            failedBucketPartial = (await saveFailedAttendance(expiredItem)) || failedBucketPartial;
             newlyFailedAttendance.push(expiredItem);
             expiredAttendance++;
             console.error(
@@ -1087,11 +1121,23 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
         for (const img of d.localImages || d.images || []) referenced.push(img.uri);
       }
       const failedList = await readAllFailedAttendance();
-      for (const f of failedList) {
-        const d: any = f?.data || {};
-        for (const img of d.localImages || d.images || []) referenced.push(img.uri);
+      if (failedList === null || failedBucketPartial) {
+        // M-1: keranjang gagal gagal-terbaca (null) ATAU baru saja direpair
+        // dari blob tak terbaca/gagal-tulis (parsial) ⇒ keep-set TIDAK
+        // dipercaya. Arah aman = SIMPAN: lewati seluruh sweep, jangan pernah
+        // menafsirkan 'gagal baca' sebagai 'kosong'.
+        console.warn("[OfflineQueue] Sweep bukti yatim DILEWAT — keep-set tidak lengkap (M-1)");
+      } else {
+        for (const f of failedList) {
+          const d: any = f?.data || {};
+          for (const img of d.localImages || d.images || []) referenced.push(img.uri);
+        }
+        // Di titik ini masukan keep TERBUKTI lengkap: fungsi ini hanya lewat
+        // gerbang queue non-empty (queue terbaca) dan bucket terbaca array.
+        // referenced=[] berarti memang tidak ada rujukan sama sekali — 'sengaja
+        // kosong' yang diizinkan lewat opsi eksplisit, bukan default buta.
+        await cleanupOrphanedEvidence(referenced, { allowEmptyKeep: true });
       }
-      await cleanupOrphanedEvidence(referenced);
     } catch (cleanupErr) {
       if (__DEV__) console.debug("[OfflineQueue] cleanup bukti yatim gagal:", cleanupErr);
     }

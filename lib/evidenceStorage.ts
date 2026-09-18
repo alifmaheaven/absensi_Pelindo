@@ -124,11 +124,27 @@ export async function removePersistedEvidence(
  * Sweep defensif: hapus file bukti yang tidak lagi dirujuk antrean
  * tersisa dari crash/kill sebelum upload selesai dipanggil pada app
  * launch. `keep` = semua uri yang masih dipakai item antrean aktif.
+ *
+ * M-1 (disposisi reviewer G.3 — 'pengaman harus tinggal di fungsi yang
+ * menghapus'): keep-set KOSONG hampir selalu berarti pemanggil TIDAK bisa
+ * membaca datanya (tekanan penyimpanan, korusi pasca-crash), bukan 'bukti
+ * memang habis' — satu getItem/JSON.parse yang gagal tidak boleh menyapu
+ * SELURUH direktori bukti. Eksekusi ditolak kecuali pemanggil menyatakan
+ * eksplisit 'sengaja kosong' lewat `{ allowEmptyKeep: true }`.
  */
-export async function cleanupOrphanedEvidence(keep: (string | null | undefined)[]): Promise<void> {
+export async function cleanupOrphanedEvidence(
+  keep: (string | null | undefined)[],
+  options?: { allowEmptyKeep?: boolean },
+): Promise<void> {
   const dir = getEvidenceDir();
   if (!dir) return;
   const keepSet = new Set(urisOf(keep));
+  if (keepSet.size === 0 && !options?.allowEmptyKeep) {
+    console.warn(
+      "[evidenceStorage] cleanupOrphanedEvidence DITOLAK: keep kosong tanpa allowEmptyKeep — arah aman = SIMPAN.",
+    );
+    return;
+  }
   try {
     const listing = await FileSystem.readDirectoryAsync(dir);
     for (const file of listing) {

@@ -173,5 +173,27 @@ describe("evidenceStorage (WAVE-0 P0-0.6)", () => {
       expect(state.files.has(orphan)).toBe(false);
       expect(state.files.has(keep)).toBe(true);
     });
+
+    it("M-1: keep KOSONG ditolak — nol hapus, direktori bukti utuh", async () => {
+      await cleanupOrphanedEvidence([]);
+
+      expect(state.deletions).toEqual([]);
+      expect(state.files.has(`${state.evidenceDir}old-keep.jpg`)).toBe(true);
+      expect(state.files.has(`${state.evidenceDir}old-orphan.jpg`)).toBe(true);
+    });
+
+    it("M-1: keep berisi nol uri bukti-persisten (hanya cache/null) = efektif kosong — juga ditolak", async () => {
+      await cleanupOrphanedEvidence(["file:///cache/not-evidence.jpg", null, undefined]);
+
+      expect(state.deletions).toEqual([]);
+      expect(state.files.size).toBe(3);
+    });
+
+    it("M-1: opsi eksplisit allowEmptyKeep = 'sengaja kosong' — penyapuan berjalan", async () => {
+      await cleanupOrphanedEvidence([], { allowEmptyKeep: true });
+
+      expect(state.deletions).toContain(`${state.evidenceDir}old-keep.jpg`);
+      expect(state.deletions).toContain(`${state.evidenceDir}old-orphan.jpg`);
+    });
   });
 });

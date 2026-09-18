@@ -389,4 +389,59 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
     expect(queue).toHaveLength(1); // item utuh utk dicoba lagi
     expect(queue[0].type).toBe("ATTENDANCE_CHECKIN");
   });
+
+  /**
+   * M-1 (verdict reviewer G.3, papan H-2) — sweep bukti yatim harus GAGAL
+   * SAFE: satu pembacaan keranjang gagal yang rusak (tekanan penyimpanan,
+   * korusi pasca-crash) tidak boleh diterjemahkan sebagai "tidak ada bukti
+   * dirujuk" lalu menyapu direktori bukti milik keranjang gagal.
+   */
+  it("M-1: baca failed-bucket gagal → sweep TIDAK berjalan → NOL unlink", async () => {
+    // Bucket korup: JSON.parse melempar saat sweep menyusun keep-set.
+    await AsyncStorage.setItem("@failed_attendance_queue", "{korupsi-pasca-crash");
+    // Satu item yang sync-nya SUKSES penuh (tanpa tulis ke keranjang gagal)
+    // — queue non-empty membuka gerbang sync, jadi sweep pasti disinggahi.
+    await seedQueue([
+      checkInAction([{ uri: "file:///cache/a.jpg", name: "a.jpg", type: "image/jpeg" }]),
+    ]);
+    routePosts(["ok"]);
+
+    const outcome = await syncQueuedRequests();
+    expect(outcome.synced).toBe(1); // sync normal berjalan — bukan test kegagalan sync
+
+    // Komposisi yang diuji: cleanupOrphanedEvidence TIDAK PERNAH dipanggil —
+    // nol berkas bukti hilang. Kode pra-M-1 memanggilnya dengan keep=[] dan
+    // (produksi asli) menyapu SELURUH direktori.
+    expect(evidenceStorageMock.cleanupOrphanedEvidence).not.toHaveBeenCalled();
+  });
+
+  it("M-1: bucket korup + repair-write saat sync → keep parsial → sweep tetap DILEWAT, record tetap tersimpan", async () => {
+    await AsyncStorage.setItem("@failed_attendance_queue", "{korupsi-pasca-crash");
+    const stale = checkInAction([
+      { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
+    ]);
+    stale.timestamp = Date.now() - 49 * 60 * 60 * 1000;
+    await seedQueue([stale]);
+    // kegagalan jaringan murni pada POST attendance → jalur retryable >48 jam
+    // → pindah ke keranjang gagal lewat saveFailedAttendance (yang akan
+    // menimpa blob korup = repair parsial).
+    (apiClient.post as jest.Mock).mockImplementation(async (url: string) => {
+      if (url.includes("/evidence-group/")) return { data: { data: { id: "group-1" } } };
+      if (url === "/api/v2/attendance/") {
+        throw Object.assign(new Error("network down"), { code: "ERR_NETWORK" });
+      }
+      return { data: {} };
+    });
+
+    const outcome = await syncQueuedRequests();
+    expect(outcome.expired).toBe(1);
+
+    // Record baru tetap tersimpan (banner pulih): blob korup digantikan.
+    const failed = await getFailedAttendance();
+    expect(failed).toHaveLength(1);
+
+    // TAPI bukti milik record lama yang tak terbaca tidak boleh dianggap
+    // tak-dirujuk: keep-set hasil repair = PARSIAL → sweep dilewati.
+    expect(evidenceStorageMock.cleanupOrphanedEvidence).not.toHaveBeenCalled();
+  });
 });

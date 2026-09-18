@@ -560,11 +560,18 @@ export async function getCachedAttendanceStatuses(): Promise<any[]> {
  *  - missing : file sudah tidak ada di perangkat (uri cache ter-evict) —
  *              tidak dapat di-retry, harus masuk keranjang gagal + LOUD;
  *  - error   : gagal upload (HTTP/timeout) — file masih ada, retry berguna.
+ *
+ * D-2 CHECK-2b: `ok`/`error` membawa `readUri` — uri HASIL promosi cache→
+ * persisten bila promosi terjadi. Pemanggil WAJIB menulis-balikkannya ke
+ * record antrean; menyimpannya di variabel lokal saja membuat file hasil
+ * promosi yatim permanen (retry-child dan removePersistedEvidence tetap
+ * menunjuk uri cache lama). `missing` tidak memuat readUri — tidak ada
+ * file yang bisa dipromosikan.
  */
 export type EvidenceUploadOutcome =
-  | { status: "ok"; file: string }
+  | { status: "ok"; file: string; readUri: string }
   | { status: "missing" }
-  | { status: "error" };
+  | { status: "error"; readUri: string };
 
 async function uploadLocalImage(
   img: { uri: string; name: string; type: string },
@@ -600,14 +607,14 @@ async function uploadLocalImage(
       timeout: 30000,
     });
     const tempLink = tempRes.data?.data?.[0]?.link || tempRes.data?.links?.[0];
-    if (!tempLink) return { status: "error" };
+    if (!tempLink) return { status: "error", readUri };
 
     // 2. Upload permanent
     const permRes = await apiClient.post("/api/v2/attendance/upload-permanent", {
       links: [tempLink],
     });
     const permFile = permRes.data?.data?.links?.[0] || permRes.data?.links?.[0];
-    if (!permFile) return { status: "error" };
+    if (!permFile) return { status: "error", readUri };
 
     // 3. Link to evidence group
     await apiClient.post("/evidence/", {
@@ -617,10 +624,10 @@ async function uploadLocalImage(
       evidence_group_id: groupId,
     });
 
-    return { status: "ok", file: permFile };
+    return { status: "ok", file: permFile, readUri };
   } catch (error) {
     if (__DEV__) console.debug("Error uploading offline image:", error);
-    return { status: "error" };
+    return { status: "error", readUri };
   }
 }
 
@@ -645,6 +652,14 @@ async function uploadImagesWithAccounting(
   const lostImages: { uri: string; name: string; type: string }[] = [];
   for (const img of images) {
     const outcome = await uploadLocalImage(img, groupId, userName, label);
+    // D-2 CHECK-2b — TULIS-BALIK hasil promosi ke elemen record (referensi
+    // yang sama dengan payload.localImages / images anak): tanpa ini, uri
+    // persisten hanya hidup di variabel lokal → retry-child menunjuk cache
+    // yang bisa ter-evict, dan salinan hasil promosi tidak pernah
+    // di-removePersistedEvidence (file yatim permanen).
+    if (outcome.status !== "missing" && outcome.readUri !== img.uri) {
+      img.uri = outcome.readUri;
+    }
     if (outcome.status === "ok") uploadedUris.push(img.uri);
     else if (outcome.status === "missing") lostImages.push(img);
     else retryImages.push(img);

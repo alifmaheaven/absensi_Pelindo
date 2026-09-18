@@ -391,6 +391,62 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
   });
 
   /**
+   * D-2 CHECK-2(b) — promosi uri cache→persisten dulu hanya hidup di variabel
+   * lokal `readUri`: file hasil promosi tidak pernah dihapus setelah upload
+   * sukses (removePersistedEvidence menunjuk uri cache lama → skip) dan tidak
+   * pernah dirujuk ulang saat retry (anak menunjuk cache yang bisa di-evict OS
+   * → bukti hilang padahal salinan persisten ada, lalu sweep memandangnya
+   * yatim). Fix: tulis-balik readUri ke elemen record.
+   */
+  it("D-2 CHECK-2b: upload sukses dari uri cache — salinan persisten yang dihapus, bukan tak tersentuh", async () => {
+    await seedQueue([
+      checkInAction([{ uri: "file:///cache/a.jpg", name: "a.jpg", type: "image/jpeg" }]),
+    ]);
+    routePosts(["ok"]);
+
+    const outcome = await syncQueuedRequests();
+    expect(outcome.synced).toBe(1);
+
+    // Pra-fix: removePersistedEvidence menerima uri cache lama → salinan
+    // persisten hasil promosi jadi yatim permanen. Kini: uri persisten.
+    expect(evidenceStorageMock.removePersistedEvidence).toHaveBeenCalledWith([
+      "file:///doc/attendance-evidence/a.jpg",
+    ]);
+  });
+
+  it("D-2 CHECK-2b: upload gagal (retryable) dari uri cache — anak retry menunjuk salinan persisten", async () => {
+    await seedQueue([
+      checkInAction([{ uri: "file:///cache/a.jpg", name: "a.jpg", type: "image/jpeg" }]),
+    ]);
+    routePosts(["fail"]);
+
+    const outcome = await syncQueuedRequests();
+    expect(outcome.evidenceRetrying).toBe(1);
+
+    const queue = await getQueue();
+    const child = queue.find((a) => a.type === "ATTENDANCE_EVIDENCE");
+    expect(child).toBeTruthy();
+    // Record anak WAJIB membawa uri hasil promosi — kalau masih uri cache,
+    // eviksi OS memutus bukti padahal salinan persisten tersedia.
+    expect(child!.data.images[0].uri).toBe("file:///doc/attendance-evidence/a.jpg");
+    // Sweep keep-set ikut menunjuk persisten (tidak lagi menandai promosi sbg yatim):
+    expect(mockEvidenceState.cleanupKeep).toContain("file:///doc/attendance-evidence/a.jpg");
+    // Belum terkonfirmasi → salinan persisten TIDAK boleh dibuang:
+    expect(evidenceStorageMock.removePersistedEvidence).not.toHaveBeenCalledWith(
+      expect.arrayContaining(["file:///doc/attendance-evidence/a.jpg"]),
+    );
+
+    // Putaran berikutnya memakai anak yang sudah menulis-balik → sukses:
+    routePosts(["ok"]);
+    const r2 = await syncQueuedRequests();
+    expect(r2.evidenceResynced).toBe(1);
+    expect(await getQueue()).toHaveLength(0);
+    expect(evidenceStorageMock.removePersistedEvidence).toHaveBeenCalledWith([
+      "file:///doc/attendance-evidence/a.jpg",
+    ]);
+  });
+
+  /**
    * M-1 (verdict reviewer G.3, papan H-2) — sweep bukti yatim harus GAGAL
    * SAFE: satu pembacaan keranjang gagal yang rusak (tekanan penyimpanan,
    * korusi pasca-crash) tidak boleh diterjemahkan sebagai "tidak ada bukti

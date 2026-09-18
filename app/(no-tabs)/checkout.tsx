@@ -600,51 +600,13 @@ export default function CheckoutScreen() {
             <View style={styles.mapContainer}>
               {!location ? (
                 locationFailure && locationFailureCopy ? (
+                  // GPS-01: panel KOMPAK saja di dalam kontainer 180dp —
+                  // copy lengkap + aksi dirender di kartu luar (di bawah peta).
                   <View style={styles.loadingContainer}>
-                    <Ionicons name="location-outline" size={40} color={colors.danger} style={{ marginBottom: 10 }} />
-                    <Text style={styles.locationDeniedTitle}>
-                      {locationFailureCopy.title}
+                    <Ionicons name="location-outline" size={32} color={colors.danger} style={{ marginBottom: 8 }} />
+                    <Text style={styles.loadingText}>
+                      {locationFailureCopy.title} — panduan lengkap di bawah
                     </Text>
-                    <Text style={styles.locationDeniedText}>
-                      {locationFailureCopy.message}
-                    </Text>
-                    {locationFailureCopy.actions.map((action) =>
-                      action === "RETRY" ? (
-                        <TouchableOpacity
-                          key={action}
-                          style={styles.retryButton}
-                          onPress={requestLocation}
-                          accessibilityRole="button"
-                          accessibilityLabel="Coba Lagi"
-                        >
-                          <Text style={styles.retryButtonText}>Coba Lagi</Text>
-                        </TouchableOpacity>
-                      ) : action === "ENABLE_SERVICES" ? (
-                        <TouchableOpacity
-                          key={action}
-                          style={styles.settingsButton}
-                          onPress={handleEnableServices}
-                          accessibilityRole="button"
-                          accessibilityLabel="Aktifkan Layanan Lokasi"
-                        >
-                          <Text style={styles.settingsButtonText}>
-                            Aktifkan Layanan Lokasi
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          key={action}
-                          style={styles.settingsButton}
-                          onPress={() => Linking.openSettings()}
-                          accessibilityRole="button"
-                          accessibilityLabel="Buka Pengaturan"
-                        >
-                          <Text style={styles.settingsButtonText}>
-                            Buka Pengaturan
-                          </Text>
-                        </TouchableOpacity>
-                      ),
-                    )}
                   </View>
                 ) : (
                   <View style={styles.loadingContainer}>
@@ -661,6 +623,68 @@ export default function CheckoutScreen() {
                 <Text style={styles.locationOverlayText}>{location ? `${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}` : "Menunggu..."}</Text>
               </View>
             </View>
+
+            {/* GPS-01: kartu diagnosis penuh DI LUAR kontainer peta 180dp
+                (overflow hidden). Warna teks c.text (kontras ~11:1), bukan
+                c.textMuted (2.70:1). */}
+            {locationFailure && locationFailureCopy ? (
+              <View style={styles.locationFailureCard} accessibilityRole="alert">
+                <Text style={styles.locationFailureTitle}>
+                  {locationFailureCopy.title}
+                </Text>
+                <Text style={styles.locationFailureBody}>
+                  {locationFailureCopy.message}
+                </Text>
+                {locationFailureCopy.steps ? (
+                  <View style={styles.locationFailureSteps}>
+                    {locationFailureCopy.steps.map((step, i) => (
+                      <Text key={i} style={styles.locationFailureStep}>
+                        {i + 1}. {step}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+                <View style={styles.locationFailureActions}>
+                  {locationFailureCopy.actions.map((action) =>
+                    action === "RETRY" ? (
+                      <TouchableOpacity
+                        key={action}
+                        style={styles.retryButton}
+                        onPress={requestLocation}
+                        accessibilityRole="button"
+                        accessibilityLabel="Coba Lagi"
+                      >
+                        <Text style={styles.retryButtonText}>Coba Lagi</Text>
+                      </TouchableOpacity>
+                    ) : action === "ENABLE_SERVICES" ? (
+                      <TouchableOpacity
+                        key={action}
+                        style={styles.enableServicesButton}
+                        onPress={handleEnableServices}
+                        accessibilityRole="button"
+                        accessibilityLabel="Aktifkan Layanan Lokasi"
+                      >
+                        <Text style={styles.enableServicesButtonText}>
+                          Aktifkan Layanan Lokasi
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        key={action}
+                        style={styles.settingsButton}
+                        onPress={() => Linking.openSettings()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Buka Pengaturan"
+                      >
+                        <Text style={styles.settingsButtonText}>
+                          Buka Pengaturan
+                        </Text>
+                      </TouchableOpacity>
+                    ),
+                  )}
+                </View>
+              </View>
+            ) : null}
 
             {/* Warning multi-sesi jujur bila list.length > 1 */}
             {multiSessionWarning && (
@@ -901,6 +925,15 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },
   settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
+  // GPS-01 — kartu diagnosis di luar kontainer peta; kontras tinggi (c.text*).
+  locationFailureCard: { backgroundColor: c.surface, borderColor: c.danger, borderWidth: 1, borderRadius: 16, padding: 18, marginBottom: 24 },
+  locationFailureTitle: { fontSize: 16, fontWeight: "bold", color: c.textStrong, marginBottom: 8 },
+  locationFailureBody: { fontSize: 14, lineHeight: 20, color: c.text, marginBottom: 12 },
+  locationFailureSteps: { marginBottom: 12, gap: 4 },
+  locationFailureStep: { fontSize: 14, lineHeight: 20, color: c.text },
+  locationFailureActions: { gap: 8 },
+  enableServicesButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, minHeight: 48, alignSelf: "flex-start" },
+  enableServicesButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600" },
   sectionTitle: { fontSize: 15, fontWeight: "bold", color: c.textStrong, marginBottom: 10 },

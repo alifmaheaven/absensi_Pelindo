@@ -957,9 +957,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   map: { width: "100%", height: "100%" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 10, color: c.textSecondary },
-  locationDeniedEmoji: { fontSize: 40, marginBottom: 10 },
-  locationDeniedTitle: { fontSize: 16, fontWeight: "bold", color: c.text, marginBottom: 4 },
-  // locationDeniedText (0 rujukan sejak GPS-01) DIHAPUS — dead style; idem checkin.tsx.
+  // Keluarga locationDenied* (Emoji/Title/Text) DIHAPUS ALL — idem checkin.tsx.
   retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },

@@ -1145,18 +1145,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginTop: 10,
     color: c.textSecondary,
   },
-  locationDeniedEmoji: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
-  locationDeniedTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: c.text,
-    marginBottom: 4,
-  },
-  // locationDeniedText (kontras 2.70:1, 0 rujukan sejak GPS-01) DIHAPUS —
-  // dead style; badan pesan kini dirender locationFailureBody (c.text).
+  // Keluarga locationDenied* (Emoji/Title/Text) DIHAPUS ALL — peninggalan
+  // panel pra-GPS-01 dengan 0 rujukan; diagnosis kini wholly di
+  // locationFailureCard/Title/Body/Steps/Step (c.text, GPS-01/02/09).
   retryButton: {
     backgroundColor: c.primary,
     paddingVertical: 12,

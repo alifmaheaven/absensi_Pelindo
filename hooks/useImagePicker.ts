@@ -3,6 +3,7 @@ import {
   IMAGE_MAX_WIDTH,
   IMAGE_QUALITY,
 } from "@/constants";
+import { persistEvidenceImage, removePersistedEvidence } from "@/lib/evidenceStorage";
 import { THttpErrorResult } from "@/types";
 import { compressImage } from "@/utils/utils";
 import NetInfo from "@react-native-community/netinfo";
@@ -110,11 +111,29 @@ export function useImagePicker() {
         return;
       }
 
+      // WAVE-0 P0-0.6 — pindahkan foto ke penyimpanan persisten SEBELUM masuk
+      // state/antrean. Uri cache dari ImagePicker boleh di-evict OS kapan pun;
+      // antrean offline yang disinkronkan berjam-jam kemudian tidak boleh
+      // mengirim absensi tanpa bukti. Kegagalan persistensi = LOUD dan foto
+      // TIDAK ditambahkan (lebih baik gagal terlihat daripada hilang senyap).
+      let durableUri: string;
+      try {
+        durableUri = await persistEvidenceImage(fileUri);
+      } catch (persistError) {
+        console.error("[PickImage] Gagal menyimpan bukti ke penyimpanan perangkat:", persistError);
+        Alert.alert(
+          "Bukti Gagal Disimpan",
+          "Foto tidak dapat disimpan ke penyimpanan aplikasi. Ruang penyimpanan perangkat mungkin penuh. Kosongkan ruang, lalu ambil ulang foto bukti ini.",
+        );
+        setLoadingImage(false);
+        return;
+      }
+
       const fileName = `image-${Date.now()}.jpg`;
       const localImage: IImage = {
-        uri: fileUri,
+        uri: durableUri,
         path: "",
-        link: fileUri,
+        link: durableUri,
         name: fileName,
         type: "image/jpeg",
       };
@@ -190,6 +209,11 @@ export function useImagePicker() {
       }
       newImages.splice(index, 1);
       setImages(newImages);
+      // WAVE-0 P0-0.6 — file persisten yang tidak lagi dirujuk state layar
+      // dihapus agar penyimpanan perangkat tidak menumpuk. Best-effort.
+      if (target?.uri) {
+        void removePersistedEvidence([target.uri]);
+      }
     } catch (error) {
       const err = error as THttpErrorResult;
       console.error("Remove Image Error:", err);

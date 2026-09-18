@@ -4,6 +4,12 @@ import { Alert } from "react-native";
 import apiClient from "./axios";
 import { getToken, saveCheckInId } from "./storage";
 import { useAuthStore } from "@/stores/auth";
+import {
+  evidenceFileExists,
+  isPersistedEvidence,
+  persistEvidenceImage,
+  removePersistedEvidence,
+} from "./evidenceStorage";
 
 const OFFLINE_QUEUE_KEY = "@offline_queue";
 const FAILED_ATTENDANCE_KEY = "@failed_attendance_queue";
@@ -454,7 +460,13 @@ export async function getCachedAttendanceStatuses(): Promise<any[]> {
 }
 
 /**
- * Upload single local image file to server and link to evidence
+ * Upload single local image file to server and link to evidence.
+ *
+ * WAVE-0 P0-0.6 — sebelum membaca file, pastikan:
+ *  - file BENAR-BENAR ADA (cache uri lama yang sudah di-evict OS → return null;
+ *    pemanggil WAJIB menangani null secara LOUD, tidak boleh diam-diam);
+ *  - bila uri masih menunjuk cache (item yang di-queue sebelum fix ini),
+ *    salin dulu ke penyimpanan persisten agar tahan retry berikutnya.
  */
 async function uploadLocalImage(
   img: { uri: string; name: string; type: string },
@@ -463,9 +475,23 @@ async function uploadLocalImage(
   label: string
 ): Promise<string | null> {
   try {
+    if (!(await evidenceFileExists(img.uri))) {
+      console.warn("[OfflineQueue] File bukti tidak ditemukan di perangkat:", img.uri);
+      return null;
+    }
+    let readUri = img.uri;
+    if (!isPersistedEvidence(readUri)) {
+      try {
+        readUri = await persistEvidenceImage(readUri);
+      } catch (e) {
+        // cache uri masih ada tapi gagal dipromosikan — lanjut upload dari cache
+        console.warn("[OfflineQueue] Gagal persistensi bukti lama:", e);
+      }
+    }
+
     const formData = new FormData();
     formData.append("files", {
-      uri: img.uri,
+      uri: readUri,
       name: img.name || `offline_${Date.now()}.jpg`,
       type: img.type || "image/jpeg",
     } as any);
@@ -616,6 +642,9 @@ export async function syncQueuedRequests(): Promise<number> {
           if (createdId) {
             await saveCheckInId(createdId);
           }
+          // WAVE-0 P0-0.6 — server sudah menerima record; salinan persisten lokal
+          // tidak diperlukan lagi.
+          await removePersistedEvidence((payload.localImages || []).map((i) => i.uri));
           synced++;
         } else if (action.type === "ATTENDANCE_CHECKOUT") {
           const payload = action.data as OfflineCheckOutPayload;
@@ -639,6 +668,8 @@ export async function syncQueuedRequests(): Promise<number> {
             },
             { timeout: 20000 }
           );
+          // WAVE-0 P0-0.6 — checkout diterima server; bersihkan salinan lokal.
+          await removePersistedEvidence((payload.localImages || []).map((i) => i.uri));
           synced++;
         } else {
           // STANDARD_REQUEST

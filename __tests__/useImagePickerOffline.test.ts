@@ -3,6 +3,7 @@ import { Alert } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import * as ImagePicker from "expo-image-picker";
 import { useImagePicker } from "../hooks/useImagePicker";
+import * as evidenceStorageMock from "@/lib/evidenceStorage";
 
 jest.mock("@/components/ui/toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
@@ -14,6 +15,15 @@ jest.mock("@react-native-community/netinfo", () => ({
 
 jest.mock("@/utils/utils", () => ({
   compressImage: jest.fn(async (asset: any) => asset),
+}));
+
+// WAVE-0 P0-0.6 — pass-through default: tes lama mengasumsikan uri hasil
+// kompresi dipakai apa adanya. Test persistensi meng-override mock ini.
+jest.mock("@/lib/evidenceStorage", () => ({
+  persistEvidenceImage: jest.fn(async (uri: string) => uri),
+  isPersistedEvidence: jest.fn(() => false),
+  removePersistedEvidence: jest.fn(async () => {}),
+  evidenceFileExists: jest.fn(async () => true),
 }));
 
 jest.mock("expo-image-picker", () => ({
@@ -148,5 +158,62 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
     });
 
     expect(result.current.images).toHaveLength(0);
+  });
+
+  describe("WAVE-0 P0-0.6 — persistensi bukti ke penyimpanan permanen", () => {
+    const evidence = evidenceStorageMock as unknown as {
+      persistEvidenceImage: jest.Mock;
+      removePersistedEvidence: jest.Mock;
+    };
+
+    it("menyalin uri cache ke penyimpanan persisten sebelum foto masuk state", async () => {
+      (NetInfo.fetch as jest.Mock).mockResolvedValue({
+        isConnected: false,
+        isInternetReachable: false,
+      });
+      (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: "file:///cache/ephemeral-photo.jpg" }],
+      });
+      (evidence.persistEvidenceImage as jest.Mock).mockImplementationOnce(
+        async () => "file:///document/attendance-evidence/durable-photo.jpg",
+      );
+
+      const { result } = renderHook(() => useImagePicker());
+
+      await act(async () => {
+        await result.current.pickImage("camera", mockUploadService);
+      });
+
+      expect(evidence.persistEvidenceImage).toHaveBeenCalledWith("file:///cache/ephemeral-photo.jpg");
+      // State layar (dan nanti antrean) menyimpan uri PERSISTEN, bukan cache
+      expect(result.current.images[0].uri).toBe("file:///document/attendance-evidence/durable-photo.jpg");
+    });
+
+    it("foto DITOLAK dengan Alert LOUD bila persistensi gagal — tidak pernah masuk state diam-diam", async () => {
+      (NetInfo.fetch as jest.Mock).mockResolvedValue({
+        isConnected: false,
+        isInternetReachable: false,
+      });
+      (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: "file:///cache/failed-persist.jpg" }],
+      });
+      (evidence.persistEvidenceImage as jest.Mock).mockImplementationOnce(() =>
+        Promise.reject(new Error("ENOSPC: no space left on device")),
+      );
+
+      const { result } = renderHook(() => useImagePicker());
+
+      await act(async () => {
+        await result.current.pickImage("camera", mockUploadService);
+      });
+
+      expect(result.current.images).toHaveLength(0);
+      expect(result.current.localImages).toHaveLength(0);
+      expect(Alert.alert).toHaveBeenCalled();
+      expect(mockUploadService.uploadTemp).not.toHaveBeenCalled();
+      expect(result.current.loadingImage).toBe(false);
+    });
   });
 });

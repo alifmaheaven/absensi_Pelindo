@@ -23,6 +23,7 @@ import { IAttendance, THttpErrorResult } from "@/types";
 import { parseWIBDate, getOperationalDateWIB, formatHourMinute } from "@/utils/utils";
 import {
   LOCATION_FIX_TIMEOUT_MS,
+  classifyLocationFailure,
   getLocationFailureCopy,
   type LocationFailureCause,
 } from "@/utils/location-diagnostics";
@@ -240,32 +241,45 @@ export default function CheckoutScreen() {
     setLocationFailure(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        // A — izin aplikasi belum diberikan; tanpa 'Coba Lagi' buta (steer UI/UX)
-        setLocationFailure("PERMISSION");
-        return;
-      }
-      // B — layanan lokasi perangkat (probe non-fatal)
+
+      // GPS-10: layar HANYA merakit LocationProbeResult; keputusan A/B/C
+      // diambil classifyLocationFailure — fungsi murni yang sama yang dijaga
+      // locationDiagnostics.test.ts. Perilaku wajib identik dgn checkin.tsx;
+      // tidak ada assignment penyebab literal inline sebagai klasifikasi.
+      const permissionStatus: string = status;
       let servicesEnabled: boolean | undefined;
-      try {
-        servicesEnabled = await Location.hasServicesEnabledAsync();
-      } catch {
-        servicesEnabled = undefined;
+      let fix: Location.LocationObject | null = null;
+      if (permissionStatus === "granted" || permissionStatus === "unnecessary") {
+        // B — layanan lokasi perangkat (probe non-fatal; undefined = tak terbukti)
+        try {
+          servicesEnabled = await Location.hasServicesEnabledAsync();
+        } catch {
+          servicesEnabled = undefined;
+        }
+        // C — fix dalam batas waktu eksplisit (satu sumber angka dgn pesan NO_FIX)
+        if (servicesEnabled !== false) {
+          fix = await Promise.race([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_FIX_TIMEOUT_MS)),
+          ]);
+        }
       }
-      if (servicesEnabled === false) {
-        setLocationFailure("SERVICES");
+
+      const failure = classifyLocationFailure({
+        permissionStatus,
+        servicesEnabled,
+        hasFix: fix !== null,
+      });
+      if (failure) {
+        setLocation(null);
+        setLocationFailure(failure);
         return;
       }
-      // C — fix dalam batas waktu eksplisit (satu sumber angka dgn pesan NO_FIX)
-      const loc = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), LOCATION_FIX_TIMEOUT_MS)),
-      ]);
-      if (!loc) {
-        setLocationFailure("NO_FIX");
-        return;
-      }
-      if (loc.mocked) {
+      // Classifier hanya mengembalikan null bila fix ada — penyempitan tipe,
+      // bukan keputusan klasifikasi kedua.
+      if (!fix) return;
+
+      if (fix.mocked) {
         setLocation(null);
         Alert.alert(
           "Peringatan Keamanan",
@@ -273,9 +287,10 @@ export default function CheckoutScreen() {
         );
         return;
       }
-      setLocation(loc);
+      setLocation(fix);
     } catch (e) {
       console.debug("Location error:", e);
+      // Provider error tak terlihat classifier — konservatif: C (sinyal), bukan A.
       setLocationFailure("NO_FIX");
     } finally {
       setLoadingLocation(false);
@@ -608,14 +623,17 @@ export default function CheckoutScreen() {
                       {locationFailureCopy.title} — panduan lengkap di bawah
                     </Text>
                   </View>
-                ) : (
+                ) : loadingLocation ? (
+                  // GPS-07b: varian ketiga pesan menunggu ("Menunggu posisi
+                  // GPS — silakan coba lagi...") dihapus — idem checkin.tsx.
+                  // Cabang itu terrender saat TIDAK memuat dan tanpa penyebab
+                  // terklasifikasi; keadaan itu tidak lagi ada sejak
+                  // classifier jadi gerbang tunggal (GPS-10).
                   <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={colors.primary} />
-                    <Text style={styles.loadingText}>
-                      {loadingLocation ? "Mendeteksi lokasi..." : "Menunggu posisi GPS — silakan coba lagi bila lama tidak muncul."}
-                    </Text>
+                    <Text style={styles.loadingText}>Mendeteksi lokasi...</Text>
                   </View>
-                )
+                ) : null
               ) : (
                 <MapEmbed location={location} />
               )}

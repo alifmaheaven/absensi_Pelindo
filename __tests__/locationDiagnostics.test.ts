@@ -13,6 +13,14 @@ import {
   getLocationFailureCopy,
 } from "@/utils/location-diagnostics";
 
+// Konvensi source-scan mengikuti __tests__/apiEnvelopeContract.test.tsx:
+// tanpa @types/node — deklarasinya lokal.
+declare const __dirname: string;
+declare function require(name: string): any;
+const fs: { readFileSync(p: string, enc: string): string } = require("fs");
+const path: { join(...p: string[]): string } = require("path");
+const ROOT = path.join(__dirname, "..");
+
 describe("classifyLocationFailure (A→B→C berurutan)", () => {
   it("A: izin tidak granted → PERMISSION, walau layanan mati & tanpa fix", () => {
     expect(
@@ -154,4 +162,30 @@ describe("UIUX-02 ambang copy (assertion CI)", () => {
       expect(step.length).toBeLessThanOrEqual(40);
     }
   });
+});
+
+/**
+ * GPS-10 — fungsi yang diuji CI harus yang dipakai produksi. Akar temuan
+ * @ fb14041: `classifyLocationFailure` hanya ada di baris import sementara
+ * layar mengklasifikasi inline; 11 assertion menjaga fungsi yang tidak
+ * dilalui pengguna. Gerbang ini menolak regresinya dengan membaca sumber
+ * kedua layar: wajib ADA pemanggilan classifier, dan inline
+ * setLocationFailure hanya boleh tersisa satu — fallback catch untuk
+ * exception yang tidak bisa dilihat classifier (dokumentasi GPS-10).
+ */
+describe("GPS-10 wiring: layar memanggil classifier, bukan varian inline", () => {
+  const screens = ["app/(no-tabs)/checkin.tsx", "app/(no-tabs)/checkout.tsx"];
+
+  for (const rel of screens) {
+    it(`${rel}: classifier terpanggil + tak ada klasifikasi inline lain`, () => {
+      const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
+      // Import saja tidak sah — harus call-site dengan argumen objek probe.
+      expect(src).toMatch(/classifyLocationFailure\(\s*\{/);
+      const inlineCauses =
+        src.match(/setLocationFailure\(\s*"(PERMISSION|SERVICES|NO_FIX|OUT_OF_RANGE)"/g) ?? [];
+      expect(inlineCauses).toEqual(['setLocationFailure("NO_FIX"']);
+      // GPS-07b: varian ketiga pesan menunggu sudah mati — haram bangkit lagi.
+      expect(src).not.toContain("Menunggu posisi GPS");
+    });
+  }
 });

@@ -90,22 +90,49 @@ export function extractFileKey(uriOrKey: string): string | null {
   if (/^(https?:\/\/|file:\/\/|content:\/\/)/i.test(uriOrKey)) {
     const marker = "/public/images/";
     const idx = uriOrKey.indexOf(marker);
-    return idx >= 0 ? uriOrKey.slice(idx + marker.length) : null;
+    // M-08: buang `?query`/`#fragment` — key cache TIDAK boleh mengandung token
+    // lama (paritas web imageToken.js:62 `split(/[?#]/)`; tanpa ini, URL
+    // ber-token menghasilkan key "files/a.jpg?token=…" yang tak pernah match
+    // dengan entri cache manapun).
+    return idx >= 0 ? uriOrKey.slice(idx + marker.length).split(/[?#]/)[0] : null;
   }
-  return uriOrKey.startsWith("/") ? uriOrKey.slice(1) : uriOrKey;
+  const raw = uriOrKey.startsWith("/") ? uriOrKey.slice(1) : uriOrKey;
+  return raw.split(/[?#]/)[0];
 }
 
 /**
- * Mint render tokens for every key that does not yet have a live one.
- * One batched POST for the whole page load. Errors are swallowed: a failed mint
- * leaves `fileUrl` returning the bare URL (the pre-SEC-01 behaviour), which the
- * server will 403 — the same outcome as before this module existed, and the
- * next effect retry can mint again.
+ * M-08 (UIUX r2, 2026-09-19): KESGARAN, bukan keberadaan.
+ * Entri kedaluwarsa dipurge-on-sight supaya:
+ *   1. `ensureRenderTokens` me-mint ulang token basi (bug lama: `!cache.has(k)`
+ *      membuat sesi > TTL → url polos → 403 → gambar BLANK PERMANEN s/d
+ *      restart app, padahal server hanya TTL 300 dtk);
+ *   2. Map tidak menumpuk entri mati tanpa batas.
+ */
+function isFresh(key: string): boolean {
+  const entry = cache.get(key);
+  if (!entry) return false;
+  if (entry.expiresAt > Date.now()) return true;
+  cache.delete(key);
+  return false;
+}
+
+/**
+ * Mint render tokens for every key that does not yet have a LIVE (unexpired)
+ * one. One batched POST for the whole page load. Errors are swallowed: a failed
+ * mint leaves `fileUrl` returning the bare URL (the pre-SEC-01 behaviour),
+ * which the server will 403 — and the next effect retry re-mints, because
+ * expired entries are purged and re-requested (M-08), never trusted by
+ * presence.
  */
 export async function ensureRenderTokens(keys: Array<string | null | undefined>): Promise<void> {
-  const wanted = keys
-    .map((k) => (k ? extractFileKey(k) : null))
-    .filter((k): k is string => !!k && !cache.has(k));
+  const wanted = [
+    ...new Set(
+      keys
+        .map((k) => (k ? extractFileKey(k) : null))
+        .filter((k): k is string => !!k)
+        .filter((k) => !isFresh(k)),
+    ),
+  ];
 
   if (wanted.length === 0) return;
   if (wanted.some((k) => inFlight.has(k))) return;
@@ -141,10 +168,14 @@ export async function ensureRenderTokens(keys: Array<string | null | undefined>)
  */
 export function appendRenderToken(fullUrl: string): string {
   if (!fullUrl) return fullUrl;
+  // M-08 paritas web imageToken.js:135: URL yang sudah membawa token tidak
+  // boleh dapat token kedua (extractFileKey kini membuang query, sehingga
+  // tanpa guard ini pemanggilan ganda menghasilkan ?token=A&token=B).
+  if (/[?&]token=/.test(fullUrl)) return fullUrl;
   const key = extractFileKey(fullUrl);
   if (!key) return fullUrl;
-  const entry = cache.get(key);
-  if (!entry || entry.expiresAt <= Date.now()) return fullUrl;
+  const entry = isFresh(key) ? cache.get(key) : undefined;
+  if (!entry) return fullUrl;
   const sep = fullUrl.includes("?") ? "&" : "?";
   return `${fullUrl}${sep}token=${encodeURIComponent(entry.token)}`;
 }
@@ -162,7 +193,10 @@ export function fileUrl(uriOrKey: string): string {
   const key = extractFileKey(uriOrKey);
   if (!key) return uriOrKey;
 
-  const entry = cache.get(key);
+  // isFresh (bukan cache.get polos): entri expired dibuang di sini, bukan
+  // dipakai diam-diam maupun diblokir diam-diam — pastikan mint ulang datang
+  // dari pemanggil effect (kontrak modul: jangan ensure() dari render).
+  const entry = isFresh(key) ? cache.get(key) : undefined;
   const base = originUrl();
 
   // Preserve the original per-screen semantics exactly: a key that already
@@ -173,6 +207,6 @@ export function fileUrl(uriOrKey: string): string {
   const path = key.startsWith("public/images/") ? `/${key}` : `${IMAGE_BASE_PATH}${key}`;
   const url = base ? `${base}${path}` : path;
 
-  if (!entry || entry.expiresAt <= Date.now()) return url;
+  if (!entry) return url;
   return `${url}?token=${encodeURIComponent(entry.token)}`;
 }

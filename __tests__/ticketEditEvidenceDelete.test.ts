@@ -1,7 +1,9 @@
 /**
- * F1 / temuan M-02 (review 2026-09-19 r2):
- * `DELETE /evidence/` kini RequirePermission(['ticketing_delete','attendance_delete',
- * 'daily_routine_delete']) (backend 07e210e + e817480, ada di image prod 42cef67).
+ * F1 / temuan M-02 (review 2026-09-19 r2; attribusi dikoreksi per vonis
+ * Architect — gate *_delete di /evidence/ SUDAH ada sejak d0f8312 14-Sep,
+ * regresi LAMA yang baru TERUKUR; yang baru semalam hanya keluarga /upload):
+ * `DELETE /evidence/` RequirePermission(['ticketing_delete','attendance_delete',
+ * 'daily_routine_delete']).
  * Role `user` lapangan tidak memegang satupun (header seed 20260904; OBSERVER-LOG:331)
  * → 403. Loop `deleteEvid` di submit ticketing/[id].tsx MENGIKAT error ke seluruh
  * submit → "Gagal edit ticket!" = edit dengan hapus foto tak mungkin tersimpan.

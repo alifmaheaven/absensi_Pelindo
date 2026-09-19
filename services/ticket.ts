@@ -223,11 +223,12 @@ export async function deleteEvid(payload: {
 /**
  * HAPUS-LOKAL-TERUS-SUBMIT (vonis koordinator T-3 utk temuan M-02, 2026-09-19).
  *
- * `DELETE /evidence/` kini RequirePermission keluarga `*_delete`
- * (backend 07e210e + e817480, hidup di image prod 42cef67). Role `user`
- * lapangan tidak memegang satupun → 403. Loop submit lama mengikat error itu
- * ke SELURUH edit ticket ("Gagal edit ticket!" — regresi server-side di atas
- * klien yang tak berubah sejak initial commit).
+ * `DELETE /evidence/` SUDAH bergate keluarga `*_delete` sejak d0f8312
+ * (14-Sep, sudah hidup di produksi-kemarin) — regresi LAMA yang baru
+ * TERUKUR (koreksi attribusi Architect r2; semalam hanya rute /upload).
+ * Role `user` lapangan tidak memegang satupun → 403. Loop submit lama
+ * mengikat error itu ke SELURUH edit ticket ("Gagal edit ticket!" —
+ * regresi server-side di atas klien yang tak berubah sejak initial commit).
  *
  * Kontrak helper: 403 DITOLERIR per-item (baris bukti tetap ada di server;
  * pemanggil WAJIB memakai `retained` untuk toast jujur), error lain

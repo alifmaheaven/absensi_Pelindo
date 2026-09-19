@@ -232,6 +232,12 @@ export default function DailyRoutineDetailScreen() {
                     upload_failed: false,
                   },
                 ];
+                // M-03c: cabang LEGACY kolom tunggal `evidence_file` tidak
+                // pernah ikut di-mint (hanya cabang evidence_files). Layar ini
+                // sudah subscribe useRenderTokenVersion() dan menghitung URI
+                // dari key saat render → fire-and-forget di sini cukup; tanpa
+                // panggilan ini thumbnail bukti legacy selamanya url polos 403.
+                ensureRenderTokens([ef]);
               }
             }
 

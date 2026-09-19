@@ -244,7 +244,9 @@ useFocusEffect(
           const evidsData = evids.data?.data || [];
 
           if (evidsData?.length) {
-            ensureRenderTokens(evidsData.map((e) => e.file));
+            // M-03: await mint SEBELUM bake uri (lihat alasan identik di
+            // checkout.tsx). Kontrak ensureRenderTokens tidak pernah reject.
+            await ensureRenderTokens(evidsData.map((e) => e.file));
             const evidencesData = evidsData?.map((e) => ({
               id: e?.id,
               uri: appendRenderToken(new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString()),

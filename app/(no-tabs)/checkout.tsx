@@ -329,7 +329,13 @@ export default function CheckoutScreen() {
           (e) => e.evidence_group_id === activeCheckin.evidence_group_id,
         );
         if (evidences?.length) {
-          ensureRenderTokens(evidences.map((e) => e.file));
+          // M-03: DULU fire-and-forget lalu SINKRON bake uri — token belum
+          // tiba saat appendRenderToken dieksekusi, dan layar ini tidak
+          // subscribe useRenderTokenVersion → uri ter-bake polos selamanya
+          // (403 senyap). Await menjamin token ada SEBELUM bake; mint tidak
+          // pernah reject (kontrak renderToken), jadi await tidak menambah
+          // jalur error baru.
+          await ensureRenderTokens(evidences.map((e) => e.file));
           setImages(
             evidences.map((e) => ({
               uri: appendRenderToken(new URL(`${IMAGE_BASE_PATH}${e.file}`, BASE_URL).toString()),

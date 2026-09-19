@@ -260,6 +260,14 @@ export default function IzinScreen() {
           (e) => e.evidence_group_id === item.evidence_group_id
         );
         setDetailEvidence(evs);
+        // A-7 (vonis koordinator): `ensureRenderTokens` SEJAK 16-Sep hanya
+        // diimpor di layar ini tanpa pernah dipanggil → cache token kosong
+        // selamanya → fileUrl() selalu url polos → 403 senyap di semua
+        // thumbnail bukti izin. Layar ini sudah subscribe
+        // useRenderTokenVersion() dan menghitung URI dari key saat render,
+        // jadi satu pemanggilan di sini cukup: mint → bump → re-render →
+        // token terpasang.
+        ensureRenderTokens(evs.map((e) => e.file));
       } catch (e) {
         console.error("Error fetching evidence:", e);
         showToast("Gagal memuat lampiran", "error");

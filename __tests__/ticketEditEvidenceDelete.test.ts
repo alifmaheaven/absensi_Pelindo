@@ -93,7 +93,6 @@ describe("deleteRemovedEvidence (M-02: 403-tolerant, non-blocking)", () => {
 });
 
 describe("kunci sumber ticketing/[id].tsx (wiring M-02)", () => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const fs = require("fs");
   const src = fs.readFileSync(
     // jest berjalan dengan cwd = akar Mobile (lihat jest.config.js rootDir).

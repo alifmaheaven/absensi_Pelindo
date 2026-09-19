@@ -39,7 +39,6 @@ const now = () => T0 + nowOffset;
 // reload modul lewat require sinkron + resetModules, bukan `await import()`.
 function freshModule() {
   jest.resetModules();
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   return require("@/lib/renderToken") as typeof import("@/lib/renderToken");
 }
 

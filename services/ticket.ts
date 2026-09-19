@@ -244,8 +244,10 @@ export interface RemovedEvidenceOutcome {
   retained: number;
 }
 
+type RemovableImage = { id?: string | null } | null | undefined;
+
 export async function deleteRemovedEvidence(
-  images: Array<{ id?: string | null } | null | undefined>,
+  images: RemovableImage[],
   del: (payload: { id: string }) => Promise<unknown> = deleteEvid,
 ): Promise<RemovedEvidenceOutcome> {
   let deleted = 0;

@@ -220,6 +220,58 @@ export async function deleteEvid(payload: {
   }
 }
 
+/**
+ * HAPUS-LOKAL-TERUS-SUBMIT (vonis koordinator T-3 utk temuan M-02, 2026-09-19).
+ *
+ * `DELETE /evidence/` kini RequirePermission keluarga `*_delete`
+ * (backend 07e210e + e817480, hidup di image prod 42cef67). Role `user`
+ * lapangan tidak memegang satupun → 403. Loop submit lama mengikat error itu
+ * ke SELURUH edit ticket ("Gagal edit ticket!" — regresi server-side di atas
+ * klien yang tak berubah sejak initial commit).
+ *
+ * Kontrak helper: 403 DITOLERIR per-item (baris bukti tetap ada di server;
+ * pemanggil WAJIB memakai `retained` untuk toast jujur), error lain
+ * (500/network/dll) TETAP dilempar supaya submit gagal keras seperti semula —
+ * jangan pernah sembunyikan insiden di balik toleransi ini.
+ * Ini BUKAN kelas best-effort `/upload` (tmp): di sini baris DB bertahan dan
+ * foto lama masih akan tampil saat tiket dimuat ulang — karena itu toast jujur
+ * adalah bagian dari fix, bukan hiasan.
+ */
+export interface RemovedEvidenceOutcome {
+  /** id yang berhasil diperintahkan terhapus ke server. */
+  deleted: number;
+  /** id yang ditolak 403 — masih tersimpan di server, masih akan tampil. */
+  retained: number;
+}
+
+export async function deleteRemovedEvidence(
+  images: Array<{ id?: string | null } | null | undefined>,
+  del: (payload: { id: string }) => Promise<unknown> = deleteEvid,
+): Promise<RemovedEvidenceOutcome> {
+  let deleted = 0;
+  let retained = 0;
+  for (const img of images) {
+    const id = img?.id;
+    if (!id) continue;
+    try {
+      await del({ id });
+      deleted++;
+    } catch (err) {
+      const code = (err as { code?: number } | undefined)?.code;
+      if (code === 403) {
+        console.warn(
+          "deleteRemovedEvidence: server menolak hapus bukti (403) — baris tetap ada, user tanpa *_delete",
+          id,
+        );
+        retained++;
+        continue;
+      }
+      throw err;
+    }
+  }
+  return { deleted, retained };
+}
+
 export async function getEvid(payload: { file_exact: string }): Promise<
   Response<
     {

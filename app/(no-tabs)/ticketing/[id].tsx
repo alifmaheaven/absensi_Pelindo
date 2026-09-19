@@ -8,7 +8,7 @@ import {
   TIMEZONE,
 } from "@/constants";
 import {
-  deleteEvid,
+  deleteRemovedEvidence,
   deleteEvidtmp,
   getActiveCheckins,
   getDataEvid,
@@ -414,12 +414,10 @@ useFocusEffect(
       const groupId = ticket?.evidence_group_id ?? "";
       console.debug("Group ID", groupId);
 
-      for (const img of removedImages) {
-        const deleted = await deleteEvid({ id: img?.id || "" });
-
-        if (deleted?.code !== 200) continue;
-        console.debug("File deleted", deleted);
-      }
+      // M-02 (vonis T-3): 403 dari DELETE /evidence/ (role user tanpa *_delete)
+      // tidak boleh lagi meracuni seluruh submit. Hapus-lokal-terus-submit,
+      // dengan `retained` yang dilaporkan jujur di toast di bawah.
+      const { retained } = await deleteRemovedEvidence(removedImages);
 
       const { default: api } = await import("@/lib/axios");
       let imgCounter = 0;
@@ -467,7 +465,16 @@ useFocusEffect(
 
       console.debug("Ticket created");
 
-      showToast("Berhasil edit ticket!", "success");
+      // Toast JUJUR (M-02): edit tersimpan, tapi baris bukti yang ditolak 403
+      // MASIH ADA di server dan akan tampil lagi saat tiket dimuat ulang.
+      if (retained > 0) {
+        showToast(
+          `Edit tersimpan. ${retained} foto lama tidak dapat dihapus dari server dan masih akan tampil.`,
+          "warning",
+        );
+      } else {
+        showToast("Berhasil edit ticket!", "success");
+      }
 
       useTicketStore.getState().setNeedsRefresh(true);
       router.replace("/ticketing");

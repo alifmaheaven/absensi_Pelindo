@@ -32,6 +32,7 @@ import {
   generateShareToken,
 } from "@/services/gallery";
 import { IGalleryPhoto } from "@/types/gallery";
+import { applyCameraWatermark } from "@/utils/watermark";
 
 type UploadFile = {
   uri: string;
@@ -223,7 +224,23 @@ export default function GalleryFolderScreen() {
       }
       const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
       if (result.canceled || !result.assets?.length) return;
-      await uploadAssets(result.assets.map(imageToUploadFile));
+      // WATERMARK foto KAMERA (keputusan user 2026-09-19). Layar ini sengaja
+      // TIDAK memakai compressImage (unggah langsung quality 0.8), jadi cap
+      // dibakar pada berkas hasil kamera apa adanya. Fail-soft dengan guard
+      // per-foto: kegagalan cap pada satu foto tidak boleh menggagalkan unggah
+      // dokumentasi operasional, dan foto tetap dikirim apa adanya.
+      // Jalur GALERI & DOKUMEN di bawah tidak disentuh (tidak distamp).
+      const captured = await Promise.all(
+        result.assets.map(async (asset) => {
+          try {
+            return { ...asset, uri: await applyCameraWatermark(asset.uri) };
+          } catch (wmError) {
+            console.warn("Watermark kamera gagal, memakai foto asli:", wmError);
+            return asset;
+          }
+        }),
+      );
+      await uploadAssets(captured.map(imageToUploadFile));
     } catch (err: any) {
       Alert.alert("Error Kamera", err?.message || "Gagal membuka kamera.");
     }

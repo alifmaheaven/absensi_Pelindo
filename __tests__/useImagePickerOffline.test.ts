@@ -128,6 +128,17 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
       data: [{ path: "attendance/server-photo-123.jpg", link: "https://s3.pelindo.co.id/attendance/server-photo-123.jpg" }],
     });
 
+    // REGRESI WAVE-0 (diperbaiki 2026-09-28): test ini dulu lulus palsu.
+    // Mock identity (uri => uri) membuat `durableUri === fileUri`, sehingga
+    // kode yang membandingkan `img.uri === fileUri` tampak benar di test —
+    // padahal di produksi persistEvidenceImage mengembalikan uri BERBEDA
+    // (salinan di documentDirectory) dan pembandingan itu tidak pernah cocok.
+    // Mock kini realistis (uri durable berbeda dari cache), sehingga hanya
+    // implementasi yang membandingkan terhadap `durableUri` yang lulus.
+    (evidenceStorageMock.persistEvidenceImage as jest.Mock).mockImplementationOnce(
+      async () => "file:///document/attendance-evidence/online-durable.jpg",
+    );
+
     const { result } = renderHook(() => useImagePicker());
 
     await act(async () => {
@@ -135,7 +146,8 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
     });
 
     expect(result.current.images).toHaveLength(1);
-    expect(result.current.images[0].uri).toBe("file:///local/online-photo.jpg");
+    // uri di state = uri persisten (salinan), bukan uri cache yang diunggah
+    expect(result.current.images[0].uri).toBe("file:///document/attendance-evidence/online-durable.jpg");
     expect(result.current.images[0].path).toBe("attendance/server-photo-123.jpg");
     expect(result.current.images[0].link).toBe("https://s3.pelindo.co.id/attendance/server-photo-123.jpg");
   });

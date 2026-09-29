@@ -18,6 +18,7 @@ import {
   IDailyRoutineItem,
 } from "@/types";
 import { compressImage, getTodayDateString } from "@/utils/utils";
+import { applyCameraWatermark } from "@/utils/watermark";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -563,6 +564,19 @@ export default function DailyRoutineDetailScreen() {
         return;
       }
 
+      // WATERMARK jalur KAMERA (keputusan user 2026-09-19). Fail-soft: helper
+      // ini tidak pernah throw, dan guard try/catch di sini melindungi dari
+      // kegagalan native tak terduga agar foto bukti tidak hilang hanya karena
+      // cap gagal. Ditempatkan sebelum resolveTranscodedAsset agar ukuran/nama
+      // berkas hasil ukur ulang sudah mencerminkan file ber-watermark.
+      if (compressedUri) {
+        try {
+          compressedUri = await applyCameraWatermark(compressedUri);
+        } catch (wmError) {
+          console.warn("Watermark kamera gagal, memakai foto asli:", wmError);
+        }
+      }
+
       const resolved = await resolveTranscodedAsset(
         rawAsset,
         compressedUri,
@@ -1035,7 +1049,8 @@ export default function DailyRoutineDetailScreen() {
     stateKey: string,
     idx: number,
     asset: any,
-    fileType: "image" | "pdf"
+    fileType: "image" | "pdf",
+    fromCamera = false
   ) => {
     const itemState = itemStates[stateKey];
     if (!itemState) return;
@@ -1076,6 +1091,17 @@ export default function DailyRoutineDetailScreen() {
             "error"
           );
           return;
+        }
+
+        // WATERMARK hanya bila berkas berasal dari KAMERA (`fromCamera`).
+        // Galeri & dokumen tidak distamp (keputusan user 2026-09-19). Fail-soft
+        // dengan guard: kegagalan cap tidak boleh membatalkan penggantian bukti.
+        if (fromCamera && compressedUri) {
+          try {
+            compressedUri = await applyCameraWatermark(compressedUri);
+          } catch (wmError) {
+            console.warn("Watermark penggantian gagal, memakai foto asli:", wmError);
+          }
         }
 
         const resolved = await resolveTranscodedAsset(
@@ -1165,7 +1191,8 @@ export default function DailyRoutineDetailScreen() {
           quality: 1,
         });
         if (res.canceled || !res.assets?.[0]) return;
-        await processReplaceFile(stateKey, idx, res.assets[0], "image");
+        // fromCamera = true → foto ini distamp watermark.
+        await processReplaceFile(stateKey, idx, res.assets[0], "image", true);
       } catch (e) {
         console.error("Replace camera error:", e);
       }
@@ -1202,6 +1229,7 @@ export default function DailyRoutineDetailScreen() {
               quality: 1,
             });
             if (res.canceled || !res.assets?.[0]) return;
+            // Galeri → TIDAK distamp watermark (fromCamera tetap false).
             await processReplaceFile(stateKey, idx, res.assets[0], "image");
           } catch (e) {
             console.error("Replace gallery error:", e);

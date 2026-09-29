@@ -2,7 +2,7 @@
   "expo": {
     "name": "Absensi Eos",
     "slug": "absensi_app",
-    "version": "1.0.33",
+    "version": "37",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "absensiapp",
@@ -36,7 +36,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 48
+      "versionCode": 51
     },
     "web": {
       "output": "static",

@@ -6,6 +6,7 @@ import {
 import { persistEvidenceImage, removePersistedEvidence } from "@/lib/evidenceStorage";
 import { THttpErrorResult } from "@/types";
 import { compressImage } from "@/utils/utils";
+import { applyCameraWatermark } from "@/utils/watermark";
 import NetInfo from "@react-native-community/netinfo";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
@@ -105,10 +106,35 @@ export function useImagePicker() {
       });
       console.debug("[PickImage] Compressed result:", compressed);
 
-      const fileUri = compressed?.uri || result.assets?.[0]?.uri;
+      let fileUri = compressed?.uri || result.assets?.[0]?.uri;
       if (!fileUri) {
         setLoadingImage(false);
         return;
+      }
+
+      // WATERMARK foto KAMERA (keputusan user 2026-09-19):
+      // isi = tanggal/jam WIB + GPS, cakupan = foto kamera saja (galeri tidak
+      // distamp), dan FAIL-SOFT — absensi tidak boleh terblokir oleh watermark.
+      // Ditempatkan SESUDAH compress (tidak ada kompresi ganda dari resize) dan
+      // SEBELUM persistEvidenceImage, sehingga salinan persisten di
+      // `attendance-evidence/` — termasuk yang dikirim jalur antrean offline
+      // berjam-jam kemudian — sudah ber-watermark.
+      //
+      // `applyCameraWatermark` memang TIDAK PERNAH throw (kontraknya), tetapi
+      // guard try/catch ini disengaja: bila helper suatu saat gagal dengan cara
+      // tak terduga (mis. kegagalan native Skia), foto TIDAK boleh hilang.
+      // Tanpa guard ini, throw akan jatuh ke catch terluar pickImage() dan
+      // membatalkan seluruh pemilihan foto — pelanggaran kontrak P0-0.6
+      // (tidak ada bukti yang hilang senyap) hanya demi sebuah cap.
+      if (isCamera) {
+        try {
+          fileUri = await applyCameraWatermark(fileUri);
+        } catch (wmError) {
+          console.warn(
+            "[PickImage] Watermark gagal, memakai foto asli:",
+            wmError,
+          );
+        }
       }
 
       // WAVE-0 P0-0.6 — pindahkan foto ke penyimpanan persisten SEBELUM masuk
@@ -170,7 +196,15 @@ export function useImagePicker() {
         if (serverPath || serverLink) {
           setImages((prev) =>
             prev.map((img) =>
-              img.uri === fileUri
+              // REGRESI WAVE-0 (diperbaiki 2026-09-28): state menyimpan
+              // `durableUri` (salinan persisten P0-0.6), BUKAN `fileUri` cache
+              // yang diunggah. Membandingkan terhadap `fileUri` membuat
+              // pembaruan path/link TIDAK PERNAH cocok sejak b14c9bc —
+              // akibatnya alur online izin resubmit / leave create /
+              // ticketing create & edit (yang TIDAK punya fallback re-upload)
+              // mengirim `uploadEvidPermanent({ links: [""] })` dan gagal
+              // keras (backend: moveToPermanentInS3 menolak key kosong).
+              img.uri === durableUri
                 ? {
                     ...img,
                     path: serverPath || img.path,

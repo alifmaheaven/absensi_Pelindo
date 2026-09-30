@@ -32,6 +32,7 @@ import {
   generateShareToken,
 } from "@/services/gallery";
 import { IGalleryPhoto } from "@/types/gallery";
+import { useAuthStore } from "@/stores/auth";
 import { applyCameraWatermark } from "@/utils/watermark";
 
 type UploadFile = {
@@ -68,6 +69,8 @@ const PAGE_SIZE = 30;
 const CATEGORY_PRESETS = ["Sebelum", "Pengerjaan", "Sesudah", "Temuan", "Dokumentasi"];
 
 export default function GalleryFolderScreen() {
+  // Nama pengguna untuk baris keterangan watermark kamera.
+  const watermarkName = useAuthStore((s) => s.user?.name ?? null);
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
@@ -233,7 +236,7 @@ export default function GalleryFolderScreen() {
       const captured = await Promise.all(
         result.assets.map(async (asset) => {
           try {
-            return { ...asset, uri: await applyCameraWatermark(asset.uri) };
+            return { ...asset, uri: await applyCameraWatermark(asset.uri, watermarkName) };
           } catch (wmError) {
             console.warn("Watermark kamera gagal, memakai foto asli:", wmError);
             return asset;

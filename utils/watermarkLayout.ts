@@ -34,19 +34,53 @@ export function watermarkFontSize(imageWidth: number): number {
 export const WATERMARK_LINE_HEIGHT_RATIO = 1.35;
 
 /**
- * Tinggi panel peta, sebagai rasio TINGGI gambar.
+ * Tinggi panel peta yang DIMINTA user (piksel absolut).
  *
- * Riwayat: 0.25 → 0.28 (agar 4 baris teks muat pada font 2×) → **0.187**.
- * Permintaan user 2026-09-29: "bagian hitam transparannya dikurangi 1/3 dari
- * yang sekarang" → 0.28 × 2/3 = 0.1867.
+ * Riwayat: 0.25 → 0.28 → 0.187 (rasio) → **220 px absolut**
+ * (permintaan user 2026-09-29: "panel hitamnya dibuat jadi 220 px dong").
  *
- * CATATAN PENTING: 0.187 adalah BATAS BAWAH yang masih memuat 4 baris teks
- * pada foto 896×1600 (butuh 160 px dari 299 px). Bila diturunkan lagi menjadi
- * 1/3 dari sebelumnya (≈149 px), anggaran teks tinggal 101 px sehingga BARIS
- * ALAMAT harus dibuang — jadi panel tidak boleh lebih pendek dari ini tanpa
- * mengorbankan isi bukti.
+ * KENAPA MASIH ADA PENGAMAN (`panelHeightFor`)
+ * --------------------------------------------
+ * 220 px adalah ukuran ABSOLUT, sedangkan tinggi foto bervariasi. Diukur pada
+ * beberapa kasus nyata (font 2×, 5 baris teks termasuk nama user):
+ *
+ *   foto 896×1600  → panel 13,8%  , teks 188 px  → MUAT
+ *   foto 960×1280  → panel 17,2%  , teks 207 px  → MUAT
+ *   foto 1280×960  → panel 22,9%  , teks 274 px  → **TIDAK MUAT** (4:3 lanskap)
+ *   gallery 3000px → panel  5,5%  , teks 493 px  → **TIDAK MUAT** (jadi garis tipis)
+ *
+ * Karena itu 220 px dipakai sebagai ACUAN, lalu dinaikkan bila teks tidak muat
+ * supaya isi bukti (nama, wilayah, alamat, koordinat, waktu) tidak pernah
+ * terpangkas. Foto user tetap persis 220 px.
  */
-export const WATERMARK_PANEL_HEIGHT_RATIO = 0.187;
+export const WATERMARK_PANEL_HEIGHT_PX = 220;
+
+/** Jumlah baris teks panel: nama, wilayah, alamat (maks 2), koordinat, waktu. */
+export const WATERMARK_PANEL_TEXT_LINES = 6;
+
+/**
+ * Tinggi panel final: `WATERMARK_PANEL_HEIGHT_PX`, dinaikkan seperlunya agar
+ * semua baris teks + padding + ruang brand tetap muat.
+ *
+ * `lines` = jumlah baris teks maksimum yang harus ditampilkan.
+ * Murni dan teruji (lihat __tests__/watermarkLayout.test.ts).
+ */
+export function panelHeightFor(params: {
+  width: number;
+  lines?: number;
+}): number {
+  const { width } = params;
+  const lines = Math.max(1, params.lines ?? WATERMARK_PANEL_TEXT_LINES);
+
+  const fontSize = watermarkFontSize(width);
+  const smallSize = Math.max(11, Math.round(fontSize * 0.62));
+  const padding = Math.max(10, Math.round(fontSize * 0.5));
+  const brandReserve = Math.round(fontSize * 0.9);
+  const lineH = Math.round(smallSize * WATERMARK_LINE_HEIGHT_RATIO);
+
+  const minimum = lines * lineH + padding + brandReserve;
+  return Math.max(WATERMARK_PANEL_HEIGHT_PX, minimum);
+}
 
 /** Lebar thumbnail peta, sebagai rasio LEBAR gambar. */
 export const WATERMARK_MAP_WIDTH_RATIO = 0.28;

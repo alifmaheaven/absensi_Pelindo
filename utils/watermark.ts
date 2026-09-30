@@ -35,10 +35,10 @@ import {
   TILE_SIZE,
   WATERMARK_LINE_HEIGHT_RATIO,
   WATERMARK_MAP_WIDTH_RATIO,
-  WATERMARK_PANEL_HEIGHT_RATIO,
   clampLines,
   formatAddressLines,
   mapThumbnailHeight,
+  panelHeightFor,
   tileRangeFor,
   watermarkFontSize,
   watermarkMapZoom,
@@ -126,6 +126,23 @@ function isUnsupportedFormat(uri: string): boolean {
 }
 
 /**
+ * Nama pengguna untuk baris keterangan panel (permintaan user 2026-09-29).
+ *
+ * SENGAJA TIDAK diambil dari `useAuthStore` di dalam modul ini: mengimpor
+ * `stores/auth` menarik `lib/cache` → AsyncStorage, sehingga setiap suite Jest
+ * yang menyentuh watermark wajib mem-mock AsyncStorage — kopling yang tidak
+ * sepadan hanya demi satu baris teks (terbukti memerahkan 2 suite saat dicoba).
+ *
+ * Karena itu nama dikirim sebagai PARAMETER oleh pemanggil yang sudah punya
+ * konteks React (`useImagePicker`). Normalisasi: kosong/spasi → null supaya
+ * baris nama dilewati, bukan menampilkan placeholder palsu.
+ */
+export function normalizeWatermarkName(name?: string | null): string | null {
+  const trimmed = typeof name === "string" ? name.trim() : "";
+  return trimmed ? trimmed : null;
+}
+
+/**
  * Gambar panel watermark di bagian BAWAH foto:
  *
  *   ┌──────────┬──────────────────────────────────────────────┐
@@ -157,6 +174,8 @@ export function drawPanel(params: {
   mapHeight: number;
   gps: { latitude: number; longitude: number } | null;
   address: { region: string | null; detail: string | null };
+  /** Nama pengguna login; null = baris nama dilewati. */
+  userName?: string | null;
   loadedTiles: { image: unknown; drawX: number; drawY: number; size: number }[];
   FontWeight: any;
   ClipOp: any;
@@ -172,6 +191,7 @@ export function drawPanel(params: {
     mapHeight,
     gps,
     address,
+    userName,
     loadedTiles,
     FontWeight,
     ClipOp,
@@ -382,6 +402,24 @@ export function drawPanel(params: {
 
   const contextLines: LineToDraw[] = [];
 
+  // Baris NAMA pengguna (permintaan user 2026-09-29) — paling atas, memakai
+  // font kecil tetapi putih penuh supaya terbaca sebagai identitas pemilik
+  // bukti. Dipenggal 1 baris dengan elipsis bila nama sangat panjang.
+  if (userName) {
+    contextLines.push({
+      text: clampLines(
+        wrapTextToWidth(userName, maxTextWidth, (s) =>
+          smallFont.measureText(s).width,
+        ),
+        1,
+      )[0],
+      font: smallFont,
+      paint: textPaint,
+      height: smallLineH,
+      ascent: Math.round(smallSize * 0.85),
+    });
+  }
+
   // Baris wilayah — hanya bila muat bersama inti.
   //
   // BUG yang diperbaiki 2026-09-29: nama wilayah panjang ("Daerah Khusus
@@ -502,7 +540,10 @@ interface LineToDraw {
  * @returns Uri foto ber-watermark, ATAU uri asal bila apa pun gagal.
  *          Tidak pernah throw (kontrak fail-soft).
  */
-export async function applyCameraWatermark(uri: string): Promise<string> {
+export async function applyCameraWatermark(
+  uri: string,
+  userName?: string | null,
+): Promise<string> {
   if (!uri) return uri;
 
   // Skia headless tidak tersedia di web; waterfall di web dilewati.
@@ -566,15 +607,19 @@ export async function applyCameraWatermark(uri: string): Promise<string> {
     // Alamat sudah selesai (berjalan paralel dengan decode di atas).
     const address = await addressPromise;
 
+    // Nama pengguna — baris keterangan pertama pada panel (dikirim pemanggil).
+    const resolvedName = normalizeWatermarkName(userName);
+
     // 3. Raster peta: unduh tile OSM di sekitar koordinat. Peta adalah NILAI
     //    TAMBAH — kegagalan apa pun hanya berakibat panel digambar skematik
     //    lokal (grid + pin), tidak pernah menggagalkan watermark/absensi.
     const fontSize = watermarkFontSize(width);
     const mapWidth = Math.round(width * WATERMARK_MAP_WIDTH_RATIO);
-    // Panel setinggi rasio foto bila ada GPS; tanpa GPS cukup bar ramping
-    // (hanya waktu + brand) supaya tidak memakan seperempat foto percuma.
+    // Panel: 220 px sesuai permintaan user, DENGAN PENGAMAN — dinaikkan bila
+    // teks tidak muat (mis. foto 4:3 lanskap atau foto besar tanpa kompresi),
+    // supaya isi bukti tidak pernah terpangkas. Lihat panelHeightFor().
     const panelHeight = hasGps
-      ? Math.round(height * WATERMARK_PANEL_HEIGHT_RATIO)
+      ? panelHeightFor({ width })
       : Math.max(72, Math.round(fontSize * 2.4));
     // Peta memakai rasio aspek tetap (bukan setinggi panel) dan dipusatkan
     // vertikal — memperbaiki bug "peta jadi strip tegak".
@@ -619,6 +664,7 @@ export async function applyCameraWatermark(uri: string): Promise<string> {
       mapHeight,
       gps: hasGps ? gps! : null,
       address,
+      userName: resolvedName,
       loadedTiles,
       FontWeight,
       ClipOp,

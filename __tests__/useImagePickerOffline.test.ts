@@ -5,6 +5,13 @@ import * as ImagePicker from "expo-image-picker";
 import { useImagePicker } from "../hooks/useImagePicker";
 import * as evidenceStorageMock from "@/lib/evidenceStorage";
 
+jest.mock("@/stores/auth", () => ({
+  // Store auth di-mock tipis: hook membacanya untuk baris nama watermark,
+  // dan mengimpor store asli akan menarik AsyncStorage (butuh mock native).
+  useAuthStore: (selector: any) =>
+    selector({ user: { name: "Teknisi Uji" } }),
+}));
+
 jest.mock("@/components/ui/toast", () => ({
   useToast: () => ({ showToast: jest.fn() }),
 }));

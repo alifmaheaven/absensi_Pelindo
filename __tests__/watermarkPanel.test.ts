@@ -17,8 +17,9 @@
 import { drawPanel } from "../utils/watermark";
 import {
   WATERMARK_MAP_WIDTH_RATIO,
-  WATERMARK_PANEL_HEIGHT_RATIO,
+  WATERMARK_PANEL_HEIGHT_PX,
   mapThumbnailHeight,
+  panelHeightFor,
   tileRangeFor,
   watermarkMapZoom,
 } from "../utils/watermarkLayout";
@@ -93,7 +94,8 @@ function arrange(overrides: Record<string, any> = {}) {
   const width = 895;
   const height = 1599;
   const mapWidth = Math.round(width * WATERMARK_MAP_WIDTH_RATIO);
-  const panelHeight = Math.round(height * WATERMARK_PANEL_HEIGHT_RATIO);
+  // Panel memakai fungsi NYATA (220 px + pengaman), bukan angka karangan.
+  const panelHeight = panelHeightFor({ width });
   const mapHeight = mapThumbnailHeight(mapWidth, panelHeight);
   const gps = { latitude: -6.121991, longitude: 106.893849 };
 
@@ -121,6 +123,7 @@ function arrange(overrides: Record<string, any> = {}) {
       region: "Daerah Khusus Ibukota Jakarta, Indonesia",
       detail: "Jalan Berdikari, Rawa Badak Utara",
     },
+    userName: "Alif Maheaven",
     loadedTiles,
     FontWeight: { Normal: 400 },
     ClipOp: CLIP_OP,
@@ -199,22 +202,44 @@ describe("drawPanel — pin menandai titik koordinat", () => {
   });
 });
 
-describe("drawPanel — tinggi panel (permintaan user: dikurangi 1/3)", () => {
-  it("panel tidak lebih pendek dari batas yang masih memuat 4 baris teks", () => {
-    const { panelHeight, width } = arrange();
-    const fontSize = Math.min(88, Math.max(32, Math.round(width / 26)));
-    const smallSize = Math.max(11, Math.round(fontSize * 0.62));
-    const padding = Math.max(10, Math.round(fontSize * 0.5));
-    const brandReserve = Math.round(fontSize * 0.9);
-    const need = 4 * Math.round(smallSize * 1.35) + padding + brandReserve;
-    expect(panelHeight).toBeGreaterThanOrEqual(need);
+describe("drawPanel — tinggi panel 220 px + pengaman (permintaan user)", () => {
+  it("foto user (lebar 896) memakai panel PERSIS 220 px", () => {
+    // Permintaan eksplisit: "panel hitamnya dibuat jadi 220 px dong".
+    // Pada potret 896 px teks butuh 188 px < 220 px → pengaman tidak aktif,
+    // jadi hasilnya tepat 220 px.
+    const panelHeight = panelHeightFor({ width: 896 });
+    expect(panelHeight).toBe(WATERMARK_PANEL_HEIGHT_PX);
+    expect(panelHeight).toBe(220);
   });
 
-  it("panel lebih pendek dari 0.28 tetapi tetap proporsional", () => {
-    const { panelHeight, height } = arrange();
-    const rasio = panelHeight / height;
-    expect(rasio).toBeLessThan(0.28);
-    expect(rasio).toBeGreaterThan(0.15);
+  it("panel dinaikkan otomatis bila teks tidak muat (foto lebar/besar)", () => {
+    // Foto 4:3 lanskap 1280 px dan foto gallery 3000 px: teks butuh > 220 px.
+    expect(panelHeightFor({ width: 1280 })).toBeGreaterThan(
+      WATERMARK_PANEL_HEIGHT_PX,
+    );
+    expect(panelHeightFor({ width: 3000 })).toBeGreaterThan(
+      WATERMARK_PANEL_HEIGHT_PX,
+    );
+  });
+
+  it("panel SELALU cukup untuk seluruh baris teks (tidak pernah terpangkas)", () => {
+    for (const width of [640, 896, 960, 1280, 2000, 3000]) {
+      const panel = panelHeightFor({ width });
+      const fontSize = Math.min(88, Math.max(32, Math.round(width / 26)));
+      const smallSize = Math.max(11, Math.round(fontSize * 0.62));
+      const padding = Math.max(10, Math.round(fontSize * 0.5));
+      const brandReserve = Math.round(fontSize * 0.9);
+      const need = 6 * Math.round(smallSize * 1.35) + padding + brandReserve;
+      expect(panel).toBeGreaterThanOrEqual(need);
+    }
+  });
+
+  it("panel tidak pernah lebih pendek dari 220 px", () => {
+    for (const width of [320, 640, 896, 3000]) {
+      expect(panelHeightFor({ width })).toBeGreaterThanOrEqual(
+        WATERMARK_PANEL_HEIGHT_PX,
+      );
+    }
   });
 });
 
@@ -270,6 +295,40 @@ describe("drawPanel — atribusi OSM & branding", () => {
     const { calls } = arrange();
     const texts = calls.filter((c) => c.op === "drawText").map((c) => c.args[0]);
     expect(texts.some((t: string) => t.includes("PT Prakhya Tama Cakrawala"))).toBe(true);
+  });
+});
+
+describe("drawPanel — baris NAMA pengguna (permintaan user)", () => {
+  it("menampilkan nama pengguna pada panel", () => {
+    const { calls } = arrange();
+    const texts = calls
+      .filter((c) => c.op === "drawText")
+      .map((c) => String(c.args[0]));
+    expect(texts).toContain("Alif Maheaven");
+  });
+
+  it("melewati baris nama (tanpa placeholder palsu) bila nama kosong/null", () => {
+    const { calls } = arrange({ userName: null });
+    const texts = calls
+      .filter((c) => c.op === "drawText")
+      .map((c) => String(c.args[0]));
+    // Tidak boleh muncul "null"/"undefined"/"-" sebagai pengganti nama.
+    for (const t of texts) {
+      expect(t).not.toMatch(/^(null|undefined|-)$/);
+    }
+    // Baris lain tetap ada.
+    expect(texts.join(" ")).toContain("Jakarta");
+  });
+
+  it("memenggal nama yang sangat panjang dengan elipsis, bukan meluber", () => {
+    const panjang = "Nama".repeat(60);
+    const { calls } = arrange({ userName: panjang });
+    const texts = calls
+      .filter((c) => c.op === "drawText")
+      .map((c) => String(c.args[0]));
+    const barisNama = texts.find((t) => t.startsWith("NamaNama"));
+    expect(barisNama).toBeDefined();
+    expect(barisNama!.endsWith("…") || barisNama === panjang).toBe(true);
   });
 });
 

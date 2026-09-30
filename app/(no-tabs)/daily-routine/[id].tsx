@@ -18,6 +18,7 @@ import {
   IDailyRoutineItem,
 } from "@/types";
 import { compressImage, getTodayDateString } from "@/utils/utils";
+import { useAuthStore } from "@/stores/auth";
 import { applyCameraWatermark } from "@/utils/watermark";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -78,6 +79,8 @@ const getDraftKey = (routineId: string, logDate?: string | null) => {
 export default function DailyRoutineDetailScreen() {
   // SEC-01: langganan versi cache render-token agar bukti re-render saat token di-mint.
   useRenderTokenVersion();
+  // Nama pengguna untuk baris keterangan watermark kamera.
+  const watermarkName = useAuthStore((s) => s.user?.name ?? null);
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const router = useRouter();
@@ -571,7 +574,7 @@ export default function DailyRoutineDetailScreen() {
       // berkas hasil ukur ulang sudah mencerminkan file ber-watermark.
       if (compressedUri) {
         try {
-          compressedUri = await applyCameraWatermark(compressedUri);
+          compressedUri = await applyCameraWatermark(compressedUri, watermarkName);
         } catch (wmError) {
           console.warn("Watermark kamera gagal, memakai foto asli:", wmError);
         }
@@ -1098,7 +1101,7 @@ export default function DailyRoutineDetailScreen() {
         // dengan guard: kegagalan cap tidak boleh membatalkan penggantian bukti.
         if (fromCamera && compressedUri) {
           try {
-            compressedUri = await applyCameraWatermark(compressedUri);
+            compressedUri = await applyCameraWatermark(compressedUri, watermarkName);
           } catch (wmError) {
             console.warn("Watermark penggantian gagal, memakai foto asli:", wmError);
           }

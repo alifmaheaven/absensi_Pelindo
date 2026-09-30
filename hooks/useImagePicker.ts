@@ -4,6 +4,7 @@ import {
   IMAGE_QUALITY,
 } from "@/constants";
 import { persistEvidenceImage, removePersistedEvidence } from "@/lib/evidenceStorage";
+import { useAuthStore } from "@/stores/auth";
 import { THttpErrorResult } from "@/types";
 import { compressImage } from "@/utils/utils";
 import { applyCameraWatermark } from "@/utils/watermark";
@@ -31,6 +32,11 @@ export interface IImageUploadService {
 
 export function useImagePicker() {
   const { showToast } = useToast();
+  // Nama pengguna untuk baris keterangan watermark (permintaan user
+  // 2026-09-29). Dibaca DI SINI — bukan di utils/watermark — supaya modul
+  // watermark tidak perlu mengimpor store auth (menarik AsyncStorage dan
+  // memerahkan suite Jest yang tidak menyentuh auth).
+  const userName = useAuthStore((s) => s.user?.name ?? null);
   const [images, setImages] = useState<IImage[]>([]);
   const [loadingImage, setLoadingImage] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -128,7 +134,7 @@ export function useImagePicker() {
       // (tidak ada bukti yang hilang senyap) hanya demi sebuah cap.
       if (isCamera) {
         try {
-          fileUri = await applyCameraWatermark(fileUri);
+          fileUri = await applyCameraWatermark(fileUri, userName);
         } catch (wmError) {
           console.warn(
             "[PickImage] Watermark gagal, memakai foto asli:",

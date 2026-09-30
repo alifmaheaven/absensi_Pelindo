@@ -36,7 +36,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 51
+      "versionCode": 53
     },
     "web": {
       "output": "static",

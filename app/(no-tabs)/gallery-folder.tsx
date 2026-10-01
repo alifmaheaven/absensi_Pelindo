@@ -33,6 +33,12 @@ import {
 } from "@/services/gallery";
 import { IGalleryPhoto } from "@/types/gallery";
 import { useAuthStore } from "@/stores/auth";
+import { downloadGalleryFile } from "@/utils/galleryDownload";
+import {
+  formatFileSize,
+  fromGalleryPhoto,
+  isPdfFile,
+} from "@/utils/galleryDownloadText";
 import { applyCameraWatermark } from "@/utils/watermark";
 
 type UploadFile = {
@@ -104,6 +110,10 @@ export default function GalleryFolderScreen() {
   const [renamingFolder, setRenamingFolder] = useState(false);
 
   // Fullscreen photo viewer
+  // Unduh (permintaan user 2026-09-29): status per-foto agar tombol bisa
+  // menampilkan spinner dan mencegah ketuk ganda.
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const viewerListRef = useRef<FlatList<IGalleryPhoto>>(null);
@@ -440,6 +450,64 @@ export default function GalleryFolderScreen() {
     }
   };
 
+  /**
+   * Unduh satu file galeri ke perangkat (permintaan user 2026-09-29).
+   *
+   * PENTING: `item.url` adalah presigned URL S3 yang hanya berlaku 60 detik,
+   * jadi URL di-refresh di sini dengan memuat ulang daftar foto folder dan
+   * mencari baris dengan id yang sama. Tanpa refresh, unduhan akan gagal
+   * 403 pada foto yang sudah lama tampil di layar.
+   */
+  const handleDownload = async (item: IGalleryPhoto) => {
+    if (downloadingId) return; // cegah ketuk ganda
+    setDownloadingId(item.id);
+    try {
+      const outcome = await downloadGalleryFile({
+        // Pemetaan snake_case→camelCase dilakukan di helper, bukan di sini,
+        // supaya tidak ada layar yang salah memetakan field.
+        file: fromGalleryPhoto(item),
+        refreshUrl: async () => {
+          try {
+            const res = await getPhotos(id, 1, 200);
+            const list: IGalleryPhoto[] = res?.data?.data ?? [];
+            const fresh = list.find((p) => p.id === item.id);
+            return fresh?.url ?? null;
+          } catch {
+            return null;
+          }
+        },
+      });
+
+      switch (outcome.status) {
+        case "saved":
+          Alert.alert("Berhasil Diunduh", `${outcome.fileName} tersimpan di perangkat Anda.`);
+          break;
+        case "shared":
+          Alert.alert(
+            "File Siap Disimpan",
+            `${outcome.fileName} sudah diunduh. Pilih tujuan penyimpanan pada menu yang muncul.`,
+          );
+          break;
+        case "permission-denied":
+          Alert.alert(
+            "Izin Penyimpanan Diperlukan",
+            "Aplikasi membutuhkan izin menyimpan media untuk menaruh file di Galeri/Files. Mohon aktifkan di pengaturan, lalu coba lagi.",
+            [
+              { text: "Batal", style: "cancel" },
+              { text: "Buka Pengaturan", onPress: () => Linking.openSettings() },
+            ],
+          );
+          break;
+        case "error":
+        default:
+          Alert.alert("Unduhan Gagal", outcome.message);
+          break;
+      }
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   // Open item viewer
   const handleItemPress = (item: IGalleryPhoto) => {
     if (isSelectionMode) {
@@ -451,7 +519,24 @@ export default function GalleryFolderScreen() {
       setViewerIndex(idx >= 0 ? idx : 0);
       setViewerVisible(true);
     } else {
-      Linking.openURL(item.url);
+      // File non-gambar (mis. PDF). Dulu langsung `Linking.openURL(url)` —
+      // rapuh karena url presigned hanya 60 detik. Sekarang user ditawari
+      // UNDUH (yang me-refresh URL) atau buka lewat tautan.
+      const size = formatFileSize(item.file_size);
+      Alert.alert(
+        item.original_name || "Berkas",
+        [
+          isPdfFile(item) ? "Dokumen PDF" : "Berkas lampiran",
+          size ? `Ukuran: ${size}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        [
+          { text: "Batal", style: "cancel" },
+          { text: "Buka Tautan", onPress: () => Linking.openURL(item.url) },
+          { text: "Unduh", onPress: () => handleDownload(item) },
+        ],
+      );
     }
   };
 
@@ -782,6 +867,28 @@ export default function GalleryFolderScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* Unduh foto ini ke perangkat (permintaan user 2026-09-29). */}
+              <TouchableOpacity
+                onPress={() => handleDownload(currentViewerPhoto)}
+                disabled={downloadingId === currentViewerPhoto.id}
+                style={[
+                  styles.categoryEditBtn,
+                  { marginRight: 8 },
+                  downloadingId === currentViewerPhoto.id && { opacity: 0.6 },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Unduh foto ini"
+              >
+                {downloadingId === currentViewerPhoto.id ? (
+                  <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+                ) : (
+                  <Ionicons name="download-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                )}
+                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>
+                  {downloadingId === currentViewerPhoto.id ? "Mengunduh…" : "Unduh"}
+                </Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => openCategoryModal(currentViewerPhoto)}

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Absensi Eos",
     "slug": "absensi_app",
-    "version": "37",
+    "version": "1.0.37",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "absensiapp",
@@ -36,7 +36,7 @@
         "android.permission.POST_NOTIFICATIONS"
       ],
       "package": "com.lutfirr.absensi_app",
-      "versionCode": 53
+      "versionCode": 54
     },
     "web": {
       "output": "static",
@@ -72,7 +72,15 @@
       "expo-web-browser",
       "expo-font",
       "expo-localization",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Aplikasi memerlukan akses galeri untuk menyimpan foto yang Anda unduh dari Galeri.",
+          "savePhotosPermission": "Aplikasi menyimpan foto yang Anda unduh ke Galeri perangkat.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -135,15 +135,16 @@ export async function ensureRenderTokens(keys: Array<string | null | undefined>)
   ];
 
   if (wanted.length === 0) return;
-  if (wanted.some((k) => inFlight.has(k))) return;
-  wanted.forEach((k) => inFlight.add(k));
+  const toFetch = wanted.filter((k) => !inFlight.has(k));
+  if (toFetch.length === 0) return;
+  toFetch.forEach((k) => inFlight.add(k));
 
   try {
     // Path TANPA prefix /api/v1: baseURL sudah memuatnya. Memakai
     // "/api/v1/signed-url/render" menghasilkan /api/v1/api/v1/... (404) karena
     // request interceptor hanya me-rewrite baseURL untuk path /api/v2/. Itu
     // membuat mint selalu gagal senyap -> token tak pernah ada -> gambar kosong.
-    const res = await api.post("/signed-url/render", { keys: wanted });
+    const res = await api.post("/signed-url/render", { keys: toFetch });
     const urls: Record<string, string> = res.data?.data?.urls ?? {};
     const expiresIn: number = res.data?.data?.expires_in ?? 300;
     const now = Date.now();
@@ -158,7 +159,7 @@ export async function ensureRenderTokens(keys: Array<string | null | undefined>)
     // Mint failure is non-fatal: images fall back to bare URLs (which are 403
     // under SEC-01) and the caller can retry. Do not crash the screen for it.
   } finally {
-    wanted.forEach((k) => inFlight.delete(k));
+    toFetch.forEach((k) => inFlight.delete(k));
   }
 }
 

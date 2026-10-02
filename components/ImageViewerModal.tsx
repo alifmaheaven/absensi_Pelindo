@@ -11,6 +11,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { appendRenderToken } from "@/lib/renderToken";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
@@ -48,7 +49,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
         </TouchableOpacity>
         {uri && (
           <Image
-            source={{ uri }}
+            source={{ uri: appendRenderToken(uri) }}
             style={styles.image}
             resizeMode="contain"
           />

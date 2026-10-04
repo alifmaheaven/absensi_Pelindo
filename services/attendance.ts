@@ -20,6 +20,11 @@ export async function getAttendanceList(
     include?: string;
     user_id_exact?: string[];
     id_exact?: string[];
+    created_at_gte?: string[];
+    created_at_lte?: string[];
+    checkin_gte?: string[];
+    checkin_lte?: string[];
+    [key: string]: any;
   },
 ): Promise<Response<{ data: IAttendance[]; meta?: IMeta }>> {
   try {

@@ -5,7 +5,10 @@ import {
   parseWIBDate,
   calculateAttendanceStatus,
   getOperationalDateWIB,
+  parseDateParts,
+  todayWIB,
 } from "@/utils/utils";
+import MonthYearPickerModal from "@/components/ui/MonthYearPickerModal";
 import {
   IAttendance,
   IMeta,
@@ -41,6 +44,11 @@ export default function AttendanceTabScreen() {
   const colors = useThemeColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuthStore();
+  const currentWIB = useMemo(() => parseDateParts(todayWIB()), []);
+  const [filterYear, setFilterYear] = useState<number>(currentWIB.year);
+  const [filterMonth, setFilterMonth] = useState<number>(currentWIB.month + 1);
+  const [showMonthFilterModal, setShowMonthFilterModal] = useState<boolean>(false);
+
   const [attendanceData, setAttendanceData] = useState<IAttendance[]>([]);
   const [meta, setMeta] = useState<IMeta>(initialMeta);
   const [loading, setLoading] = useState(false);
@@ -49,14 +57,62 @@ export default function AttendanceTabScreen() {
   const [isError, setIsError] = useState(false);
   const [selectedAttendance, setSelectedAttendance] = useState<IAttendance | null>(null);
 
-  const fetchAttendanceList = async (page: number) => {
+  const filterMonthDisplay = useMemo(() => {
+    const d = new Date(filterYear, filterMonth - 1, 1);
+    return new Intl.DateTimeFormat("id-ID", {
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  }, [filterYear, filterMonth]);
+
+  const fetchAttendanceList = async (page: number, y: number = filterYear, m: number = filterMonth) => {
+    const mm = String(m).padStart(2, "0");
+    const lastDay = new Date(y, m, 0).getDate();
+    const startDate = `${y}-${mm}-01 00:00:00`;
+    const endDate = `${y}-${mm}-${String(lastDay).padStart(2, "0")} 23:59:59`;
+
     return getAttendanceList({
       page,
       per_page: meta.per_page,
       order_by_desc: ["created_at"],
       include: "shift,site",
       user_id_exact: [user?.id ?? ""],
+      created_at_gte: [startDate],
+      created_at_lte: [endDate],
     });
+  };
+
+  const loadInitialList = async (y: number = filterYear, m: number = filterMonth) => {
+    setLoading(true);
+    setIsError(false);
+    try {
+      const response = await fetchAttendanceList(1, y, m);
+      const items = response.data?.data || [];
+      const responseMeta = response.data?.meta;
+      setAttendanceData(items);
+      setMeta({
+        ...initialMeta,
+        total: responseMeta?.total || 0,
+        page: 2,
+        total_pages: responseMeta?.total_pages || 0,
+      });
+      setHasMore(1 < (responseMeta?.total_pages || 0));
+    } catch (error) {
+      console.error("Failed to load attendance list:", error);
+      setIsError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFilterMonthChange = (y: number, m: number) => {
+    setFilterYear(y);
+    setFilterMonth(m);
+    setShowMonthFilterModal(false);
+    setAttendanceData([]);
+    setMeta({ ...initialMeta, page: 1 });
+    setHasMore(true);
+    loadInitialList(y, m);
   };
 
   const handleGetList = async () => {
@@ -64,7 +120,7 @@ export default function AttendanceTabScreen() {
     setLoading(true);
     setIsError(false);
     try {
-      const response = await fetchAttendanceList(meta.page);
+      const response = await fetchAttendanceList(meta.page, filterYear, filterMonth);
       const items = response.data?.data || [];
       const responseMeta = response.data?.meta;
 
@@ -103,17 +159,7 @@ export default function AttendanceTabScreen() {
     setRefreshing(true);
     setIsError(false);
     try {
-      const response = await fetchAttendanceList(1);
-      const items = response.data?.data || [];
-      const responseMeta = response.data?.meta;
-      setAttendanceData(items);
-      setMeta({
-        ...initialMeta,
-        total: responseMeta?.total || 0,
-        page: 2,
-        total_pages: responseMeta?.total_pages || 0,
-      });
-      setHasMore(1 < (responseMeta?.total_pages || 0));
+      await loadInitialList(filterYear, filterMonth);
     } catch (error) {
       console.error("Failed to refresh attendance:", error);
       if (attendanceData.length === 0) {
@@ -126,7 +172,7 @@ export default function AttendanceTabScreen() {
 
   useEffect(() => {
     (async () => {
-      await handleGetList();
+      await loadInitialList(filterYear, filterMonth);
     })();
   }, []);
 
@@ -190,87 +236,108 @@ export default function AttendanceTabScreen() {
   }, [attendanceData, meta.total]);
 
   const renderSummaryMetrics = () => {
-    if (!attendanceData.length) return null;
-
     return (
       <View style={styles.metricsWrapper}>
-        <Text style={styles.metricsSectionTitle}>Ringkasan Presensi</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.metricsContainer}
-        >
-          {/* Total */}
-          <View style={[styles.metricChip, styles.metricChipPrimary]}>
-            <View style={styles.metricIconWrap}>
-              <Ionicons name="list-outline" size={13} color={colors.primaryText} />
-            </View>
-            <View>
-              <Text style={styles.metricValuePrimary}>{metrics.total}</Text>
-              <Text style={styles.metricLabelPrimary}>Total Absensi</Text>
-            </View>
-          </View>
+        <View style={styles.metricsHeaderRow}>
+          <Text style={styles.metricsSectionTitle}>Ringkasan Presensi</Text>
+          <TouchableOpacity
+            style={styles.monthFilterButton}
+            onPress={() => setShowMonthFilterModal(true)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Filter bulan dan tahun ringkasan presensi"
+          >
+            <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+            <Text style={styles.monthFilterText}>{filterMonthDisplay}</Text>
+            <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
 
-          {/* Selesai */}
-          <View style={[styles.metricChip, styles.metricChipSuccess]}>
-            <View style={styles.metricIconWrap}>
-              <Ionicons
-                name="checkmark-done-outline"
-                size={13}
-                color={colors.success}
-              />
+        {attendanceData.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.metricsContainer}
+          >
+            {/* Total */}
+            <View style={[styles.metricChip, styles.metricChipPrimary]}>
+              <View style={styles.metricIconWrap}>
+                <Ionicons name="list-outline" size={13} color={colors.primaryText} />
+              </View>
+              <View>
+                <Text style={styles.metricValuePrimary}>{metrics.total}</Text>
+                <Text style={styles.metricLabelPrimary}>Total Absensi</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.metricValueSuccess}>{metrics.completed}</Text>
-              <Text style={styles.metricLabelSuccess}>Selesai</Text>
-            </View>
-          </View>
 
-          {/* Aktif */}
-          <View style={[styles.metricChip, styles.metricChipWarning]}>
-            <View style={styles.metricIconWrap}>
-              <Ionicons
-                name="radio-button-on-outline"
-                size={13}
-                color={colors.warning}
-              />
+            {/* Selesai */}
+            <View style={[styles.metricChip, styles.metricChipSuccess]}>
+              <View style={styles.metricIconWrap}>
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={13}
+                  color={colors.success}
+                />
+              </View>
+              <View>
+                <Text style={styles.metricValueSuccess}>{metrics.completed}</Text>
+                <Text style={styles.metricLabelSuccess}>Selesai</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.metricValueWarning}>{metrics.active}</Text>
-              <Text style={styles.metricLabelWarning}>Aktif</Text>
-            </View>
-          </View>
 
-          {/* Tepat Waktu */}
-          <View style={[styles.metricChip, styles.metricChipSuccess]}>
-            <View style={styles.metricIconWrap}>
-              <Ionicons
-                name="checkmark-circle-outline"
-                size={13}
-                color={colors.success}
-              />
+            {/* Aktif */}
+            <View style={[styles.metricChip, styles.metricChipWarning]}>
+              <View style={styles.metricIconWrap}>
+                <Ionicons
+                  name="radio-button-on-outline"
+                  size={13}
+                  color={colors.warning}
+                />
+              </View>
+              <View>
+                <Text style={styles.metricValueWarning}>{metrics.active}</Text>
+                <Text style={styles.metricLabelWarning}>Aktif</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.metricValueSuccess}>{metrics.onTime}</Text>
-              <Text style={styles.metricLabelSuccess}>Tepat Waktu</Text>
-            </View>
-          </View>
 
-          {/* Terlambat */}
-          <View style={[styles.metricChip, styles.metricChipDanger]}>
-            <View style={styles.metricIconWrap}>
-              <Ionicons
-                name="alert-circle-outline"
-                size={13}
-                color={colors.danger}
-              />
+            {/* Tepat Waktu */}
+            <View style={[styles.metricChip, styles.metricChipSuccess]}>
+              <View style={styles.metricIconWrap}>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={13}
+                  color={colors.success}
+                />
+              </View>
+              <View>
+                <Text style={styles.metricValueSuccess}>{metrics.onTime}</Text>
+                <Text style={styles.metricLabelSuccess}>Tepat Waktu</Text>
+              </View>
             </View>
-            <View>
-              <Text style={styles.metricValueDanger}>{metrics.late}</Text>
-              <Text style={styles.metricLabelDanger}>Terlambat</Text>
+
+            {/* Terlambat */}
+            <View style={[styles.metricChip, styles.metricChipDanger]}>
+              <View style={styles.metricIconWrap}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={13}
+                  color={colors.danger}
+                />
+              </View>
+              <View>
+                <Text style={styles.metricValueDanger}>{metrics.late}</Text>
+                <Text style={styles.metricLabelDanger}>Terlambat</Text>
+              </View>
             </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.emptyMetricsRow}>
+            <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
+            <Text style={styles.emptyMetricsText}>
+              Belum ada data kehadiran pada bulan {filterMonthDisplay}.
+            </Text>
           </View>
-        </ScrollView>
+        )}
       </View>
     );
   };
@@ -551,6 +618,16 @@ export default function AttendanceTabScreen() {
         attendance={selectedAttendance}
         onClose={() => setSelectedAttendance(null)}
       />
+
+      {/* Month & Year Filter Modal for Ringkasan Presensi */}
+      <MonthYearPickerModal
+        visible={showMonthFilterModal}
+        year={filterYear}
+        month={filterMonth}
+        title="Filter Bulan Presensi"
+        onConfirm={handleFilterMonthChange}
+        onClose={() => setShowMonthFilterModal(false)}
+      />
     </View>
   );
 }
@@ -579,12 +656,49 @@ const makeStyles = (c: ThemeColors) =>
     metricsWrapper: {
       marginBottom: 14,
     },
+    metricsHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+      paddingHorizontal: 2,
+    },
     metricsSectionTitle: {
       fontSize: 13,
       fontWeight: "700",
       color: c.textStrong,
-      marginBottom: 8,
-      paddingHorizontal: 2,
+    },
+    monthFilterButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    monthFilterText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: c.primary,
+    },
+    emptyMetricsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      backgroundColor: c.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    emptyMetricsText: {
+      fontSize: 12,
+      color: c.textMuted,
+      flex: 1,
     },
     metricsContainer: {
       flexDirection: "row",

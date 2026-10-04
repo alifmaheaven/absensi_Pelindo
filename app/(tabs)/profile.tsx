@@ -9,7 +9,8 @@ import { PersonFill } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
 import { useAuthStore } from "@/stores/auth";
-import { smartCapitalize, isNewerVersion } from "@/utils/utils";
+import { smartCapitalize, isNewerVersion, parseDateParts, todayWIB } from "@/utils/utils";
+import MonthYearPickerModal from "@/components/ui/MonthYearPickerModal";
 import API from "@/lib/axios";
 import { getLatestVersion } from "@/services/version";
 import { getAttendanceMySummary, type IAttendanceMySummary } from "@/services/attendance";
@@ -75,18 +76,30 @@ export default function ProfileScreen() {
   const [aboutModalVisible, setAboutModalVisible] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
-  // R-BL-4: State rekap absensi bulanan milik sendiri
+  // R-BL-4: State rekap absensi bulanan milik sendiri dengan filter bulan & tahun
+  const currentWIB = useMemo(() => parseDateParts(todayWIB()), []);
+  const [selectedYear, setSelectedYear] = useState<number>(currentWIB.year);
+  const [selectedMonth, setSelectedMonth] = useState<number>(currentWIB.month + 1);
+  const [showMonthPicker, setShowMonthPicker] = useState<boolean>(false);
+
   const [summaryData, setSummaryData] = useState<IAttendanceMySummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const currentMonthDisplay = useMemo(() => getWIBMonthDisplay(), []);
 
-  const fetchSummary = useCallback(async () => {
+  const selectedMonthDisplay = useMemo(() => {
+    const d = new Date(selectedYear, selectedMonth - 1, 1);
+    return new Intl.DateTimeFormat("id-ID", {
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  }, [selectedYear, selectedMonth]);
+
+  const fetchSummary = useCallback(async (y: number = selectedYear, m: number = selectedMonth) => {
     setSummaryLoading(true);
     setSummaryError(false);
     try {
-      const monthStr = getWIBMonthString();
+      const monthStr = `${y}-${String(m).padStart(2, "0")}`;
       const res = await getAttendanceMySummary(monthStr);
       const payload: any = res.data;
       const actualData: IAttendanceMySummary = payload?.data || payload;
@@ -97,7 +110,7 @@ export default function ProfileScreen() {
     } finally {
       setSummaryLoading(false);
     }
-  }, []);
+  }, [selectedYear, selectedMonth]);
 
   useFocusEffect(
     useCallback(() => {
@@ -108,7 +121,7 @@ export default function ProfileScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await fetchSummary();
+      await fetchSummary(selectedYear, selectedMonth);
     } finally {
       setRefreshing(false);
     }
@@ -259,7 +272,17 @@ export default function ProfileScreen() {
           <View style={styles.summaryCardHeader}>
             <View>
               <Text style={styles.summaryTitle}>Rekap Kehadiran</Text>
-              <Text style={styles.summarySubtitle}>{currentMonthDisplay}</Text>
+              <TouchableOpacity
+                style={styles.monthSelectorBadge}
+                onPress={() => setShowMonthPicker(true)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Pilih bulan dan tahun rekap kehadiran"
+              >
+                <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+                <Text style={styles.monthSelectorText}>{selectedMonthDisplay}</Text>
+                <Ionicons name="chevron-down" size={13} color={colors.primary} />
+              </TouchableOpacity>
             </View>
             {summaryLoading && (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -272,7 +295,7 @@ export default function ProfileScreen() {
                 Gagal memuat ringkasan absensi
               </Text>
               <TouchableOpacity
-                onPress={fetchSummary}
+                onPress={() => fetchSummary(selectedYear, selectedMonth)}
                 style={styles.summaryRetryButton}
               >
                 <Text style={styles.summaryRetryText}>Coba Lagi</Text>
@@ -448,6 +471,21 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Month & Year Picker Modal for Rekap Kehadiran */}
+      <MonthYearPickerModal
+        visible={showMonthPicker}
+        year={selectedYear}
+        month={selectedMonth}
+        title="Pilih Bulan Rekap"
+        onConfirm={(y, m) => {
+          setSelectedYear(y);
+          setSelectedMonth(m);
+          setShowMonthPicker(false);
+          fetchSummary(y, m);
+        }}
+        onClose={() => setShowMonthPicker(false)}
+      />
     </View>
   );
 }
@@ -523,6 +561,22 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     fontSize: 12,
     color: c.textMuted,
     marginTop: 2,
+  },
+  monthSelectorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: c.primarySoft,
+    alignSelf: "flex-start",
+  },
+  monthSelectorText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: c.primary,
   },
   summaryChipsGrid: {
     flexDirection: "row",

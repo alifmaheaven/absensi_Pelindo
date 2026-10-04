@@ -839,18 +839,12 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
             latitude: payload.checkin_latitude,
             longitude: payload.checkin_longitude,
             attendance_status_id: payload.attendance_status_id,
-            // W2 REGRESSION FIX (2026-09-15): the `attendance` table has NOT NULL
-            // constraints on `name` and `code`, and the SERVER does not derive them
-            // for a self-service caller — its defaults live inside the
-            // `if (hasCreate)` branch, and the self-service `else` branch only forces
-            // `user_id`. The online path supplies both (`checkin.tsx`); this offline
-            // path did not, so a queued check-in failed with
-            //   400 "null value in column \"name\" ... violates not-null constraint"
-            // and then retried indefinitely — the same false "will sync
-            // automatically" promise that OBS-V1 was raised to eliminate. Mirror the
-            // online path exactly. Verified live against production before/after.
+            // W2 regression fix: the `attendance` table requires `name`; the
+            // backend supplies safe defaults for self-service callers. `code` is
+            // deliberately omitted: PostgreSQL code_seq_attendance owns numbering
+            // (AT001...), including offline retries. Old queued records may still
+            // contain CHK-Date.now(); the server strips client code before INSERT.
             name: "attendance",
-            code: `CHK-${Date.now()}`,
             ...(payload.contract_id ? { contract_id: payload.contract_id } : {}),
             ...(payload.description ? { description: payload.description } : {}),
             ...(groupId ? { evidence_group_id: groupId } : {}),

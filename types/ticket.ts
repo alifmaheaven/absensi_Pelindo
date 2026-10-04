@@ -55,6 +55,7 @@ export interface ITicket {
   end_ticket: string;
   created_at: string;
   updated_at: string;
+  row_version?: string;
   deleted_at: string;
   incident_owners?: IIncidentOwner[];
   incident_owner_ids?: string[];
@@ -340,7 +341,8 @@ export type TTicket = {
   company_id: string;
   contract_id: string;
   site_id: string;
-  code: string;
+  /** Optional on create; PostgreSQL sequence generates it. */
+  code?: string;
   status_id: string;
   start_ticket: string;
   attendance_id: string;
@@ -350,4 +352,5 @@ export type TTicket = {
   name: string;
   description: string;
   incident_owner_ids?: string[];
+  row_version?: string;
 };

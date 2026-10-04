@@ -29,6 +29,32 @@ export async function getTicketHistory(ticketId: string) {
   }
 }
 
+/**
+ * Fetch ONE ticket (Wave A1, 2026-10-02).
+ *
+ * Until now this endpoint did not exist server-side, so the detail screen
+ * could only read `ticket` from the zustand store that the LIST screen had
+ * populated. A deep link (`/ticketing/<id>`), a notification tap, or a cold
+ * start therefore left `ticket === null`, and the screen then PUT blank
+ * `site_id` / `code` / `user_id` / `company_id`.
+ *
+ * `?include=incident_owners` mirrors what the list screen receives, so the
+ * detail view renders the same shape. Out-of-scope tickets come back 404
+ * (anti-reconnaissance) and are surfaced by the caller's existing error path.
+ */
+export async function getTicketById(
+  ticketId: string,
+  include?: string,
+): Promise<ITicket> {
+  const response = await axios.get(`/ticket/${ticketId}`, {
+    params: include ? { include } : undefined,
+  });
+  // Backend envelope: { code, message, data }. With `include=` the row also
+  // carries the joined relations, which is the ITicket shape
+  // (types/ticket.ts:59 `incident_owners?`) — not the raw TTicket payload.
+  return response.data?.data as ITicket;
+}
+
 export async function getTicketDevice(
   params: TParams & {
     company_id_exact?: string[];
@@ -389,7 +415,7 @@ export async function createTicket(payload: TTicket) {
 }
 
 export async function updateTicket(
-  payload: TTicket & { id: string; end_ticket: string },
+  payload: TTicket & { id: string; end_ticket: string; row_version?: string },
 ) {
   try {
     const response = await axios.put("/ticket/", payload);

@@ -21,6 +21,7 @@ import {
   uploadEvidPermanent,
   uploadEvidtmp,
   getTicketHistory,
+  getTicketById,
 } from "@/services/ticket";
 import { getAttendanceList } from "@/services/attendance";
 import { formatAttendanceDate } from "@/utils/utils";
@@ -29,6 +30,7 @@ import { useTicketStore } from "@/stores/ticket";
 import {
   IAttendanceOptions,
   IIncidentOwner,
+  ITicket,
   ITicketDevice,
   ITicketSeverity,
   ITicketStatus,
@@ -70,7 +72,12 @@ export default function TicketingEditScreen() {
   const { showToast } = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const { ticket } = useTicketStore();
+  const { ticket: storeTicket } = useTicketStore();
+  // Wave A1: this screen no longer depends on the LIST screen having filled the
+  // store. Seed from the store so an in-app navigation paints instantly, then
+  // re-hydrate from GET /ticket/:id on every focus — that is what makes deep
+  // links, notification taps and cold starts work at all.
+  const [ticket, setTicket] = useState<ITicket | null>(storeTicket);
 
   // form values
   const [notes, setNotes] = useState("");
@@ -173,6 +180,14 @@ useFocusEffect(
         try {
           setLoadingSkeleton(true);
 
+          // Wave A1: resolve the ticket FIRST. Everything below reads
+          // `ticket?.evidence_group_id`, `ticket?.company_id`,
+          // `freshTicket?.attendance_id`, so this must complete before the batch —
+          // and it is what makes a deep link / cold start work, where the store
+          // is empty. 404 (anti-recon) surfaces through the existing error path.
+          const freshTicket = await getTicketById(id as string, "incident_owners");
+          setTicket(freshTicket);
+
           const [sitesRes, devices, attendanceOptions, ticketAttendanceRes, severitys, evids, status, historyRes, incidentOwners] =
             await Promise.all([
               getDataSite({
@@ -195,18 +210,18 @@ useFocusEffect(
                 page: 1,
                 per_page: 5,
                 order_by_desc: ["created_at"],
-                id_exact: [ticket?.attendance_id || ""],
+                id_exact: [freshTicket?.attendance_id || ""],
               }).catch(() => null),
               getDataSeverity({ page: 1, per_page: 100 }),
               getDataEvid({
                 page: 1,
                 per_page: 100,
-                evidence_group_id_exact: [ticket?.evidence_group_id ?? ""],
+                evidence_group_id_exact: [freshTicket?.evidence_group_id ?? ""],
               }),
               getDataStatus({
                 page: 1,
                 per_page: 100,
-                company_id_exact: [ticket?.company_id || ""],
+                company_id_exact: [freshTicket?.company_id || ""],
               }),
               getTicketHistory(id as string).catch(() => ({ data: { logs: [] } })),
               getDataIncidentOwner({ page: 1, per_page: 200 }),
@@ -259,20 +274,20 @@ useFocusEffect(
 
           setSeveritys(sortSeverity);
           setAllIncidentOwners((incidentOwners as any)?.data?.data || []);
-          setSelectedIncidentOwners(ticket?.incident_owners?.map((o: any) => o.id) || []);
+          setSelectedIncidentOwners(freshTicket?.incident_owners?.map((o: any) => o.id) || []);
           setSiteData(siteOpts.map((s: any) => ({ id: s.id, name: s.name, company_id: s.company_id })));
           setAttendanceOptions(attendanceOptionFilter);
           // Auto-select attendance from ticket data or first active check-in
-          if (ticket?.attendance_id) {
-            setAttendanceSelected(ticket.attendance_id);
+          if (freshTicket?.attendance_id) {
+            setAttendanceSelected(freshTicket.attendance_id);
           } else if (attendanceOptionFilter.length > 0) {
             setAttendanceSelected(attendanceOptionFilter[0].id);
           }
           // Determine site ID for device drawer
-          const drawerSiteId = ticket?.site_id || attendanceOptionFilter[0]?.site_id || "";
+          const drawerSiteId = freshTicket?.site_id || attendanceOptionFilter[0]?.site_id || "";
           setDeviceDrawerSiteId(drawerSiteId);
           // Set selected site from ticket or attendance - do this BEFORE device
-          const prefilledSiteId = ticket?.site_id || attendanceOptionFilter[0]?.site_id || "";
+          const prefilledSiteId = freshTicket?.site_id || attendanceOptionFilter[0]?.site_id || "";
           let selectedSiteName = "";
           if (prefilledSiteId) {
             initialSiteId.current = prefilledSiteId;
@@ -286,14 +301,14 @@ useFocusEffect(
             ? device.filter((d: any) => d.site_id === prefilledSiteId)
             : device;
           setDeviceData(filteredDevices);
-          setDeviceSelected(ticket?.device_id || "");
+          setDeviceSelected(freshTicket?.device_id || "");
           setStatusData(statusData);
           setHistory((historyRes as any)?.data?.logs || []);
 
-          setTitle(ticket?.name || "");
-          setNotes(ticket?.description || "");
-          setSeveritySelected(ticket?.severity_id || "");
-          setStatusSelected(ticket?.status_id || "");
+          setTitle(freshTicket?.name || "");
+          setNotes(freshTicket?.description || "");
+          setSeveritySelected(freshTicket?.severity_id || "");
+          setStatusSelected(freshTicket?.status_id || "");
         } catch (error) {
           const err = error as THttpErrorResult;
           console.error("[FetchData Error]", err);
@@ -447,6 +462,7 @@ useFocusEffect(
       // Submit
       await updateTicket({
         id,
+        row_version: ticket?.row_version,
         end_ticket: ticket?.end_ticket || getNowJakarta(),
         user_id: ticket?.user_id || "",
         company_id: ticket?.company_id || "",

@@ -201,6 +201,31 @@ jest.mock("@/lib/axios", () => {
         if (url === "/ticket/t1/history") {
           return Promise.resolve(ok({ ticket_id: "t1", logs: TICKET_LOGS }));
         }
+        if (url === "/ticket/t1") {
+          // Wave A1: the detail screen now resolves the ticket itself instead of
+          // relying on the list screen having filled the zustand store — this is
+          // what makes a deep link / cold start work.
+          return Promise.resolve(ok({
+            id: "t1",
+            user_id: "u1",
+            company_id: "company-1",
+            contract_id: "contract-1",
+            site_id: "site-1",
+            attendance_id: "att-1",
+            evidence_group_id: "eg-1",
+            severity_id: "sev-1",
+            device_id: "d1",
+            status_id: "stat-1",
+            code: "T00001",
+            name: "Kamera Dermaga Mati",
+            description: "Tidak merespons ping sejak 07:30 WIB",
+            start_ticket: "2026-09-01T07:30:00.000Z",
+            end_ticket: null,
+            created_at: "2026-09-01T07:30:00.000Z",
+            updated_at: "2026-09-01T07:30:00.000Z",
+            deleted_at: null,
+          }));
+        }
         if (url === "/device/") {
           // `pagination()` builds {meta,data:[...]} and `response.ok` wraps that once,
           // so the rows ARE three levels deep from the AxiosResponse.

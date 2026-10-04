@@ -1,6 +1,6 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
 import { useToast } from "@/components/ui/toast";
-import { ITicketDevice, THttpErrorResult } from "@/types";
+import { ITicketDevice } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useState , useMemo } from "react";
 import {
@@ -162,7 +162,7 @@ export default function DeviceDrawer({
         await axios.put("/device/", {
           id: editDevice.id,
           name: formName.trim(),
-          code: formCode.trim() || "DEV-" + Date.now().toString(),
+          ...(formCode.trim() ? { code: formCode.trim() } : {}),
           brand: formBrand.trim(),
           productnumber: formProductNumber.trim(),
           ip: formIp.trim(),
@@ -172,7 +172,13 @@ export default function DeviceDrawer({
         });
         showToast("Device berhasil diperbarui", "success");
       } else {
-        // Create
+        // Create (device.code sequence is misaligned in production; require a
+        // manual code until the sequence is reconciled through an approved DB fix).
+        if (!formCode.trim()) {
+          showToast("Kode device harus diisi", "error");
+          setFormSubmitting(false);
+          return;
+        }
         if (!siteId) {
           showToast("Site ID tidak tersedia", "error");
           setFormSubmitting(false);
@@ -180,7 +186,7 @@ export default function DeviceDrawer({
         }
         const res = await axios.post("/device/", {
           name: formName.trim(),
-          code: formCode.trim() || "DEV-" + Date.now().toString(),
+          code: formCode.trim(),
           brand: formBrand.trim(),
           productnumber: formProductNumber.trim(),
           ip: formIp.trim(),
@@ -348,7 +354,7 @@ export default function DeviceDrawer({
                 </View>
 
                 <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Kode <Text style={{ color: colors.textMuted }}>(opsional)</Text></Text>
+                  <Text style={styles.fieldLabel}>Kode {editDevice ? <Text style={{ color: colors.textMuted }}>(kosong = pertahankan kode lama)</Text> : <Text style={{ color: colors.danger }}>*</Text>}</Text>
                   <TextInput
                     style={styles.input}
                     value={formCode}

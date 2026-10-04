@@ -296,7 +296,6 @@ export default function TicketingCreateScreen() {
         company_id: user?.company_id || "",
         contract_id: user?.contract_id || "",
         site_id: siteSelected || user?.site_id || "",
-        code: `TKT-${Date.now()}`,
         status_id: defaultStatusId,
         start_ticket: getNowJakarta(),
 

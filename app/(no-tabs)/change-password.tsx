@@ -64,7 +64,7 @@ export default function ChangePasswordScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#1e90ff", "#4dabf7"]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -211,7 +211,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -260,7 +260,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontWeight: "500",
   },
   saveButton: {
-    backgroundColor: c.success,
+    backgroundColor: c.successAction,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",

@@ -374,7 +374,7 @@ export default function TicketingCreateScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={[colors.primary, colors.background]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -544,7 +544,7 @@ export default function TicketingCreateScreen() {
               {attendanceOptions.length > 1 ? (
                 <View style={styles.dropdownWrapper}>
                   <View style={styles.multiSessionAlert}>
-                    <InfoOutlineRounded color={colors.warning} width={16} height={16} />
+                    <InfoOutlineRounded color={colors.warningText} width={16} height={16} />
                     <Text style={styles.multiSessionAlertText}>
                       {attendanceOptions.length} sesi aktif ditemukan. Sesi terbaru otomatis terpilih:
                     </Text>
@@ -554,7 +554,7 @@ export default function TicketingCreateScreen() {
                     onPress={() => setAttendanceDropdownOpen((p) => !p)}
                   >
                     <View style={styles.sessionSelectedRow}>
-                      <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                      <Ionicons name="checkmark-circle" size={18} color={colors.successText} />
                       <Text style={styles.value} numberOfLines={1}>
                         {attendanceOptions.find((a) => a.id === attendanceSelected)?.name || "Pilih sesi check-in"}
                       </Text>
@@ -592,7 +592,7 @@ export default function TicketingCreateScreen() {
                 </View>
               ) : attendanceOptions.length === 1 ? (
                 <View style={styles.singleSessionCard}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                  <Ionicons name="checkmark-circle" size={20} color={colors.successText} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.singleSessionLabel}>Sesi Aktif Terpilih</Text>
                     <Text style={styles.singleSessionValue}>{attendanceOptions[0].name}</Text>
@@ -600,7 +600,7 @@ export default function TicketingCreateScreen() {
                 </View>
               ) : (
                 <View style={styles.noSessionCard}>
-                  <InfoOutlineRounded color={colors.danger} width={20} height={20} />
+                  <InfoOutlineRounded color={colors.dangerText} width={20} height={20} />
                   <Text style={styles.noSessionText}>
                     Tidak ditemukan sesi check-in aktif. Pastikan Anda telah melakukan check-in sebelum membuat tiket.
                   </Text>
@@ -1050,7 +1050,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: c.primary, // Modern blue
+    backgroundColor: c.primaryAction, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -1114,7 +1114,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
@@ -1279,7 +1279,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   noSessionText: {
     flex: 1,
     fontSize: 12,
-    color: c.danger,
+    color: c.dangerText,
     lineHeight: 16,
   },
 });

@@ -621,7 +621,7 @@ export default function HomeScreen() {
       icon: Ticket,
       label: "Ticket",
       subtext: "Bantuan & Lapor",
-      color: colors.warning,
+      color: colors.warningText,
       containerColor: colors.warningSoft,
       onPress: () => {
         if (!activeSession?.checkin && !recentlyCompletedSession?.checkin) {
@@ -638,7 +638,7 @@ export default function HomeScreen() {
       icon: CheckRounded,
       label: "Daily Routine",
       subtext: "Checklist Harian",
-      color: colors.success,
+      color: colors.successText,
       containerColor: colors.successSoft,
       onPress: () => {
         if (!activeSession?.checkin && !recentlyCompletedSession?.checkin) {
@@ -664,7 +664,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.gradient}
@@ -729,7 +729,7 @@ export default function HomeScreen() {
               <Ionicons
                 name="time-outline"
                 size={16}
-                color={isDark ? colors.warning : "#92400e"}
+                color={colors.warningText}
                 style={styles.offlinePillIcon}
               />
               <Text style={styles.offlinePillText}>
@@ -885,7 +885,7 @@ export default function HomeScreen() {
                 <Ionicons
                   name="warning"
                   size={20}
-                  color={colors.danger}
+                  color={colors.dangerText}
                   style={styles.bannerIcon}
                 />
                 <View style={{ flex: 1 }}>
@@ -951,7 +951,7 @@ export default function HomeScreen() {
                 <CheckRounded
                   width={18}
                   height={18}
-                  color={colors.success}
+                  color={colors.successText}
                   style={styles.bannerIcon}
                 />
                 <Text style={styles.completedTitle}>
@@ -968,7 +968,7 @@ export default function HomeScreen() {
                 <Ionicons
                   name="alert-circle"
                   size={18}
-                  color={isDark ? colors.warning : "#92400e"}
+                  color={colors.warningText}
                   style={styles.bannerIcon}
                 />
                 <Text style={styles.expiredTitle}>
@@ -1133,7 +1133,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     flexShrink: 1,
   },
   offlineSyncButton: {
-    backgroundColor: c.warning,
+    backgroundColor: c.warningAction,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
@@ -1293,7 +1293,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   overdueTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: c.danger,
+    color: c.dangerText,
     letterSpacing: 0.5,
   },
   overdueSubtitle: {
@@ -1343,7 +1343,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   completedTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: c.success,
+    color: c.successText,
   },
   completedSubtitle: {
     fontSize: 12,
@@ -1474,7 +1474,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     position: "absolute",
     top: 2,
     right: 2,
-    backgroundColor: c.danger,
+    backgroundColor: c.dangerAction,
     borderRadius: 9,
     minWidth: 16,
     height: 16,

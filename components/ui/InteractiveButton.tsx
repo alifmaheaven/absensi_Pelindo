@@ -69,7 +69,7 @@ export default function InteractiveButton({
         return {
           container: styles.btnOutline,
           text: styles.btnOutlineText,
-          indicatorColor: colors.primary,
+          indicatorColor: colors.primaryAction,
         };
       case "primary":
       default:
@@ -147,7 +147,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     // Variants
     btnPrimary: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
     },
     btnPrimaryText: {
       color: c.onGradient,
@@ -161,7 +161,7 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textStrong,
     },
     btnDanger: {
-      backgroundColor: c.danger,
+      backgroundColor: c.dangerAction,
     },
     btnDangerText: {
       color: c.onGradient,
@@ -172,6 +172,6 @@ const makeStyles = (c: ThemeColors) =>
       borderColor: c.primary,
     },
     btnOutlineText: {
-      color: c.primary,
+      color: c.primaryAction,
     },
   });

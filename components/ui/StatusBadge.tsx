@@ -42,20 +42,20 @@ export default function StatusBadge({
       case "success":
         return {
           backgroundColor: colors.successSoft,
-          borderColor: colors.success,
-          color: colors.success,
+          borderColor: colors.successText,
+          color: colors.successText,
         };
       case "warning":
         return {
           backgroundColor: colors.warningSoft,
-          borderColor: colors.warning,
-          color: colors.warning,
+          borderColor: colors.warningText,
+          color: colors.warningText,
         };
       case "danger":
         return {
           backgroundColor: colors.dangerSoft,
-          borderColor: colors.danger,
-          color: colors.danger,
+          borderColor: colors.dangerText,
+          color: colors.dangerText,
         };
       case "info":
         return {

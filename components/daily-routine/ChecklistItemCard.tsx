@@ -313,7 +313,7 @@ export default function ChecklistItemCard({
                                   <DocumentCheck
                                     width={28}
                                     height={28}
-                                    color={colors.danger}
+                                    color={colors.dangerText}
                                   />
                                   <Text style={styles.pdfBadgeTextFailed}>
                                     PDF
@@ -445,7 +445,7 @@ export default function ChecklistItemCard({
                                 <CheckRounded
                                   width={14}
                                   height={14}
-                                  color={colors.success}
+                                  color={colors.successText}
                                 />
                                 <Text style={styles.attachedStatusText}>
                                   Bukti terlampir
@@ -885,7 +885,7 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.surface,
     },
     checkboxChecked: {
-      backgroundColor: c.success,
+      backgroundColor: c.successAction,
       borderColor: c.success,
     },
     checkboxReadOnly: {
@@ -951,7 +951,7 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textSecondary,
     },
     badgeTextBoth: {
-      color: c.success,
+      color: c.successText,
     },
 
     // Revealed Section
@@ -1029,7 +1029,7 @@ const makeStyles = (c: ThemeColors) =>
     pdfBadgeTextFailed: {
       fontSize: 10,
       fontWeight: "700",
-      color: c.danger,
+      color: c.dangerText,
       marginTop: 2,
     },
     evidenceInfoCol: {
@@ -1044,7 +1044,7 @@ const makeStyles = (c: ThemeColors) =>
     attachedStatusText: {
       fontSize: 12,
       fontWeight: "700",
-      color: c.success,
+      color: c.successText,
     },
     fileNameText: {
       fontSize: 12.5,
@@ -1095,10 +1095,10 @@ const makeStyles = (c: ThemeColors) =>
     actionButtonDangerText: {
       fontSize: 12.5,
       fontWeight: "700",
-      color: c.danger,
+      color: c.dangerText,
     },
     retryButton: {
-      backgroundColor: c.warning,
+      backgroundColor: c.warningAction,
       minHeight: 44,
       paddingHorizontal: 12,
       borderRadius: 8,
@@ -1120,7 +1120,7 @@ const makeStyles = (c: ThemeColors) =>
     failedBadgeText: {
       fontSize: 10.5,
       fontWeight: "700",
-      color: c.danger,
+      color: c.dangerText,
     },
 
     // Pickers
@@ -1193,7 +1193,7 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textSecondary,
     },
     counterMaxText: {
-      color: c.warning,
+      color: c.warningText,
       fontWeight: "700",
     },
     addMoreSection: {

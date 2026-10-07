@@ -231,7 +231,7 @@ export default function GalleryScreen() {
               alignItems: "center",
             }}
           >
-            <Ionicons name="trash-outline" size={15} color={colors.danger} />
+            <Ionicons name="trash-outline" size={15} color={colors.dangerText} />
           </TouchableOpacity>
         </View>
       </View>
@@ -261,7 +261,7 @@ export default function GalleryScreen() {
           <TouchableOpacity
             onPress={() => setShowCreate(true)}
             style={{
-              backgroundColor: colors.primary,
+              backgroundColor: colors.primaryAction,
               paddingHorizontal: 16,
               paddingVertical: 8,
               borderRadius: 8,
@@ -302,7 +302,7 @@ export default function GalleryScreen() {
                   deniedMessage ||
                   "Akun Anda tidak memiliki izin untuk mengakses fitur Galeri. Hubungi administrator untuk meminta hak akses."
                 }
-                icon={<GalleryIcon color={colors.danger} width={36} height={36} />}
+                icon={<GalleryIcon color={colors.dangerText} width={36} height={36} />}
               />
             ) : isError ? (
               <EmptyState
@@ -310,7 +310,7 @@ export default function GalleryScreen() {
                 description="Koneksi internet bermasalah atau server tidak merespons. Periksa jaringan Anda dan coba lagi."
                 actionLabel="Coba Lagi"
                 onAction={onRefresh}
-                icon={<InfoOutlineRounded color={colors.danger} width={36} height={36} />}
+                icon={<InfoOutlineRounded color={colors.dangerText} width={36} height={36} />}
               />
             ) : (
               <EmptyState

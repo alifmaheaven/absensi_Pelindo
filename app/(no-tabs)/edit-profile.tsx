@@ -66,7 +66,7 @@ export default function EditProfileScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={["#1e90ff", "#4dabf7"]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -205,7 +205,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
@@ -244,7 +244,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.text,
   },
   saveButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",

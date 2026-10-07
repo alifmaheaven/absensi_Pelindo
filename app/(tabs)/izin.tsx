@@ -591,9 +591,9 @@ export default function IzinScreen() {
                   disabled={deletingId === item.id}
                 >
                   {deletingId === item.id ? (
-                    <ActivityIndicator size="small" color={colors.danger} />
+                    <ActivityIndicator size="small" color={colors.dangerText} />
                   ) : (
-                    <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    <Ionicons name="trash-outline" size={16} color={colors.dangerText} />
                   )}
                 </TouchableOpacity>
               ) : isApprovedLeave ? (
@@ -801,7 +801,7 @@ export default function IzinScreen() {
                       <Ionicons
                         name="alert-circle-outline"
                         size={16}
-                        color={colors.danger}
+                        color={colors.dangerText}
                       />
                       <Text style={styles.rejectionLabel}>Alasan Ditolak</Text>
                     </View>
@@ -943,7 +943,7 @@ export default function IzinScreen() {
                 (detailItem.status === "Disetujui" || detailItem.rawStatus === "approved") ? (
                   <View style={styles.approvedNoticeContainer}>
                     <InfoOutlineRounded
-                      color={colors.warning}
+                      color={colors.warningText}
                       width={20}
                       height={20}
                     />
@@ -1073,7 +1073,7 @@ const makeStyles = (c: ThemeColors) =>
       borderWidth: 1,
     },
     filterChipActive: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       borderColor: c.primary,
     },
     filterChipInactive: {
@@ -1339,14 +1339,14 @@ const makeStyles = (c: ThemeColors) =>
     },
     rejectionLabel: {
       fontSize: 12,
-      color: c.danger,
+      color: c.dangerText,
       fontWeight: "700",
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
     rejectionValue: {
       fontSize: 13,
-      color: c.danger,
+      color: c.dangerText,
       lineHeight: 18,
       fontWeight: "500",
     },
@@ -1430,7 +1430,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     resubmitHint: {
       fontSize: 13,
-      color: c.danger,
+      color: c.dangerText,
       marginBottom: 12,
       lineHeight: 18,
     },
@@ -1465,7 +1465,7 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "600",
     },
     resubmitBtn: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       borderRadius: 12,
       paddingVertical: 14,
       alignItems: "center",
@@ -1495,7 +1495,7 @@ const makeStyles = (c: ThemeColors) =>
       lineHeight: 18,
     },
     deleteModalBtn: {
-      backgroundColor: c.danger,
+      backgroundColor: c.dangerAction,
       borderRadius: 12,
       paddingVertical: 14,
       alignItems: "center",
@@ -1522,7 +1522,7 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 15,
     },
     sourceBtnPrimary: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       padding: 16,
       borderRadius: 14,
       alignItems: "center",

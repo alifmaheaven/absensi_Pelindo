@@ -51,7 +51,7 @@ export default function NotificationRationaleModal({
               onPress={onAccept}
             >
               <LinearGradient
-                colors={[colors.primary, "#0052cc"]}
+                colors={[colors.primaryAction, colors.primaryActionEnd]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.gradientBtn}

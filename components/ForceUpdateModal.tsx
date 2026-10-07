@@ -103,7 +103,7 @@ export default function ForceUpdateModal({
             onPress={handleUpdate}
           >
             <LinearGradient
-              colors={[colors.primary, "#0052cc"]}
+              colors={[colors.primaryAction, colors.primaryActionEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.updateButton}
@@ -187,12 +187,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   versionValueCurrent: {
     fontSize: 16,
     fontWeight: "700",
-    color: c.danger,
+    color: c.dangerText,
   },
   versionValueLatest: {
     fontSize: 16,
     fontWeight: "700",
-    color: c.success,
+    color: c.successText,
   },
   divider: {
     width: 1,

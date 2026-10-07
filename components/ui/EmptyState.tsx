@@ -32,7 +32,7 @@ export default function EmptyState({
       <View style={[styles.iconWrapper, isError && styles.iconWrapperError]}>
         {icon || (
           <InfoOutlineRounded
-            color={isError ? colors.danger : colors.primary}
+            color={isError ? colors.dangerText : colors.primary}
             width={40}
             height={40}
           />
@@ -50,7 +50,7 @@ export default function EmptyState({
             <Text style={styles.outlineBtnText}>{resolvedActionLabel}</Text>
           ) : (
             <LinearGradient
-              colors={[colors.primary, "#0052cc"]}
+              colors={[colors.primaryAction, colors.primaryActionEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.gradientBtn}
@@ -92,7 +92,7 @@ const makeStyles = (c: ThemeColors) =>
       marginBottom: 8,
     },
     titleError: {
-      color: c.danger,
+      color: c.dangerText,
     },
     description: {
       fontSize: 13,
@@ -126,7 +126,7 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: "transparent",
     },
     outlineBtnText: {
-      color: c.danger,
+      color: c.dangerText,
       fontSize: 13,
       fontWeight: "600",
     },

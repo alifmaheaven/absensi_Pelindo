@@ -1,3 +1,5 @@
+const expoModulesCorePath = require("path").dirname(require.resolve("expo-modules-core/package.json"));
+
 module.exports = {
   preset: "jest-expo",
   testMatch: ["**/__tests__/**/*.test.[jt]s?(x)"],
@@ -6,7 +8,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     "^react-native/setup-env$": "<rootDir>/__tests__/mockSetupEnv.js",
-    "^expo-modules-core$": "<rootDir>/node_modules/expo/node_modules/expo-modules-core",
-    "^expo-modules-core/(.*)$": "<rootDir>/node_modules/expo/node_modules/expo-modules-core/$1",
+    "^expo-modules-core$": expoModulesCorePath,
+    "^expo-modules-core/(.*)$": `${expoModulesCorePath}/$1`,
   },
 };

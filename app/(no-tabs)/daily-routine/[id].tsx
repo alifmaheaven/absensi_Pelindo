@@ -1452,7 +1452,7 @@ export default function DailyRoutineDetailScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={[colors.primary, colors.background]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -1485,7 +1485,7 @@ export default function DailyRoutineDetailScreen() {
                 {/* M6: Banner Read-Only saat status completed */}
                 {isReadOnly && (
                   <View style={styles.completedBanner}>
-                    <CheckRounded color={colors.success} width={20} height={20} />
+                    <CheckRounded color={colors.successText} width={20} height={20} />
                     <Text style={styles.completedBannerText}>
                       Daily Routine telah selesai dikerjakan
                       {logData?.submitted_at
@@ -1854,7 +1854,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     completedBannerText: {
       fontSize: 13,
-      color: c.success,
+      color: c.successText,
       fontWeight: "600",
       flex: 1,
       lineHeight: 18,
@@ -1887,11 +1887,11 @@ const makeStyles = (c: ThemeColors) =>
     },
     deviceProgressDone: {
       backgroundColor: c.successSoft,
-      color: c.success,
+      color: c.successText,
     },
     deviceProgressPending: {
       backgroundColor: c.warningSoft,
-      color: c.warning,
+      color: c.warningText,
     },
     deviceTabBar: {
       marginBottom: 12,
@@ -1935,11 +1935,11 @@ const makeStyles = (c: ThemeColors) =>
     },
     deviceTabDone: {
       backgroundColor: c.successSoft,
-      color: c.success,
+      color: c.successText,
     },
     deviceTabPending: {
       backgroundColor: c.warningSoft,
-      color: c.warning,
+      color: c.warningText,
     },
 
     // Submit
@@ -1947,7 +1947,7 @@ const makeStyles = (c: ThemeColors) =>
       display: "flex",
       flexDirection: "row",
       justifyContent: "center",
-      backgroundColor: c.success,
+      backgroundColor: c.successAction,
       borderRadius: 16,
       paddingVertical: 16,
       alignItems: "center",
@@ -1970,7 +1970,7 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       justifyContent: "center",
       alignItems: "center",
-      backgroundColor: c.success,
+      backgroundColor: c.successAction,
       borderRadius: 16,
       paddingVertical: 16,
       marginTop: 16,

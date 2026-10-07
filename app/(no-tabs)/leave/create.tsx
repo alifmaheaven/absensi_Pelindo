@@ -282,7 +282,7 @@ export default function LeaveScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={[colors.primary, colors.background]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -692,7 +692,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   clearDateText: {
     fontSize: 11,
     fontWeight: "700",
-    color: c.danger,
+    color: c.dangerText,
     marginBottom: 6,
   },
   dateContainer: {
@@ -831,7 +831,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: c.primary, // Modern blue
+    backgroundColor: c.primaryAction, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -895,7 +895,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",

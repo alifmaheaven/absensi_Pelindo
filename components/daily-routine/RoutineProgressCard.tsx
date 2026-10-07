@@ -178,7 +178,7 @@ export default function RoutineProgressCard({
       <View style={[styles.card, styles.warningCard, style]}>
         <View style={styles.headerRow}>
           <View style={styles.warningIconWrapper}>
-            <ClockOutline width={20} height={20} color={colors.warning} />
+            <ClockOutline width={20} height={20} color={colors.warningText} />
           </View>
           <Text style={styles.warningHeaderTitle}>Presensi Belum Tercatat</Text>
         </View>
@@ -204,7 +204,7 @@ export default function RoutineProgressCard({
       <View style={[styles.card, styles.errorCard, style]}>
         <View style={styles.headerRow}>
           <View style={styles.errorIconWrapper}>
-            <InfoOutlineRounded width={20} height={20} color={colors.danger} />
+            <InfoOutlineRounded width={20} height={20} color={colors.dangerText} />
           </View>
           <Text style={styles.errorHeaderTitle}>Gagal Memuat Progress</Text>
         </View>
@@ -239,7 +239,7 @@ export default function RoutineProgressCard({
         </View>
         <View style={styles.emptyContent}>
           <View style={styles.successIconWrapper}>
-            <CheckRounded width={24} height={24} color={colors.success} />
+            <CheckRounded width={24} height={24} color={colors.successText} />
           </View>
           <Text style={styles.neutralMessageText}>
             Tidak ada penugasan routine untuk site Anda hari ini. Selamat bertugas!
@@ -305,7 +305,7 @@ export default function RoutineProgressCard({
           style={[
             styles.progressBarFill,
             { width: progressWidthPercent },
-            isAllCompleted && { backgroundColor: colors.success },
+            isAllCompleted && { backgroundColor: colors.successAction },
           ]}
         />
       </View>
@@ -322,7 +322,7 @@ export default function RoutineProgressCard({
         </View>
         <View style={styles.detailItem}>
           <View
-            style={[styles.statusDot, { backgroundColor: colors.warning }]}
+            style={[styles.statusDot, { backgroundColor: colors.warningAction }]}
           />
           <Text style={styles.detailText}>
             {summary.unstartedRoutines} Belum Dimulai
@@ -420,7 +420,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     progressBarFill: {
       height: "100%",
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       borderRadius: 4,
     },
     detailRow: {
@@ -476,7 +476,7 @@ const makeStyles = (c: ThemeColors) =>
     warningHeaderTitle: {
       fontSize: 15,
       fontWeight: "700",
-      color: c.warning,
+      color: c.warningText,
       flex: 1,
     },
     warningMessageText: {
@@ -486,7 +486,7 @@ const makeStyles = (c: ThemeColors) =>
       marginBottom: 16,
     },
     checkInButton: {
-      backgroundColor: c.warning,
+      backgroundColor: c.warningAction,
       paddingVertical: 10,
       paddingHorizontal: 16,
       borderRadius: 10,
@@ -516,7 +516,7 @@ const makeStyles = (c: ThemeColors) =>
     errorHeaderTitle: {
       fontSize: 15,
       fontWeight: "700",
-      color: c.danger,
+      color: c.dangerText,
       flex: 1,
     },
     errorMessageText: {

@@ -554,7 +554,7 @@ export default function CheckoutScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={[colors.primary, colors.background]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -633,7 +633,7 @@ export default function CheckoutScreen() {
                   // GPS-01: panel KOMPAK saja di dalam kontainer 180dp —
                   // copy lengkap + aksi dirender di kartu luar (di bawah peta).
                   <View style={styles.loadingContainer}>
-                    <Ionicons name="location-outline" size={32} color={colors.danger} style={{ marginBottom: 8 }} />
+                    <Ionicons name="location-outline" size={32} color={colors.dangerText} style={{ marginBottom: 8 }} />
                     <Text style={styles.loadingText}>
                       {locationFailureCopy.title} — panduan lengkap di bawah
                     </Text>
@@ -734,7 +734,7 @@ export default function CheckoutScreen() {
             {/* Warning multi-sesi jujur bila list.length > 1 */}
             {multiSessionWarning && (
               <View style={styles.multiSessionBanner}>
-                <InfoOutlineRounded color={colors.warning} width={20} height={20} />
+                <InfoOutlineRounded color={colors.warningText} width={20} height={20} />
                 <Text style={styles.multiSessionWarningText}>{multiSessionWarning}</Text>
               </View>
             )}
@@ -964,7 +964,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 10, color: c.textSecondary },
   // Keluarga locationDenied* (Emoji/Title/Text) DIHAPUS ALL — idem checkin.tsx.
-  retryButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
+  retryButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
   retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },
   settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
@@ -975,7 +975,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   locationFailureSteps: { marginBottom: 12, gap: 4 },
   locationFailureStep: { fontSize: 14, lineHeight: 20, color: c.text },
   locationFailureActions: { gap: 8 },
-  enableServicesButton: { backgroundColor: c.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, minHeight: 48, alignSelf: "flex-start" },
+  enableServicesButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, minHeight: 48, alignSelf: "flex-start" },
   enableServicesButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
   locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
   locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600" },
@@ -1004,7 +1004,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: c.primary, borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: c.primarySoft },
   uploadButtonIcon: { marginRight: 8, fontSize: 18 },
   uploadButtonText: { fontSize: 14, color: c.primary, fontWeight: "700" },
-  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: c.primary, borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: c.primaryAction, borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
   submitButtonText: { color: c.onGradient, fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
   submitButtonDisabled: { opacity: 0.7 },
   uploadButtonDisabled: { opacity: 0.7, backgroundColor: c.surface },
@@ -1013,7 +1013,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   modalContent: { backgroundColor: c.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
   modalIndicator: { width: 40, height: 4, backgroundColor: c.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: c.textStrong },
-  modalButtonPrimary: { backgroundColor: c.primary, padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
+  modalButtonPrimary: { backgroundColor: c.primaryAction, padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
   modalButtonTextPrimary: { color: c.onGradient, fontWeight: "bold", fontSize: 15 },
   modalButtonCancel: { backgroundColor: c.surface, padding: 18, borderRadius: 16, alignItems: "center" },
   modalButtonTextCancel: { color: c.textSecondary, fontWeight: "600", fontSize: 15 },
@@ -1097,7 +1097,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   completedBackButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,

@@ -35,7 +35,11 @@ function TabIcon({
     <View
       style={[
         iconStyles.container,
-        focused && { backgroundColor: colors.primarySoft },
+        focused && {
+          backgroundColor: colors.primarySoft,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.borderStrong,
+        },
       ]}
     >
       <Icon
@@ -156,26 +160,21 @@ const makeStyles = (c: ThemeColors, insets?: { bottom: number }) => {
   return StyleSheet.create({
     tabBar: {
       backgroundColor: c.tabBar,
-      borderTopWidth: 0,
-      elevation: 15,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 12,
-      height: 60,
-      paddingTop: 4,
-      paddingBottom: 4,
-      borderTopLeftRadius: 30,
-      borderTopRightRadius: 30,
-      position: "absolute",
-      bottom: bottomInset,
-      left: 0,
-      right: 0,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: c.border,
+      elevation: 8,
+      shadowColor: c.textStrong,
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      height: 58 + bottomInset,
+      paddingTop: 5,
+      paddingBottom: Math.max(bottomInset, 6),
     },
     tabBarLabel: {
-      fontSize: 10,
-      fontWeight: "500",
-      marginVertical: 4,
+      fontSize: 11,
+      fontWeight: "600",
+      marginTop: 2,
     },
   });
 };

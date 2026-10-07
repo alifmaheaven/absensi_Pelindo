@@ -645,7 +645,7 @@ export default function CheckinScreen() {
         style={{ flex: 1 }}
       >
         <LinearGradient
-          colors={[colors.primary, colors.background]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.headerGradient}
@@ -728,7 +728,7 @@ export default function CheckinScreen() {
                   // copy lengkap + aksi dirender di kartu luar (di bawah peta)
                   // agar tidak terpotong overflow:"hidden".
                   <View style={styles.loadingContainer}>
-                    <Ionicons name="location-outline" size={32} color={colors.danger} style={{ marginBottom: 8 }} />
+                    <Ionicons name="location-outline" size={32} color={colors.dangerText} style={{ marginBottom: 8 }} />
                     <Text style={styles.loadingText}>
                       {locationFailureCopy.title} — panduan lengkap di bawah
                     </Text>
@@ -855,7 +855,7 @@ export default function CheckinScreen() {
             {/* Warning Sesi Aktif belum selesai bila ada */}
             {activeSessions.length > 0 && (
               <View style={styles.multiSessionBanner}>
-                <InfoOutlineRounded color={colors.warning} width={22} height={22} />
+                <InfoOutlineRounded color={colors.warningText} width={22} height={22} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.multiSessionBannerTitle}>
                     {activeSessions.length > 1
@@ -1149,7 +1149,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   // panel pra-GPS-01 dengan 0 rujukan; diagnosis kini wholly di
   // locationFailureCard/Title/Body/Steps/Step (c.text, GPS-01/02/09).
   retryButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -1207,7 +1207,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     gap: 8,
   },
   enableServicesButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
@@ -1288,7 +1288,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
   },
   locationTextContainer: {
     flex: 1,
@@ -1307,7 +1307,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   outOfRangeBadge: {
     fontSize: 10,
-    color: c.warning,
+    color: c.warningText,
     backgroundColor: c.warningSoft,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -1449,7 +1449,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: c.primary, // Modern blue
+    backgroundColor: c.primaryAction, // Modern blue
     borderRadius: 16,
     paddingVertical: 18,
     alignItems: "center",
@@ -1513,7 +1513,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   modalButtonPrimary: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
@@ -1600,7 +1600,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     lineHeight: 16,
   },
   checkoutNavButton: {
-    backgroundColor: c.warning,
+    backgroundColor: c.warningAction,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -1633,7 +1633,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: c.success,
+    backgroundColor: c.successAction,
   },
   statusSelectValue: {
     fontSize: 14,
@@ -1739,7 +1739,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   completedBackButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,

@@ -307,7 +307,7 @@ const TicketingScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}

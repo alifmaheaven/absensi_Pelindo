@@ -318,7 +318,7 @@ export default function DeviceDrawer({
                           style={styles.actionBtn}
                           onPress={() => handleDelete(device)}
                         >
-                          <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                          <Ionicons name="trash-outline" size={18} color={colors.dangerText} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -610,7 +610,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     minHeight: 80,
   },
   submitFormButton: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",

@@ -223,7 +223,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: 20,
   },
   dayCellSelected: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
   },
   dayText: {
     fontSize: 14,
@@ -235,7 +235,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   confirmButton: {
     marginTop: 16,
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
@@ -256,7 +256,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: c.danger,
+    backgroundColor: c.dangerAction,
     marginTop: 2,
   },
   disabledHint: {
@@ -271,7 +271,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   disabledHintText: {
     fontSize: 11,
-    color: c.warning,
+    color: c.warningText,
     fontWeight: "500",
   },
 });

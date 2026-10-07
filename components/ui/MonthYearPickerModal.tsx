@@ -312,7 +312,7 @@ const makeStyles = (c: ThemeColors) =>
       justifyContent: "center",
     },
     monthItemSelected: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       borderColor: c.primary,
     },
     monthItemCurrent: {
@@ -374,7 +374,7 @@ const makeStyles = (c: ThemeColors) =>
       borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
     },
     confirmButtonText: {
       fontSize: 14,

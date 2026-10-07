@@ -84,15 +84,15 @@ export function mapTimeToColor(
   const isLate = type === "checkin" ? diffMs > graceMs : diffMs < -graceMs;
   if (isLate) {
     return {
-      text: theme ? theme.danger : "#991B1B",
+      text: theme ? theme.dangerText : "#991B1B",
       container: theme ? theme.dangerSoft : "#FFE9E9",
-      button: theme ? theme.danger : "#DC2626",
+      button: theme ? theme.dangerAction : "#DC2626",
     };
   } else {
     return {
       text: theme ? theme.successText : "#166534",
       container: theme ? theme.successSoft : "#E8F5E9",
-      button: theme ? theme.success : "#0D7A53",
+      button: theme ? theme.successAction : "#0D7A53",
     };
   }
 }
@@ -131,8 +131,8 @@ export default function AttendanceCard({
   // Khusus overdue pada checkout belum selesai: tampilkan styling alert
   const isOverdueAlert = isOverdue && type === "checkout" && !time;
   const backgroundColor = time ? statusColors.container : isOverdueAlert ? colors.dangerSoft : colors.surface;
-  const textColor = time ? statusColors.text : isOverdueAlert ? colors.danger : colors.text;
-  const buttonColor = time ? statusColors.button : isOverdueAlert ? colors.danger : colors.primary;
+  const textColor = time ? statusColors.text : isOverdueAlert ? colors.dangerText : colors.text;
+  const buttonColor = time ? statusColors.button : isOverdueAlert ? colors.dangerAction : colors.primaryAction;
 
   const cardTitle = type === "checkin" ? "Check in" : "Check out";
 

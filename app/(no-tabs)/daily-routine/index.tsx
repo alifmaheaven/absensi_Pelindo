@@ -157,7 +157,7 @@ export default function DailyRoutineListScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -488,7 +488,7 @@ const makeStyles = (c: ThemeColors) =>
     completedBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: c.success,
+      color: c.successText,
     },
     inProgressBadge: {
       backgroundColor: c.primarySoft,
@@ -514,10 +514,10 @@ const makeStyles = (c: ThemeColors) =>
     pendingBadgeText: {
       fontSize: 12,
       fontWeight: "700",
-      color: c.warning,
+      color: c.warningText,
     },
     startButton: {
-      backgroundColor: c.success,
+      backgroundColor: c.successAction,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: "center",
@@ -530,7 +530,7 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "700",
     },
     viewButton: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: "center",

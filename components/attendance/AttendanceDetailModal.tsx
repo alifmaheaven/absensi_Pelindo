@@ -291,10 +291,8 @@ export default function AttendanceDetailModal({
                       size={12}
                       color={
                         checkinStatus.state === "LATE"
-                          ? colors.danger
-                          : checkinStatus.state === "ON_TIME"
-                          ? colors.success
-                          : colors.textSecondary
+                          ? colors.dangerText : checkinStatus.state === "ON_TIME"
+                          ? colors.successText : colors.textSecondary
                       }
                     />
                   }
@@ -311,7 +309,7 @@ export default function AttendanceDetailModal({
                           : "radio-button-on-outline"
                       }
                       size={12}
-                      color={attendance.checkout ? colors.success : colors.warning}
+                      color={attendance.checkout ? colors.successText : colors.warning}
                     />
                   }
                 />
@@ -384,7 +382,7 @@ export default function AttendanceDetailModal({
                     <Ionicons
                       name="log-in-outline"
                       size={16}
-                      color={colors.success}
+                      color={colors.successText}
                     />
                     <Text style={styles.timeBoxTitle}>Check In</Text>
                   </View>
@@ -410,7 +408,7 @@ export default function AttendanceDetailModal({
                     <Ionicons
                       name="log-out-outline"
                       size={16}
-                      color={colors.danger}
+                      color={colors.dangerText}
                     />
                     <Text style={styles.timeBoxTitle}>Check Out</Text>
                   </View>

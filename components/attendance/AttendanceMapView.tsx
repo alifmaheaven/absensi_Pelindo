@@ -359,7 +359,7 @@ function StatusRow({
   evaluation: { distanceMeters: number | null; status: GeofenceStatus };
   radiusMeters: number | null;
 }) {
-  const dotColor = index === 1 ? colors.success : colors.danger;
+  const dotColor = index === 1 ? colors.successText : colors.danger;
 
   return (
     <View style={styles.statusRow} testID={`attendance-map-status-${index}`}>
@@ -381,10 +381,8 @@ function StatusRow({
             size={12}
             color={
               evaluation.status === "inside"
-                ? colors.success
-                : evaluation.status === "outside"
-                ? colors.danger
-                : colors.textSecondary
+                ? colors.successText : evaluation.status === "outside"
+                ? colors.dangerText : colors.textSecondary
             }
           />
         }

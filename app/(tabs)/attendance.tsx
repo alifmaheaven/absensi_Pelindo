@@ -276,7 +276,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="checkmark-done-outline"
                   size={13}
-                  color={colors.success}
+                  color={colors.successText}
                 />
               </View>
               <View>
@@ -291,7 +291,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="radio-button-on-outline"
                   size={13}
-                  color={colors.warning}
+                  color={colors.warningText}
                 />
               </View>
               <View>
@@ -306,7 +306,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="checkmark-circle-outline"
                   size={13}
-                  color={colors.success}
+                  color={colors.successText}
                 />
               </View>
               <View>
@@ -321,7 +321,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="alert-circle-outline"
                   size={13}
-                  color={colors.danger}
+                  color={colors.dangerText}
                 />
               </View>
               <View>
@@ -421,7 +421,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="log-in-outline"
                   size={14}
-                  color={colors.success}
+                  color={colors.successText}
                 />
                 <Text style={styles.timeLabel}>Check In</Text>
               </View>
@@ -441,10 +441,8 @@ export default function AttendanceTabScreen() {
                           : colors.surface,
                       borderColor:
                         checkinStatus.state === "LATE"
-                          ? colors.danger
-                          : checkinStatus.state === "ON_TIME"
-                          ? colors.success
-                          : colors.borderStrong,
+                          ? colors.dangerText : checkinStatus.state === "ON_TIME"
+                          ? colors.successText : colors.borderStrong,
                     },
                   ]}
                   accessibilityRole="text"
@@ -461,10 +459,8 @@ export default function AttendanceTabScreen() {
                     size={11}
                     color={
                       checkinStatus.state === "LATE"
-                        ? colors.danger
-                        : checkinStatus.state === "ON_TIME"
-                        ? colors.success
-                        : colors.textSecondary
+                        ? colors.dangerText : checkinStatus.state === "ON_TIME"
+                        ? colors.successText : colors.textSecondary
                     }
                   />
                   <Text
@@ -473,10 +469,8 @@ export default function AttendanceTabScreen() {
                       {
                         color:
                           checkinStatus.state === "LATE"
-                            ? colors.danger
-                            : checkinStatus.state === "ON_TIME"
-                            ? colors.success
-                            : colors.textSecondary,
+                            ? colors.dangerText : checkinStatus.state === "ON_TIME"
+                            ? colors.successText : colors.textSecondary,
                       },
                     ]}
                     numberOfLines={1}
@@ -494,7 +488,7 @@ export default function AttendanceTabScreen() {
                 <Ionicons
                   name="log-out-outline"
                   size={14}
-                  color={colors.danger}
+                  color={colors.dangerText}
                 />
                 <Text style={styles.timeLabel}>Check Out</Text>
               </View>
@@ -532,7 +526,7 @@ export default function AttendanceTabScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.headerGradient}
@@ -585,7 +579,7 @@ export default function AttendanceTabScreen() {
                     onAction={handleRefresh}
                     icon={
                       <InfoOutlineRounded
-                        color={colors.danger}
+                        color={colors.dangerText}
                         width={36}
                         height={36}
                       />
@@ -734,12 +728,12 @@ const makeStyles = (c: ThemeColors) =>
     },
     metricChipSuccess: {
       backgroundColor: c.card,
-      borderColor: c.success,
+      borderColor: c.successText,
     },
     metricValueSuccess: {
       fontSize: 13,
       fontWeight: "700",
-      color: c.success,
+      color: c.successText,
     },
     metricLabelSuccess: {
       fontSize: 10,
@@ -748,31 +742,31 @@ const makeStyles = (c: ThemeColors) =>
     },
     metricChipWarning: {
       backgroundColor: c.card,
-      borderColor: c.warning,
+      borderColor: c.warningText,
     },
     metricValueWarning: {
       fontSize: 13,
       fontWeight: "700",
-      color: c.warning,
+      color: c.warningText,
     },
     metricLabelWarning: {
       fontSize: 10,
       fontWeight: "600",
-      color: c.warning,
+      color: c.warningText,
     },
     metricChipDanger: {
       backgroundColor: c.card,
-      borderColor: c.danger,
+      borderColor: c.dangerText,
     },
     metricValueDanger: {
       fontSize: 13,
       fontWeight: "700",
-      color: c.danger,
+      color: c.dangerText,
     },
     metricLabelDanger: {
       fontSize: 10,
       fontWeight: "600",
-      color: c.danger,
+      color: c.dangerText,
     },
     card: {
       backgroundColor: c.card,

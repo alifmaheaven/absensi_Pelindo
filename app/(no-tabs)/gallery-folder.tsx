@@ -721,7 +721,7 @@ export default function GalleryFolderScreen() {
           ListEmptyComponent={
             isAccessDenied ? (
               <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 24 }}>
-                <Ionicons name="lock-closed-outline" size={48} color={colors.danger} />
+                <Ionicons name="lock-closed-outline" size={48} color={colors.dangerText} />
                 <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>
                   Akses Ditolak
                 </Text>
@@ -731,7 +731,7 @@ export default function GalleryFolderScreen() {
               </View>
             ) : isError ? (
               <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 24 }}>
-                <Ionicons name="cloud-offline-outline" size={48} color={colors.danger} />
+                <Ionicons name="cloud-offline-outline" size={48} color={colors.dangerText} />
                 <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>
                   Koneksi Bermasalah
                 </Text>
@@ -920,7 +920,7 @@ export default function GalleryFolderScreen() {
                     onPress={() => setCategoryChoice(preset)}
                     style={[
                       styles.presetChip,
-                      isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      isSelected && { backgroundColor: colors.primaryAction, borderColor: colors.primaryAction },
                     ]}
                   >
                     <Text
@@ -939,8 +939,8 @@ export default function GalleryFolderScreen() {
                 style={[
                   styles.presetChip,
                   categoryChoice === "Lainnya" && {
-                    backgroundColor: colors.primary,
-                    borderColor: colors.primary,
+                    backgroundColor: colors.primaryAction,
+                    borderColor: colors.primaryAction,
                   },
                 ]}
               >
@@ -1053,7 +1053,7 @@ export default function GalleryFolderScreen() {
                     onPress={() => setSelectedUploadCategory(cat)}
                     style={[
                       styles.uploadChip,
-                      isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      isSelected && { backgroundColor: colors.primaryAction, borderColor: colors.primaryAction },
                     ]}
                   >
                     <Text
@@ -1141,13 +1141,13 @@ const makeStyles = (c: ThemeColors) =>
       paddingVertical: 6,
     },
     addBtn: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 8,
     },
     bulkDeleteBtn: {
-      backgroundColor: c.danger,
+      backgroundColor: c.dangerAction,
       paddingHorizontal: 12,
       paddingVertical: 7,
       borderRadius: 8,
@@ -1288,7 +1288,7 @@ const makeStyles = (c: ThemeColors) =>
     categoryEditBtn: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 8,
@@ -1351,7 +1351,7 @@ const makeStyles = (c: ThemeColors) =>
       gap: 8,
     },
     saveBtn: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       paddingHorizontal: 16,
       paddingVertical: 10,
       borderRadius: 8,
@@ -1409,7 +1409,7 @@ const makeStyles = (c: ThemeColors) =>
       color: c.text,
     },
     modalButtonPrimary: {
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       padding: 15,
       borderRadius: 12,
       alignItems: "center",

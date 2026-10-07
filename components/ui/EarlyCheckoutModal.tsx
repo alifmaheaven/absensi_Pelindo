@@ -75,7 +75,7 @@ export default function EarlyCheckoutModal({
 
               {/* Amber Clock Icon in warningSoft circle */}
               <View style={styles.iconCircle}>
-                <Ionicons name="time-outline" size={32} color={colors.warning} />
+                <Ionicons name="time-outline" size={32} color={colors.warningText} />
               </View>
 
               {/* Title */}
@@ -97,7 +97,7 @@ export default function EarlyCheckoutModal({
 
               {/* Consequences Note */}
               <View style={styles.noteBox}>
-                <Ionicons name="warning-outline" size={16} color={colors.warning} style={styles.noteIcon} />
+                <Ionicons name="warning-outline" size={16} color={colors.warningText} style={styles.noteIcon} />
                 <Text style={styles.noteText}>
                   Kepulangan lebih awal akan tercatat pada riwayat kehadiran dan
                   mungkin memerlukan verifikasi atau persetujuan atasan.
@@ -112,7 +112,7 @@ export default function EarlyCheckoutModal({
                   onPress={onClose}
                 >
                   <LinearGradient
-                    colors={[colors.primary, "#0052cc"]}
+                    colors={[colors.primaryAction, colors.primaryActionEnd]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.gradientBtn}
@@ -212,7 +212,7 @@ const makeStyles = (c: ThemeColors) =>
     deficitValue: {
       fontSize: 18,
       fontWeight: "700",
-      color: c.warning,
+      color: c.warningText,
     },
     noteBox: {
       width: "100%",
@@ -265,7 +265,7 @@ const makeStyles = (c: ThemeColors) =>
       borderWidth: 1.5,
     },
     secondaryText: {
-      color: c.danger,
+      color: c.dangerText,
       fontSize: 15,
       fontWeight: "600",
     },

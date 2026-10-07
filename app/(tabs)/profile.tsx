@@ -133,13 +133,13 @@ export default function ProfileScreen() {
       label: "Hadir",
       count: totals?.hadir ?? totals?.A ?? 0,
       bg: colors.successSoft,
-      color: colors.success,
+      color: colors.successText,
     },
     {
       label: "Terlambat",
       count: totals?.terlambat ?? totals?.T ?? 0,
       bg: colors.warningSoft,
-      color: colors.warning,
+      color: colors.warningText,
     },
     {
       label: "Sakit",
@@ -163,7 +163,7 @@ export default function ProfileScreen() {
       label: "Alpha",
       count: totals?.alpha ?? totals?.L ?? 0,
       bg: colors.dangerSoft,
-      color: colors.danger,
+      color: colors.dangerText,
     },
   ];
 
@@ -404,7 +404,7 @@ export default function ProfileScreen() {
           onPress={handleLogout}
           activeOpacity={0.7}
         >
-          <Ionicons name="log-out-outline" size={20} color={colors.danger} style={{ marginRight: 8 }} />
+          <Ionicons name="log-out-outline" size={20} color={colors.dangerText} style={{ marginRight: 8 }} />
           <Text style={styles.logoutText}>Keluar</Text>
         </TouchableOpacity>
 
@@ -610,7 +610,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
   },
   summaryErrorText: {
     fontSize: 13,
-    color: c.danger,
+    color: c.dangerText,
     marginBottom: 10,
   },
   summaryRetryButton: {
@@ -713,7 +713,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -732,7 +732,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
   logoutText: {
     fontSize: 15,
     fontWeight: "600",
-    color: c.danger,
+    color: c.dangerText,
   },
 
   // Modal
@@ -808,7 +808,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     width: "100%",
     minHeight: 48,
     borderRadius: 12,

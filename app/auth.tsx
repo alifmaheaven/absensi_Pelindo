@@ -142,7 +142,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       {/* Header Gradient */}
       <LinearGradient
-        colors={[colors.primary, colors.background]}
+        colors={[colors.primaryAction, colors.primaryActionEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.headerGradient}
@@ -413,7 +413,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.card,
   },
   checkboxChecked: {
-    backgroundColor: c.primary,
+    backgroundColor: c.primaryAction,
     borderColor: c.primary,
   },
   checkmark: {

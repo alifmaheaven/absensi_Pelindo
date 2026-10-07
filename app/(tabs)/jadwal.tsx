@@ -466,7 +466,7 @@ const makeStyles = (c: ThemeColors) =>
       top: 0,
       bottom: 0,
       width: 4,
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
     },
     dateBox: {
       width: 58,
@@ -545,7 +545,7 @@ const makeStyles = (c: ThemeColors) =>
     todayBadge: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: c.primary,
+      backgroundColor: c.primaryAction,
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 6,

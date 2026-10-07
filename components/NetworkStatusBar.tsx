@@ -33,7 +33,7 @@ export default function NetworkStatusBar() {
 
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   banner: {
-    backgroundColor: c.danger,
+    backgroundColor: c.dangerAction,
     paddingVertical: 6,
     paddingHorizontal: 16,
     alignItems: "center",

@@ -30,7 +30,7 @@ export default function NotificationPermissionBanner({
   return (
     <View style={styles.banner}>
       <View style={styles.iconWrap}>
-        <Ionicons name="notifications-off-outline" size={20} color={colors.warning} />
+        <Ionicons name="notifications-off-outline" size={20} color={colors.warningText} />
       </View>
 
       <View style={styles.textWrap}>

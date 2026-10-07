@@ -44,7 +44,7 @@ export default function OfflineBanner() {
     return (
       <View
         style={{
-          backgroundColor: colors.danger,
+          backgroundColor: colors.dangerAction,
           paddingHorizontal: 16,
           paddingVertical: 8,
           flexDirection: "row",
@@ -65,7 +65,7 @@ export default function OfflineBanner() {
   return (
     <View
       style={{
-        backgroundColor: isOffline ? colors.warning : colors.success,
+        backgroundColor: isOffline ? colors.warningAction : colors.successAction,
         paddingHorizontal: 16,
         paddingVertical: 8,
       }}

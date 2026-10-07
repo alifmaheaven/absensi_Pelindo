@@ -102,7 +102,7 @@ export default function ScreenContainer({
             {
               paddingHorizontal: contentPadding,
               paddingTop: hasHeader ? 12 : Math.max(insets.top, 12),
-              paddingBottom: 80 + Math.max(insets.bottom, 16),
+              paddingBottom: 24 + Math.max(insets.bottom, 16),
             },
             contentContainerStyle,
           ]}
@@ -128,7 +128,7 @@ export default function ScreenContainer({
             {
               paddingHorizontal: contentPadding,
               paddingTop: hasHeader ? 12 : Math.max(insets.top, 12),
-              paddingBottom: Math.max(insets.bottom, 16),
+              paddingBottom: 24 + Math.max(insets.bottom, 16),
             },
             contentContainerStyle,
           ]}
@@ -151,8 +151,8 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      backgroundColor: c.card,
-      borderBottomWidth: 1,
+      backgroundColor: c.background,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: c.border,
     },
     headerLeft: {
@@ -176,9 +176,9 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textStrong,
     },
     subtitleText: {
-      fontSize: 12,
+      fontSize: 13,
       color: c.textSecondary,
-      marginTop: 2,
+      marginTop: 3,
     },
     rightActionWrap: {
       marginLeft: 12,

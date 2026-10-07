@@ -68,7 +68,7 @@ export default function AccessDeniedState({
       accessibilityLabel={`${title}. ${description}`}
     >
       <View style={styles.iconWrapper}>
-        {icon || <ShieldLockIcon color={colors.warning} size={40} />}
+        {icon || <ShieldLockIcon color={colors.warningText} size={40} />}
       </View>
 
       <Text
@@ -116,7 +116,7 @@ export default function AccessDeniedState({
         accessibilityLabel={actionLabel}
       >
         <LinearGradient
-          colors={[colors.primary, "#0052cc"]}
+          colors={[colors.primaryAction, colors.primaryActionEnd]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={styles.gradientBtn}

@@ -85,7 +85,7 @@ export default function TicketingCreateScreen() {
     removeImage,
     openModal,
     closeModal,
-  } = useImagePicker();
+  } = useImagePicker("ticket");
   const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
   const [attendanceDropdownOpen, setAttendanceDropdownOpen] = useState(false);
   const [loadingSkeleton, setLoadingSkeleton] = useState(true);

@@ -31,6 +31,10 @@ import ChecklistItemCard, {
   getAttachedFiles,
 } from "@/components/daily-routine/ChecklistItemCard";
 import { IEvidenceFileItem } from "@/types/dailyRoutine";
+import {
+  evidenceFileExists,
+  persistFormEvidenceImage,
+} from "@/lib/evidenceStorage";
 import RoutineDetailSkeleton from "@/components/daily-routine/RoutineDetailSkeleton";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -75,6 +79,26 @@ const getDraftKey = (routineId: string, logDate?: string | null) => {
   const datePart = logDate || getTodayDateString();
   return `@dr_draft_${routineId}_${datePart}`;
 };
+
+/**
+ * F-MOBILEB-02 (tiket 10) — direktori tujuan foto daily-routine.
+ *
+ * Dulu `local_uri` item bukti menunjuk hasil `compressImage`, yaitu uri
+ * `cacheDirectory` yang OS bebas evict (tekanan penyimpanan / "Clear cache").
+ * Uri itu ikut ditulis ke draft AsyncStorage, jadi setelah cache dibersihkan
+ * draft dipulihkan dengan `upload_failed:false` dan `local_uri` yang sudah
+ * MATI: layar menampilkan bukti seolah baik-baik saja, tombol "Coba Lagi"
+ * mengunggah berkas yang tidak ada, dan item yang diwajibkan berfoto tidak
+ * bisa diselesaikan. Kegagalan menyamar sebagai sukses, lagi.
+ *
+ * Tujuan `form-evidence/daily-routine/` (bukan `attendance-evidence/`) adalah
+ * pilihan yang disengaja: foto routine TIDAK masuk antrean offline, jadi
+ * keep-set `cleanupOrphanedEvidence` tidak akan pernah memuatnya — menaruhnya
+ * di direktori yang disapu berarti sengaja menyerahkannya ke sweep. Direktori
+ * form tidak pernah dienumerasi sweep (D-03), jadi berkas ini aman sekaligus
+ * tidak menyandera kebenaran sweep untuk bukti absensi.
+ */
+const DRAFT_EVIDENCE_FEATURE = "daily-routine";
 
 export default function DailyRoutineDetailScreen() {
   // SEC-01: langganan versi cache render-token agar bukti re-render saat token di-mint.
@@ -320,6 +344,36 @@ export default function DailyRoutineDetailScreen() {
           const rawDraft = await AsyncStorage.getItem(draftKey);
           if (rawDraft) {
             const draftStates: Record<string, IItemState> = JSON.parse(rawDraft);
+            // F-MOBILEB-02: draft lama menyimpan uri cacheDirectory. Periksa
+            // keberadaan setiap berkas SEBELUM menyerahkannya ke state.
+            //
+            // Tanpa pemeriksaan ini, draft memulihkan `upload_failed: false`
+            // bersama `local_uri` yang sudah mati: layar menampilkan bukti
+            // seolah terunggah, tombol "Coba Lagi" mengunggah berkas yang tidak
+            // ada, dan item berfoto-wajib tidak bisa diselesaikan tanpa jalan
+            // keluar yang jelas. Berkas yang hilang ditandai gagal supaya
+            // pengguna melihat keadaannya yang sebenarnya.
+            const draftFileExists = new Map<string, boolean>();
+            const collectUris = (item: any): string[] => {
+              const out: string[] = [];
+              if (Array.isArray(item?.evidence_files)) {
+                for (const f of item.evidence_files) {
+                  if (f?.local_uri) out.push(f.local_uri);
+                }
+              }
+              if (item?.local_uri) out.push(item.local_uri);
+              return out;
+            };
+            await Promise.all(
+              Object.values(draftStates).flatMap((draftItem) =>
+                collectUris(draftItem).map(async (uri) => {
+                  draftFileExists.set(uri, await evidenceFileExists(uri));
+                })
+              )
+            );
+            const uriIsAlive = (uri?: string | null): boolean =>
+              Boolean(uri) && draftFileExists.get(uri as string) !== false;
+
             Object.entries(draftStates).forEach(([key, draftItem]) => {
               if (states[key]) {
                 const restoredFiles: IEvidenceFileItem[] =
@@ -350,10 +404,17 @@ export default function DailyRoutineDetailScreen() {
                   evidence_file: restoredFiles[0]?.file || draftItem.evidence_file || states[key].evidence_file,
                   evidence_files: restoredFiles,
                   local_uri: restoredFiles[0]?.local_uri || draftItem.local_uri || states[key].local_uri,
+                  // F-MOBILEB-02: unggahan dianggap gagal bila berkas lokalnya
+                  // sudah tidak ada ATAU penandaan sebelumnya memang gagal.
+                  // `upload_failed` adalah satu-satunya sinyal yang membuat UI
+                  // menawarkan "Coba Lagi", jadi ia tidak boleh `false` untuk
+                  // uri mati.
                   upload_failed:
-                    restoredFiles.some((f) => f.upload_failed) ??
-                    draftItem.upload_failed ??
-                    states[key].upload_failed,
+                    restoredFiles.some(
+                      (f) => f.upload_failed || !uriIsAlive(f.local_uri)
+                    ) ||
+                    Boolean(draftItem.upload_failed) ||
+                    Boolean(states[key].upload_failed),
                   file_name: restoredFiles[0]?.name || draftItem.file_name || states[key].file_name,
                   file_size: restoredFiles[0]?.size || draftItem.file_size || states[key].file_size,
                   file_type: restoredFiles[0]?.type || draftItem.file_type || states[key].file_type,
@@ -493,6 +554,33 @@ export default function DailyRoutineDetailScreen() {
     }
   };
 
+  /**
+   * F-MOBILEB-02: promosikan uri cache → penyimpanan form yang tidak di-evict OS,
+   * dan kembalikan uri yang aman disimpan ke state/draft.
+   *
+   * LOUD saat gagal (kontrak `persistFormEvidenceImage`): berkas yang tidak
+   * berhasil disalin TIDAK ditambahkan sebagai bukti. Menambahkan uri cache
+   * "sementara" justru melahirkan persis cacat yang tiket ini tutup.
+   */
+  const persistDraftEvidence = async (
+    uri: string,
+    label: string
+  ): Promise<string | null> => {
+    try {
+      return await persistFormEvidenceImage(uri, DRAFT_EVIDENCE_FEATURE);
+    } catch (persistError) {
+      console.error(
+        "[DailyRoutine] Gagal menyimpan bukti ke penyimpanan perangkat:",
+        persistError
+      );
+      Alert.alert(
+        "Bukti Gagal Disimpan",
+        `Berkas "${label}" tidak dapat disimpan ke penyimpanan aplikasi. Ruang penyimpanan perangkat mungkin penuh. Kosongkan ruang, lalu lampirkan ulang berkas bukti ini.`
+      );
+      return null;
+    }
+  };
+
   const handlePickImage = async (stateKey: string) => {
     if (isReadOnly) return;
     const itemState = itemStates[stateKey];
@@ -604,11 +692,17 @@ export default function DailyRoutineDetailScreen() {
         return;
       }
 
+      const durableUri = await persistDraftEvidence(resolved.uri, resolved.name);
+      if (!durableUri) {
+        setLoadingImageKey(null);
+        return;
+      }
+
       const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const newFileItem: IEvidenceFileItem = {
         id: tempId,
         file: null,
-        local_uri: resolved.uri,
+        local_uri: durableUri,
         name: resolved.name,
         size: resolved.size,
         type: "image",
@@ -621,7 +715,7 @@ export default function DailyRoutineDetailScreen() {
       try {
         const uploadRes = await uploadDailyRoutineTemp(
           {
-            uri: resolved.uri,
+            uri: durableUri,
             name: resolved.name,
             type: resolved.mimeType,
           } as any,
@@ -760,11 +854,16 @@ export default function DailyRoutineDetailScreen() {
           continue;
         }
 
+        const durableUri = await persistDraftEvidence(resolved.uri, resolved.name);
+        if (!durableUri) {
+          continue;
+        }
+
         const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
         const newFileItem: IEvidenceFileItem = {
           id: tempId,
           file: null,
-          local_uri: resolved.uri,
+          local_uri: durableUri,
           name: resolved.name,
           size: resolved.size,
           type: "image",
@@ -777,7 +876,7 @@ export default function DailyRoutineDetailScreen() {
         try {
           const uploadRes = await uploadDailyRoutineTemp(
             {
-              uri: resolved.uri,
+              uri: durableUri,
               name: resolved.name,
               type: resolved.mimeType,
             } as any,
@@ -918,11 +1017,19 @@ export default function DailyRoutineDetailScreen() {
           continue;
         }
 
+        const durableUri = await persistDraftEvidence(
+          resolvedAsset.uri,
+          resolvedAsset.name
+        );
+        if (!durableUri) {
+          continue;
+        }
+
         const tempId = `temp-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`;
         const newFileItem: IEvidenceFileItem = {
           id: tempId,
           file: null,
-          local_uri: resolvedAsset.uri,
+          local_uri: durableUri,
           name: resolvedAsset.name,
           size: resolvedAsset.size,
           type: resolvedAsset.type,
@@ -935,7 +1042,7 @@ export default function DailyRoutineDetailScreen() {
         try {
           const uploadRes = await uploadDailyRoutineTemp(
             {
-              uri: resolvedAsset.uri,
+              uri: durableUri,
               name: resolvedAsset.name,
               type: resolvedAsset.mimeType,
             } as any,
@@ -1135,10 +1242,15 @@ export default function DailyRoutineDetailScreen() {
         return;
       }
 
+      const durableUri = await persistDraftEvidence(localUri, finalName);
+      if (!durableUri) {
+        return;
+      }
+
       const replacedItem: IEvidenceFileItem = {
         id: `replace-${Date.now()}`,
         file: null,
-        local_uri: localUri,
+        local_uri: durableUri,
         name: finalName,
         size: finalSize,
         type: fileType,
@@ -1151,7 +1263,7 @@ export default function DailyRoutineDetailScreen() {
       try {
         const uploadRes = await uploadDailyRoutineTemp(
           {
-            uri: localUri,
+            uri: durableUri,
             name: finalName,
             type: finalMime,
           } as any,

@@ -232,7 +232,7 @@ export default function IzinScreen() {
     openModal,
     closeModal,
     setImages,
-  } = useImagePicker();
+  } = useImagePicker("izin");
 
   const imageUploadService = {
     uploadTemp: uploadEvid,

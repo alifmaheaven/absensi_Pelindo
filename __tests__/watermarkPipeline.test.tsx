@@ -45,6 +45,8 @@ jest.mock("@/utils/watermark", () => ({
 
 jest.mock("@/lib/evidenceStorage", () => ({
   persistEvidenceImage: jest.fn(async (uri: string) => uri),
+  // D-03 (tiket 10): hook merutekan foto form ke persistFormEvidenceImage.
+  persistFormEvidenceImage: jest.fn(async (uri: string) => uri),
   isPersistedEvidence: jest.fn(() => false),
   removePersistedEvidence: jest.fn(async () => {}),
   evidenceFileExists: jest.fn(async () => true),

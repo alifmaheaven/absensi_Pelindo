@@ -14,8 +14,10 @@ import {
   cleanupOrphanedEvidence,
   evidenceFileExists,
   getEvidenceDir,
+  getFormEvidenceDir,
   isPersistedEvidence,
   persistEvidenceImage,
+  persistFormEvidenceImage,
   removePersistedEvidence,
 } from "@/lib/evidenceStorage";
 
@@ -194,6 +196,108 @@ describe("evidenceStorage (WAVE-0 P0-0.6)", () => {
 
       expect(state.deletions).toContain(`${state.evidenceDir}old-keep.jpg`);
       expect(state.deletions).toContain(`${state.evidenceDir}old-orphan.jpg`);
+    });
+  });
+
+  /**
+   * D-03 (tiket 10 / P0-5) — DUA DIREKTORI.
+   *
+   * Sweep membangun keep-set HANYA dari storage (antrean + keranjang gagal).
+   * Foto yang masih dipegang sebuah FORM yang belum di-submit tidak ada di
+   * storage mana pun — ia hidup di state React — sehingga secara definisi tidak
+   * mungkin masuk keep-set, dan sweep pasti menghapusnya. Karena pratinjau form
+   * dibaca dari state, pengguna tidak melihat apa pun sampai form ditutup.
+   *
+   * Perbaikan struktural: foto form disimpan di direktori yang TIDAK PERNAH
+   * dienumerasi sweep, sehingga sweep menjadi benar secara konstruksi.
+   */
+  describe("D-03: direktori form terpisah dari direktori bukti absensi", () => {
+    const formDir = `${state.documentDirectory}form-evidence/ticket/`;
+
+    it("getFormEvidenceDir menaruh direktori di documentDirectory dan menyaring nama fitur", () => {
+      expect(getFormEvidenceDir("ticket")).toBe(formDir);
+      // Sanitasi ketat: nama fitur tidak boleh bisa keluar dari documentDirectory.
+      expect(getFormEvidenceDir("../../etc")).toBe(
+        `${state.documentDirectory}form-evidence/etc/`,
+      );
+      expect(getFormEvidenceDir("a/b")).toBe(
+        `${state.documentDirectory}form-evidence/ab/`,
+      );
+      expect(getFormEvidenceDir("")).toBeNull();
+    });
+
+    it("persistFormEvidenceImage menyalin ke direktori form, bukan ke direktori yang disapu", async () => {
+      state.files.add("file:///cache/ImagePicker/form.jpg");
+      const durable = await persistFormEvidenceImage(
+        "file:///cache/ImagePicker/form.jpg",
+        "ticket",
+      );
+
+      expect(durable.startsWith(formDir)).toBe(true);
+      expect(durable.startsWith(state.evidenceDir)).toBe(false);
+      expect(state.copies).toHaveLength(1);
+      expect(await evidenceFileExists(durable)).toBe(true);
+    });
+
+    it("persistFormEvidenceImage idempoten dan melempar LOUD saat copy gagal", async () => {
+      state.files.add("file:///cache/ImagePicker/form.jpg");
+      const first = await persistFormEvidenceImage(
+        "file:///cache/ImagePicker/form.jpg",
+        "ticket",
+      );
+      const again = await persistFormEvidenceImage(first, "ticket");
+      expect(again).toBe(first);
+      expect(state.copies).toHaveLength(1);
+
+      state.files.add("file:///cache/ImagePicker/form2.jpg");
+      state.failNextCopy = true;
+      await expect(
+        persistFormEvidenceImage("file:///cache/ImagePicker/form2.jpg", "ticket"),
+      ).rejects.toThrow(/copy rejected by device/);
+    });
+
+    it("foto form BERTAHAN saat sweep berjalan dengan keep-set dari antrean", async () => {
+      state.files.add("file:///cache/ImagePicker/form.jpg");
+      const formPhoto = await persistFormEvidenceImage(
+        "file:///cache/ImagePicker/form.jpg",
+        "ticket",
+      );
+
+      // Sweep seperti di produksi: keep-set hanya berisi bukti antrean.
+      const keep = `${state.evidenceDir}old-keep.jpg`;
+      await cleanupOrphanedEvidence([keep], { allowEmptyKeep: true });
+
+      // INI inti perbaikannya: berkas form tidak pernah dienumerasi sweep.
+      expect(state.files.has(formPhoto)).toBe(true);
+      expect(state.deletions).not.toContain(formPhoto);
+      // Kontrol: sweep memang berjalan dan menghapus yang yatim di direktori bukti.
+      expect(state.deletions).toContain(`${state.evidenceDir}old-orphan.jpg`);
+    });
+
+    it("sweep tidak menyentuh direktori form walau keep-set KOSONG + allowEmptyKeep", async () => {
+      state.files.add("file:///cache/ImagePicker/form.jpg");
+      const formPhoto = await persistFormEvidenceImage(
+        "file:///cache/ImagePicker/form.jpg",
+        "ticket",
+      );
+
+      await cleanupOrphanedEvidence([], { allowEmptyKeep: true });
+
+      expect(state.files.has(formPhoto)).toBe(true);
+      expect(state.deletions).not.toContain(formPhoto);
+    });
+
+    it("isPersistedEvidence mencakup kedua direktori (idempotensi promosi), removePersistedEvidence menghormatinya", async () => {
+      state.files.add("file:///cache/ImagePicker/form.jpg");
+      const formPhoto = await persistFormEvidenceImage(
+        "file:///cache/ImagePicker/form.jpg",
+        "ticket",
+      );
+      expect(isPersistedEvidence(formPhoto)).toBe(true);
+      expect(isPersistedEvidence("file:///cache/ImagePicker/form.jpg")).toBe(false);
+
+      await removePersistedEvidence([formPhoto]);
+      expect(state.deletions).toContain(formPhoto);
     });
   });
 });

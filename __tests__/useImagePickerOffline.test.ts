@@ -28,6 +28,10 @@ jest.mock("@/utils/utils", () => ({
 // kompresi dipakai apa adanya. Test persistensi meng-override mock ini.
 jest.mock("@/lib/evidenceStorage", () => ({
   persistEvidenceImage: jest.fn(async (uri: string) => uri),
+  // D-03 (tiket 10): hook merutekan foto form ke persistFormEvidenceImage.
+  // Pass-through supaya tes lama tetap memakai uri apa adanya; test persistensi
+  // di bawah meng-override mock ini secara eksplisit.
+  persistFormEvidenceImage: jest.fn(async (uri: string) => uri),
   isPersistedEvidence: jest.fn(() => false),
   removePersistedEvidence: jest.fn(async () => {}),
   evidenceFileExists: jest.fn(async () => true),
@@ -198,7 +202,10 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
         async () => "file:///document/attendance-evidence/durable-photo.jpg",
       );
 
-      const { result } = renderHook(() => useImagePicker());
+      // D-03: jalur bukti ABSENSI harus disebut eksplisit. Default hook kini
+      // mengarah ke direktori form (aman), jadi test ini menguji rute
+      // attendance yang memang menjadi subjek kontrak P0-0.6.
+      const { result } = renderHook(() => useImagePicker("attendance"));
 
       await act(async () => {
         await result.current.pickImage("camera", mockUploadService);
@@ -222,7 +229,7 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
         Promise.reject(new Error("ENOSPC: no space left on device")),
       );
 
-      const { result } = renderHook(() => useImagePicker());
+      const { result } = renderHook(() => useImagePicker("attendance"));
 
       await act(async () => {
         await result.current.pickImage("camera", mockUploadService);
@@ -233,6 +240,89 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
       expect(Alert.alert).toHaveBeenCalled();
       expect(mockUploadService.uploadTemp).not.toHaveBeenCalled();
       expect(result.current.loadingImage).toBe(false);
+    });
+  });
+
+  /**
+   * D-03 / P0-5 (tiket 10) — RUTE DIREKTORI.
+   *
+   * Foto form tiket/cuti/izin TIDAK boleh mendarat di
+   * `attendance-evidence/`, karena direktori itu disapu `cleanupOrphanedEvidence`
+   * dengan keep-set yang hanya bisa disusun dari storage (antrean + keranjang
+   * gagal). Foto yang masih dipegang form tidak ada di storage mana pun — ia
+   * hidup di state React — jadi sweep PASTI menghapusnya, dan pratinjau form
+   * tetap tampil dari state, sehingga kegagalannya tidak terlihat.
+   */
+  describe("D-03: rute direktori bukti form vs bukti absensi", () => {
+    const evidence = evidenceStorageMock as unknown as {
+      persistEvidenceImage: jest.Mock;
+      persistFormEvidenceImage: jest.Mock;
+    };
+
+    const arrangeOfflineCamera = () => {
+      (NetInfo.fetch as jest.Mock).mockResolvedValue({
+        isConnected: false,
+        isInternetReachable: false,
+      });
+      (ImagePicker.launchCameraAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: "file:///cache/picked.jpg" }],
+      });
+    };
+
+    it("form tiket: foto masuk direktori form, BUKAN direktori yang disapu sweep", async () => {
+      arrangeOfflineCamera();
+      (evidence.persistFormEvidenceImage as jest.Mock).mockImplementationOnce(
+        async () => "file:///document/form-evidence/ticket/picked.jpg",
+      );
+
+      const { result } = renderHook(() => useImagePicker("ticket"));
+      await act(async () => {
+        await result.current.pickImage("camera", mockUploadService);
+      });
+
+      expect(evidence.persistFormEvidenceImage).toHaveBeenCalledWith(
+        "file:///cache/picked.jpg",
+        "ticket",
+      );
+      expect(evidence.persistEvidenceImage).not.toHaveBeenCalled();
+      expect(result.current.images[0].uri).toBe(
+        "file:///document/form-evidence/ticket/picked.jpg",
+      );
+    });
+
+    it("check-in: foto masuk direktori bukti absensi (disapu sweep) — perilaku lama terjaga", async () => {
+      arrangeOfflineCamera();
+      (evidence.persistEvidenceImage as jest.Mock).mockImplementationOnce(
+        async () => "file:///document/attendance-evidence/picked.jpg",
+      );
+
+      const { result } = renderHook(() => useImagePicker("attendance"));
+      await act(async () => {
+        await result.current.pickImage("camera", mockUploadService);
+      });
+
+      expect(evidence.persistEvidenceImage).toHaveBeenCalledWith(
+        "file:///cache/picked.jpg",
+      );
+      expect(evidence.persistFormEvidenceImage).not.toHaveBeenCalled();
+    });
+
+    it("default tanpa argumen = rute form (arah aman bila pemanggil lupa menyebut fiturnya)", async () => {
+      arrangeOfflineCamera();
+      (evidence.persistFormEvidenceImage as jest.Mock).mockImplementationOnce(
+        async () => "file:///document/form-evidence/form/picked.jpg",
+      );
+
+      const { result } = renderHook(() => useImagePicker());
+      await act(async () => {
+        await result.current.pickImage("camera", mockUploadService);
+      });
+
+      // Default yang salah akan menaruh foto di direktori yang disapu sweep —
+      // jadi default itu sendiri adalah bagian dari gerbang keamanan ini.
+      expect(evidence.persistFormEvidenceImage).toHaveBeenCalled();
+      expect(evidence.persistEvidenceImage).not.toHaveBeenCalled();
     });
   });
 });

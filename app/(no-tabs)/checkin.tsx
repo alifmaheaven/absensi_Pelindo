@@ -109,7 +109,7 @@ export default function CheckinScreen() {
     removeImage,
     openModal,
     closeModal,
-  } = useImagePicker();
+  } = useImagePicker("attendance");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const { run: getSite } = useRequest(() =>

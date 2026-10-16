@@ -141,7 +141,7 @@ export default function CheckoutScreen() {
     openModal,
     closeModal,
     setImages,
-  } = useImagePicker();
+  } = useImagePicker("attendance");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // --- State ---

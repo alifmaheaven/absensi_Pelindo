@@ -14,6 +14,10 @@
  *      tercakup lewat klaim persistEvidenceImage.
  *   4. `cleanupOrphanedEvidence` punya tepat satu pemanggil produksi:
  *      dipanggil di akhir sync (CHECK-2b).
+ *   5. P0-5 (tiket 10) — sweep TIDAK boleh menghapus berkas yang keep-set-nya
+ *      tidak bisa ia susun: foto yang masih dipegang FORM yang belum di-submit,
+ *      dan foto form yang ditinggalkan pengguna. Sweep di suite ini benar-benar
+ *      menghapus berkas (dulu di-mock jadi no-op → test buta).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert } from "react-native";
@@ -31,16 +35,33 @@ let mockToken: string | null = null;
 // Notifikasi lokal utk item kedaluwarsa (item 2 WAVE-0) — divisikan lewat mock.
 const mockScheduleNotification = jest.fn(async (_payload?: unknown): Promise<string> => "notif-1");
 
-/** State filesystem tiruan yang bisa diatur per-skenario. */
+/**
+ * State filesystem tiruan yang bisa diatur per-skenario.
+ *
+ * ⭐ P0-5 / tiket 10 — INI DULU TEST YANG BUTA.
+ * `cleanupOrphanedEvidence` dulu di-mock menjadi fungsi yang HANYA mencatat
+ * daftar `keep` dan tidak pernah menghapus apa pun. Akibatnya setiap klaim
+ * "sweep tidak menghapus bukti X" di suite ini benar secara hampa: tidak ada
+ * berkas yang bisa hilang karena tidak ada berkas yang pernah disentuh.
+ * Cacat P0-5 (foto form yang belum di-submit DIHAPUS dari perangkat) hidup
+ * persis di celah itu.
+ *
+ * Kini `deviceFiles` adalah daftar isi direktori bukti yang SEBENARNYA, dan
+ * sweep benar-benar memindahkan berkas keluar dari daftar itu.
+ */
 const mockEvidenceState = {
-  /** uri -> ada/tidaknya file di perangkat (default: ada). */
+  /** uri -> ada/tidaknya file di perangkat (override eksplisit per-skenario). */
   exists: new Map<string, boolean>(),
+  /** Isi direktori bukti di perangkat — sweep BENAR-BENAR menghapus dari sini. */
+  deviceFiles: new Set<string>(),
   /** uri yang dipromosikan dari cache ke penyimpanan persisten. */
   promoted: [] as string[],
   /** uri yang dihapus (terkonfirmasi server / keputusan user). */
   removed: [] as string[],
   /** daftar `keep` setiap panggilan cleanup yatim. */
   cleanupKeep: [] as string[],
+  /** uri yang benar-benar dihapus OLEH SWEEP (bukan oleh konfirmasi server). */
+  sweptAway: [] as string[],
 };
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -91,7 +112,14 @@ jest.mock("../lib/storage", () => ({
 
 jest.mock("../lib/evidenceStorage", () => ({
   evidenceFileExists: jest.fn(async (uri: string) => {
-    return mockEvidenceState.exists.get(uri) ?? true;
+    const override = mockEvidenceState.exists.get(uri);
+    if (override !== undefined) return override;
+    // Default lama (`true`) dipertahankan untuk uri cache/umum; berkas yang
+    // berada di direktori bukti harus benar-benar ada di daftar perangkat.
+    if (uri.includes("/attendance-evidence/")) {
+      return mockEvidenceState.deviceFiles.has(uri);
+    }
+    return true;
   }),
   isPersistedEvidence: jest.fn((uri?: string | null) =>
     Boolean(uri && uri.startsWith("file:///doc/attendance-evidence/")),
@@ -99,16 +127,52 @@ jest.mock("../lib/evidenceStorage", () => ({
   persistEvidenceImage: jest.fn(async (uri: string) => {
     const durable = `file:///doc/attendance-evidence/${uri.split("/").pop()}`;
     mockEvidenceState.promoted.push(durable);
+    // Salinan persisten benar-benar ada di perangkat.
+    mockEvidenceState.deviceFiles.add(durable);
+    return durable;
+  }),
+  // D-03: foto form disimpan di direktori TERPISAH yang tidak disapu sweep.
+  // Mock ini sengaja menulis ke `form-evidence/` supaya setiap test yang
+  // mencampur keduanya langsung terlihat.
+  persistFormEvidenceImage: jest.fn(async (uri: string, feature: string) => {
+    const durable = `file:///doc/form-evidence/${feature}/${uri.split("/").pop()}`;
+    mockEvidenceState.promoted.push(durable);
+    mockEvidenceState.deviceFiles.add(durable);
     return durable;
   }),
   removePersistedEvidence: jest.fn(async (uris: (string | null | undefined)[]) => {
     for (const u of uris || []) mockEvidenceState.removed.push(u as string);
   }),
-  cleanupOrphanedEvidence: jest.fn(async (keep: (string | null | undefined)[]) => {
-    for (const u of keep || []) {
-      if (typeof u === "string") mockEvidenceState.cleanupKeep.push(u);
-    }
-  }),
+  /**
+   * ⭐ Dulu: hanya mencatat `keep`, tidak pernah menghapus → test buta.
+   * Kini: meniru `lib/evidenceStorage.cleanupOrphanedEvidence` — menyalin
+   * perilaku nyatanya, termasuk gerbang M-1 (keep kosong tanpa
+   * `allowEmptyKeep` → MENOLAK, arah aman = SIMPAN) dan pembatasan D-03
+   * (hanya direktori bukti absensi yang boleh dienumerasi).
+   *
+   * Direktori form sengaja TIDAK ikut dihapus, persis seperti produksi.
+   */
+  cleanupOrphanedEvidence: jest.fn(
+    async (
+      keep: (string | null | undefined)[],
+      options?: { allowEmptyKeep?: boolean },
+    ) => {
+      const dir = "file:///doc/attendance-evidence/";
+      const keepSet = new Set(
+        (keep || []).filter(
+          (u): u is string => typeof u === "string" && u.startsWith(dir),
+        ),
+      );
+      for (const u of keepSet) mockEvidenceState.cleanupKeep.push(u);
+      if (keepSet.size === 0 && !options?.allowEmptyKeep) return; // M-1
+      for (const uri of Array.from(mockEvidenceState.deviceFiles)) {
+        if (!uri.startsWith(dir)) continue; // D-03: direktori form tidak disentuh
+        if (keepSet.has(uri)) continue;
+        mockEvidenceState.deviceFiles.delete(uri);
+        mockEvidenceState.sweptAway.push(uri);
+      }
+    },
+  ),
 }));
 
 /**
@@ -206,6 +270,8 @@ beforeEach(async () => {
   mockEvidenceState.promoted = [];
   mockEvidenceState.removed = [];
   mockEvidenceState.cleanupKeep = [];
+  mockEvidenceState.deviceFiles = new Set<string>();
+  mockEvidenceState.sweptAway = [];
   (apiClient.put as jest.Mock).mockResolvedValue({ data: { data: { id: "att-existing" } } });
   jest.spyOn(Alert, "alert").mockImplementation(() => {});
 });
@@ -499,5 +565,99 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
     // TAPI bukti milik record lama yang tak terbaca tidak boleh dianggap
     // tak-dirujuk: keep-set hasil repair = PARSIAL → sweep dilewati.
     expect(evidenceStorageMock.cleanupOrphanedEvidence).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⭐ P0-5 (tiket 10) — SWEEP YANG BENAR-BENAR MENGHAPUS.
+   *
+   * Kelas cacat yang ditutup di sini tidak bisa terlihat oleh suite lama:
+   * `cleanupOrphanedEvidence` di-mock jadi no-op, jadi "tidak menghapus bukti"
+   * benar secara hampa. Test di bawah menaruh berkas NYATA di daftar perangkat,
+   * menjalankan sweep, lalu memeriksa daftar itu lagi.
+   */
+  describe("P0-5 — sweep benar-benar menghapus (dulu test buta)", () => {
+    it("kontrol: sweep MEMANG menghapus berkas yatim di direktori bukti absensi", async () => {
+      // Bukti absensi yatim: ada di perangkat, tidak dirujuk siapa pun.
+      mockEvidenceState.deviceFiles.add("file:///doc/attendance-evidence/orphan.jpg");
+      await seedQueue([
+        checkInAction([
+          { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
+        ]),
+      ]);
+      mockEvidenceState.deviceFiles.add("file:///doc/attendance-evidence/a.jpg");
+      routePosts(["ok"]);
+
+      await syncQueuedRequests();
+
+      // INI yang membuktikan sweep tidak lagi buta: berkas yatim benar-benar
+      // lenyap dari perangkat, berkas yang dirujuk tidak.
+      expect(mockEvidenceState.sweptAway).toContain(
+        "file:///doc/attendance-evidence/orphan.jpg",
+      );
+      expect(mockEvidenceState.deviceFiles.has(
+        "file:///doc/attendance-evidence/orphan.jpg",
+      )).toBe(false);
+      expect(mockEvidenceState.sweptAway).not.toContain(
+        "file:///doc/attendance-evidence/a.jpg",
+      );
+    });
+
+    it("foto FORM yang belum di-submit SELAMAT dari sweep, dan tidak ada berkas absensi yang ikut hilang", async () => {
+      // Foto form tiket: dipilih pengguna, form BELUM di-submit, jadi ia tidak
+      // ada di antrean maupun keranjang gagal — keep-set tidak mungkin
+      // memuatnya. D-03 menaruhnya di direktori terpisah.
+      mockEvidenceState.deviceFiles.add(
+        "file:///doc/form-evidence/ticket/form-photo.jpg",
+      );
+      // Satu bukti absensi yang sah, untuk membuka gerbang sync.
+      mockEvidenceState.deviceFiles.add("file:///doc/attendance-evidence/a.jpg");
+      await seedQueue([
+        checkInAction([
+          { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
+        ]),
+      ]);
+      routePosts(["ok"]);
+
+      await syncQueuedRequests();
+
+      // Sweep benar-benar berjalan (gerbang queue non-kosong terbuka)...
+      expect(evidenceStorageMock.cleanupOrphanedEvidence).toHaveBeenCalled();
+      // ...dan foto form BERTAHAN. Pra-perbaikan foto ini ada di
+      // attendance-evidence/ dan dihapus oleh sweep — tanpa satu pun sinyal
+      // ke pengguna, karena pratinjau form dibaca dari state React.
+      expect(mockEvidenceState.deviceFiles.has(
+        "file:///doc/form-evidence/ticket/form-photo.jpg",
+      )).toBe(true);
+      expect(mockEvidenceState.sweptAway).not.toContain(
+        "file:///doc/form-evidence/ticket/form-photo.jpg",
+      );
+    });
+
+    it("foto form yang DITINGGALKAN (tidak pernah di-submit) juga tidak direbut sweep, walau antrean penuh", async () => {
+      mockEvidenceState.deviceFiles.add(
+        "file:///doc/form-evidence/leave/abandoned.jpg",
+      );
+      mockEvidenceState.deviceFiles.add(
+        "file:///doc/form-evidence/izin/abandoned.jpg",
+      );
+      await seedQueue([
+        checkInAction([
+          { uri: "file:///doc/attendance-evidence/a.jpg", name: "a.jpg", type: "image/jpeg" },
+        ]),
+      ]);
+      mockEvidenceState.deviceFiles.add("file:///doc/attendance-evidence/a.jpg");
+      routePosts(["ok"]);
+
+      await syncQueuedRequests();
+
+      // Utang yang DITERIMA eksplisit (dicatat di header evidenceStorage.ts):
+      // berkas form yang ditinggalkan tidak direklamasi oleh siapa pun. Itu
+      // pertukaran yang disengaja — byte menganggur jauh lebih murah daripada
+      // bukti kerja yang hilang.
+      expect(mockEvidenceState.sweptAway).toEqual([]);
+      expect(mockEvidenceState.deviceFiles.has(
+        "file:///doc/form-evidence/leave/abandoned.jpg",
+      )).toBe(true);
+    });
   });
 });

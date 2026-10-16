@@ -3,7 +3,11 @@ import {
   IMAGE_MAX_WIDTH,
   IMAGE_QUALITY,
 } from "@/constants";
-import { persistEvidenceImage, removePersistedEvidence } from "@/lib/evidenceStorage";
+import {
+  persistEvidenceImage,
+  persistFormEvidenceImage,
+  removePersistedEvidence,
+} from "@/lib/evidenceStorage";
 import { useAuthStore } from "@/stores/auth";
 import { THttpErrorResult } from "@/types";
 import { compressImage } from "@/utils/utils";
@@ -30,7 +34,24 @@ export interface IImageUploadService {
   deleteTemp: (payload: { links: string[] }) => Promise<any>;
 }
 
-export function useImagePicker() {
+/**
+ * D-03 (tiket 10) — fitur pemilik foto, untuk memilih direktori penyimpanan.
+ *
+ * Hook ini dipakai form tiket, cuti, izin, check-in, dan check-out. Fotonya
+ * BUKAN bukti absensi sampai form di-submit — untuk tiket/cuti/izin bisa
+ * berjam-jam, dan formnya bisa ditinggalkan sama sekali. Karena itu ia tidak
+ * boleh mendarat di `attendance-evidence/`, yang disapu `cleanupOrphanedEvidence`
+ * terhadap keep-set yang hanya bisa dibaca dari storage (antrean + keranjang
+ * gagal): foto yang masih dipegang form tidak ada di storage mana pun, jadi
+ * sweep PASTI menghapusnya.
+ *
+ * Default `"form"` aman untuk semua pemanggil yang belum menyebut fiturnya;
+ * check-in/check-out memakai `"attendance"` supaya perilakunya (dan jalur
+ * promosi lama di `offlineQueue.uploadLocalImage`) tidak berubah sama sekali.
+ */
+export type FormEvidenceFeature = "ticket" | "leave" | "izin" | "attendance" | "form";
+
+export function useImagePicker(feature: FormEvidenceFeature = "form") {
   const { showToast } = useToast();
   // Nama pengguna untuk baris keterangan watermark (permintaan user
   // 2026-09-29). Dibaca DI SINI — bukan di utils/watermark — supaya modul
@@ -148,9 +169,17 @@ export function useImagePicker() {
       // antrean offline yang disinkronkan berjam-jam kemudian tidak boleh
       // mengirim absensi tanpa bukti. Kegagalan persistensi = LOUD dan foto
       // TIDAK ditambahkan (lebih baik gagal terlihat daripada hilang senyap).
+      //
+      // D-03: tujuannya `form-evidence/<feature>/` untuk form biasa dan
+      // `attendance-evidence/` untuk check-in/check-out — lihat `feature` di
+      // atas. Keduanya persisten (tidak di-evict OS); yang membedakan hanya
+      // apakah sweep yatim boleh menilainya.
       let durableUri: string;
       try {
-        durableUri = await persistEvidenceImage(fileUri);
+        durableUri =
+          feature === "attendance"
+            ? await persistEvidenceImage(fileUri)
+            : await persistFormEvidenceImage(fileUri, feature);
       } catch (persistError) {
         console.error("[PickImage] Gagal menyimpan bukti ke penyimpanan perangkat:", persistError);
         Alert.alert(

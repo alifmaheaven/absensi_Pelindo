@@ -70,7 +70,7 @@ export default function LeaveScreen() {
     removeImage,
     openModal,
     closeModal,
-  } = useImagePicker();
+  } = useImagePicker("leave");
 
   const { run: getStatus } = useRequest(() =>
     getAttendanceStatus({ page: 1, per_page: 100 }),

@@ -45,7 +45,17 @@ async function notifyAttendanceExpired(count: number): Promise<void> {
 
 export interface FailedAttendanceItem {
   id: string;
-  type: "ATTENDANCE_CHECKIN" | "ATTENDANCE_CHECKOUT" | "ATTENDANCE_EVIDENCE";
+  /**
+   * F-03: `STANDARD_REQUEST` ikut diizinkan sejak item bertipe itu ke
+   * `/attendance/` tidak lagi boleh dibuang senyap (lihat
+   * `mustNeverBeDroppedSilently`). Nilainya adalah tipe ASLI item antrean,
+   * bukan label palsu — jenisnya dibaca manusia dari `data`/`errorMessage`.
+   */
+  type:
+    | "ATTENDANCE_CHECKIN"
+    | "ATTENDANCE_CHECKOUT"
+    | "ATTENDANCE_EVIDENCE"
+    | "STANDARD_REQUEST";
   data: OfflineCheckInPayload | OfflineCheckOutPayload | OfflineEvidenceRetryPayload | any;
   timestamp: number;
   failedAt: number;
@@ -143,6 +153,36 @@ export async function resolveCurrentUserId(): Promise<string | null> {
   } catch {}
 
   return null;
+}
+
+/**
+ * F-03 residual — apakah item ini menyentuh RECORD ABSENSI?
+ *
+ * `STANDARD_REQUEST` diperlakukan "non-kritis" di dua tempat dan dibuang hanya
+ * dengan `console.warn`. Itu benar untuk request umum, tapi SALAH untuk absensi:
+ * versi aplikasi <= 1.0.33 masih bisa meng-queue `POST/PUT /api/v2/attendance/`
+ * sebagai STANDARD_REQUEST (cabang NetInfo yang sudah dihapus di
+ * `services/attendance.ts`). Perangkat yang sudah punya item semacam itu di
+ * storage akan kehilangan presensinya tanpa jejak saat item kena 4xx/409 atau
+ * melewati 48 jam. Predikat ini membuat item tersebut mendapat perlakuan
+ * setara absensi — masuk keranjang gagal, terlihat di banner merah.
+ *
+ * Dicocokkan pada path, bukan host, supaya tetap benar untuk baseURL apa pun.
+ */
+function isAttendanceRecordRequest(action: OfflineAction): boolean {
+  if (action.type !== "STANDARD_REQUEST") return false;
+  const url = typeof action.url === "string" ? action.url : "";
+  return /\/attendance(\/|$|\?)/.test(url);
+}
+
+/** Perlakuan "jangan hilang senyap": record absensi, atau request ke record absensi. */
+function mustNeverBeDroppedSilently(action: OfflineAction): boolean {
+  return (
+    action.type === "ATTENDANCE_CHECKIN" ||
+    action.type === "ATTENDANCE_CHECKOUT" ||
+    action.type === "ATTENDANCE_EVIDENCE" ||
+    isAttendanceRecordRequest(action)
+  );
 }
 
 /** Whether any bearer token is stored at all. */
@@ -310,6 +350,16 @@ export interface OfflineCheckInPayload {
    * active at check-in time rather than whatever the site points at later.
    */
   contract_id?: string | null;
+  /**
+   * F-02 — grup bukti yang SUDAH dibuat untuk item ini (dibuat sekali, lalu
+   * disimpan kembali ke record antrean).
+   *
+   * Sebelumnya grup dibuat ulang pada setiap percobaan: satu item yang gagal
+   * N kali meninggalkan N grup + N salinan unggahan foto di server, dan
+   * riwayat bukti satu absensi terpecah ke beberapa grup. Optional supaya
+   * record lama (dan payload dari layar) tetap deserialisasi apa adanya.
+   */
+  evidence_group_id?: string;
 }
 
 export interface OfflineCheckOutPayload {
@@ -352,6 +402,109 @@ export interface OfflineAction {
 }
 
 let isSyncing = false;
+
+/* ------------------------------------------------------------------------- *
+ * F-01/F-02 (P0) — satu penulis antrean: mutex + commit PER ITEM
+ *
+ * `@offline_queue` adalah SATU kunci AsyncStorage yang dimutasi oleh empat
+ * producer (`queueRequest`, `queueOfflineCheckIn`, `queueOfflineCheckOut`,
+ * `queueOfflineEvidence`) dan oleh `syncQueuedRequests()`. Sebelum perubahan
+ * ini setiap producer melakukan read-modify-write sendiri dan sync menulis
+ * hasilnya SEKALI di akhir, dari snapshot yang diambil SEBELUM request HTTP
+ * pertama. Item yang di-queue selagi sync berjalan (menit-an: 1 foto = 3
+ * request) tidak ada di array yang ditulis-balik, jadi ia lenyap dari
+ * perangkat tanpa log, tanpa error, tanpa banner — padahal pengguna sudah
+ * melihat "Tersimpan Offline" dan pill sempat menghitung 1.
+ *
+ * Dua kontrol sekarang berlaku:
+ *   1. `withQueueLock()` men-serialisasi setiap read-modify-write di konteks
+ *      JS ini, sehingga tidak ada dua penulis yang saling menimpa;
+ *   2. sync melakukan COMMIT PER ITEM (`commitQueueDelta`), bukan menulis
+ *      snapshot seluruh antrean — jadi ia hanya bisa menyentuh item yang baru
+ *      saja diselesaikannya. Apa pun yang di-queue selama ronde berjalan tidak
+ *      tersentuh secara struktural, dan proses yang dibunuh di tengah sync
+ *      tidak lagi memutar-ulang item yang sudah terkirim.
+ *
+ * `isSyncing` tetap ada dan tetap perlu: ia memblokir sync-vs-sync (dua ronde
+ * paralel akan mem-POST dua kali), bukan producer-vs-sync.
+ * ------------------------------------------------------------------------- */
+
+/** Rantai tunggal yang men-serialisasi semua mutasi kunci antrean. */
+let queueLock: Promise<unknown> = Promise.resolve();
+
+/** Jalankan `fn` dengan kepemilikan eksklusif atas kunci antrean. */
+function withQueueLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queueLock.then(fn, fn);
+  // Rantai harus selamat dari critical section yang reject; tanpa ini satu
+  // kegagalan akan menyandera setiap penulis berikutnya di belakang promise
+  // yang sudah rejected selamanya.
+  queueLock = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+/**
+ * F-01/F-02 — satu-satunya penulisan yang dilakukan sync: sebuah DELTA, tidak
+ * pernah snapshot.
+ *
+ * `removedIds` = item yang sudah selesai ronde ini (sukses / gagal / kedaluwarsa
+ * / dibuang). `upsert` = item yang harus bertahan (item yang di-retry, atau
+ * anak ATTENDANCE_EVIDENCE penggantinya). Sisanya di storage — item snapshot
+ * yang belum diproses, item milik pengguna lain, dan terutama apa pun yang
+ * di-queue SELAGI ronde ini berjalan — dipertahankan apa adanya.
+ */
+async function commitQueueDelta(delta: {
+  removedIds: string[];
+  upsert: OfflineAction[];
+}): Promise<void> {
+  await withQueueLock(async () => {
+    const stored = await readQueueOrNull();
+    if (stored === null) {
+      // FAILURE ≠ EMPTY (disiplin yang sama dengan readAllFailedAttendance,
+      // M-1): blob yang tidak terbaca TIDAK BOLEH ditulis-ulang menjadi
+      // "hanya delta ini" — itu akan menghapus seluruh antrean.
+      throw new Error("Antrean tidak terbaca — commit dibatalkan (FAILURE ≠ EMPTY)");
+    }
+    const removed = new Set(delta.removedIds);
+    const upsertById = new Map(delta.upsert.map((a) => [a.id, a]));
+    // URUTAN: item yang di-retry (ada di `removedIds` DAN di `upsert`) harus
+    // TETAP DI POSISINYA, bukan dipindah ke belakang. Karena itu `upsert`
+    // diperiksa LEBIH DULU daripada `removedIds` — kalau dibalik, item yang
+    // di-retry akan terbuang lalu ditambahkan lagi di ujung antrean, dan urutan
+    // presensi berubah dari perilaku pra-perbaikan.
+    const next: OfflineAction[] = [];
+    for (const storedItem of stored) {
+      const replacement = upsertById.get(storedItem.id);
+      if (replacement) {
+        next.push(replacement); // bertahan, di posisi semula
+        upsertById.delete(storedItem.id);
+        continue;
+      }
+      if (removed.has(storedItem.id)) continue; // selesai ronde ini
+      next.push(storedItem); // belum diproses / milik pengguna lain
+    }
+    // Anak bukti BARU (id belum ada di storage) masuk di belakang: ia pekerjaan
+    // yang baru ditemukan ronde ini, jadi tidak menyalip item yang sudah menunggu.
+    for (const item of delta.upsert) {
+      if (upsertById.has(item.id)) next.push(item);
+    }
+    await saveQueue(next);
+  });
+}
+
+/** Pembacaan mentah yang membedakan "kosong" dari "tidak terbaca". */
+async function readQueueOrNull(): Promise<OfflineAction[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function getQueue(): Promise<OfflineAction[]> {
   try {
@@ -427,7 +580,20 @@ async function migrateLegacyQueueOwnership(): Promise<void> {
 
   if (changed) {
     try {
-      await saveQueue(queue);
+      await withQueueLock(async () => {
+        const stored = await readQueueOrNull();
+        if (stored === null) return; // FAILURE ≠ EMPTY — jangan timpa blob rusak
+        // F-01: stamping diterapkan ke storage TERKINI, bukan ke snapshot yang
+        // dibaca sebelum lock — item yang lahir di sela itu tidak boleh hilang.
+        // Aturannya identik dengan loop di atas; hanya basisnya yang bergeser.
+        for (const action of stored) {
+          if (getStampedOwner(action)) continue;
+          const owner = getPayloadOwner(action) ?? sessionUserId;
+          if (!owner) continue;
+          action.owner_user_id = owner;
+        }
+        await saveQueue(stored);
+      });
     } catch (e) {
       console.error("[OfflineQueue] Gagal menandai kepemilikan antrean lama:", e);
     }
@@ -438,7 +604,7 @@ async function migrateLegacyQueueOwnership(): Promise<void> {
  * Queue a standard HTTP request for later when offline
  */
 export async function queueRequest(url: string, method: string, data?: any) {
-  const queue = await getQueue();
+  const owner = await currentOwnerStamp();
   const action: OfflineAction = {
     id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type: "STANDARD_REQUEST",
@@ -446,10 +612,15 @@ export async function queueRequest(url: string, method: string, data?: any) {
     method: method.toUpperCase(),
     data,
     timestamp: Date.now(),
-    owner_user_id: await currentOwnerStamp(),
+    owner_user_id: owner,
   };
-  queue.push(action);
-  await saveQueue(queue);
+  // F-01: read-modify-write di dalam mutex — tanpa ini sync yang sedang
+  // berjalan dapat menulis-balik snapshot lamanya di atas item ini.
+  await withQueueLock(async () => {
+    const queue = (await readQueueOrNull()) ?? [];
+    queue.push(action);
+    await saveQueue(queue);
+  });
   return action.id;
 }
 
@@ -457,16 +628,20 @@ export async function queueRequest(url: string, method: string, data?: any) {
  * Queue an offline check-in with local images & coordinates
  */
 export async function queueOfflineCheckIn(payload: OfflineCheckInPayload): Promise<string> {
-  const queue = await getQueue();
+  const owner = await currentOwnerStamp();
   const action: OfflineAction = {
     id: `checkin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type: "ATTENDANCE_CHECKIN",
     data: payload,
     timestamp: Date.now(),
-    owner_user_id: await currentOwnerStamp(),
+    owner_user_id: owner,
   };
-  queue.push(action);
-  await saveQueue(queue);
+  // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
+  await withQueueLock(async () => {
+    const queue = (await readQueueOrNull()) ?? [];
+    queue.push(action);
+    await saveQueue(queue);
+  });
   return action.id;
 }
 
@@ -474,16 +649,20 @@ export async function queueOfflineCheckIn(payload: OfflineCheckInPayload): Promi
  * Queue an offline check-out with local images & coordinates
  */
 export async function queueOfflineCheckOut(payload: OfflineCheckOutPayload): Promise<string> {
-  const queue = await getQueue();
+  const owner = await currentOwnerStamp();
   const action: OfflineAction = {
     id: `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type: "ATTENDANCE_CHECKOUT",
     data: payload,
     timestamp: Date.now(),
-    owner_user_id: await currentOwnerStamp(),
+    owner_user_id: owner,
   };
-  queue.push(action);
-  await saveQueue(queue);
+  // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
+  await withQueueLock(async () => {
+    const queue = (await readQueueOrNull()) ?? [];
+    queue.push(action);
+    await saveQueue(queue);
+  });
   return action.id;
 }
 
@@ -497,16 +676,20 @@ export async function queueOfflineCheckOut(payload: OfflineCheckOutPayload): Pro
  * yang sama, dengan SURFACING di A3).
  */
 export async function queueOfflineEvidence(payload: OfflineEvidenceRetryPayload): Promise<string> {
-  const queue = await getQueue();
+  const owner = await currentOwnerStamp();
   const action: OfflineAction = {
     id: `evidence_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type: "ATTENDANCE_EVIDENCE",
     data: payload,
     timestamp: Date.now(),
-    owner_user_id: await currentOwnerStamp(),
+    owner_user_id: owner,
   };
-  queue.push(action);
-  await saveQueue(queue);
+  // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
+  await withQueueLock(async () => {
+    const queue = (await readQueueOrNull()) ?? [];
+    queue.push(action);
+    await saveQueue(queue);
+  });
   return action.id;
 }
 
@@ -732,10 +915,14 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
     // yang harus mengganti blob tak terbaca / gagal tulis. Sweep yatim wajib
     // dilompati saat true (arah aman = SIMPAN).
     let failedBucketPartial = false;
-    const remaining: OfflineAction[] = [];
     const newlyFailedAttendance: FailedAttendanceItem[] = [];
 
     for (const action of queue) {
+      // F-01/F-02 — hasil ronde UNTUK ITEM INI, di-reset setiap iterasi.
+      // `remaining` bukan lagi "seluruh isi antrean", melainkan "item yang
+      // harus BERTAHAN dari aksi yang baru diproses ini": item yang di-retry
+      // (id sama, payload sudah menyusut) dan anak bukti penggantinya (id baru).
+      let remaining: OfflineAction[] = [];
       // MOB-02 — the non-negotiable control.
       //
       // On a shared device user A can queue a check-in offline and log out. The
@@ -748,7 +935,9 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
       // We keep the item instead of deleting or failing it, so it is still there
       // when its rightful owner logs back in on this device.
       if (!isActionEligibleFor(action, currentUserId)) {
-        remaining.push(action);
+        // TIDAK ada commit untuk item ini: `continue` melewati blok commit di
+        // bawah, sehingga storage dibiarkan apa adanya. Item milik pengguna lain
+        // harus tetap ada sampai pemiliknya masuk kembali (MOB-02).
         console.warn(
           "[OfflineQueue] Melewati antrean milik pengguna lain (MOB-02):",
           action.type,
@@ -776,13 +965,23 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           // error umum di bawah (retryable / keranjang gagal), item tidak dibakar.
           let groupId = "";
           if (images.length) {
-            const groupRes = await apiClient.post("/evidence-group/", {
-              name: `Attendance ${payload.user_name}`,
-              description: "Attendance evidence (Offline Sync)",
-            });
-            groupId = groupRes.data?.data?.id || groupRes.data?.id || "";
+            // F-02 — percobaan ULANG memakai grup yang sudah dibuat, tidak
+            // membuat grup baru. Tanpa ini setiap percobaan meninggalkan satu
+            // grup + satu set unggahan duplikat di server.
+            groupId = payload.evidence_group_id || "";
             if (!groupId) {
-              throw new Error("Gagal membuat grup bukti (respons tanpa id)");
+              const groupRes = await apiClient.post("/evidence-group/", {
+                name: `Attendance ${payload.user_name}`,
+                description: "Attendance evidence (Offline Sync)",
+              });
+              groupId = groupRes.data?.data?.id || groupRes.data?.id || "";
+              if (!groupId) {
+                throw new Error("Gagal membuat grup bukti (respons tanpa id)");
+              }
+              // Tulis-balik ke payload = objek yang sama dengan action.data,
+              // jadi id ini ikut tersimpan pada jalur retry maupun keranjang
+              // gagal (keduanya membawa action.data apa adanya).
+              payload.evidence_group_id = groupId;
             }
           }
 
@@ -1032,11 +1231,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           statusCode === 422;
 
         if (isNonRetryable) {
-          if (
-            action.type === "ATTENDANCE_CHECKIN" ||
-            action.type === "ATTENDANCE_CHECKOUT" ||
-            action.type === "ATTENDANCE_EVIDENCE"
-          ) {
+          if (mustNeverBeDroppedSilently(action)) {
             // JANGAN HAPUS BUKTI KERJA DIAM-DIAM!
             // Pindahkan ke penampung absensi gagal permanen agar data kehadiran lapangan tidak hilang
             // dan tidak di-retry berulang (mencegah retry storm).
@@ -1066,6 +1261,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           } else {
             // STANDARD_REQUEST: Request umum non-kritis dibuang dengan peringatan log
             // karena tidak menyangkut rekaman bukti kerja / payroll pekerja lapangan.
+            // (F-03: yang menyentuh /attendance/ sudah ditangani cabang di atas.)
             console.warn(
               `[OfflineQueue] Menghapus aksi non-retryable dari antrean (status ${statusCode}):`,
               action.type,
@@ -1080,11 +1276,7 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           const age = Date.now() - action.timestamp;
           if (age < QUEUE_RETENTION_MS) {
             remaining.push(action);
-          } else if (
-            action.type === "ATTENDANCE_CHECKIN" ||
-            action.type === "ATTENDANCE_CHECKOUT" ||
-            action.type === "ATTENDANCE_EVIDENCE"
-          ) {
+          } else if (mustNeverBeDroppedSilently(action)) {
             // WAVE-0 item 2 (keputusan koordinator 2026-09-18): jendela 48 jam
             // TETAP ada, tapi kejadiannya SURFACE — tidak pernah hilang senyap.
             // Jalur surfacing: (1) keranjang gagal -> banner OfflineBanner
@@ -1116,27 +1308,56 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
           }
         }
       }
-    }
 
-    await saveQueue(remaining);
+      // F-01/F-02 — COMMIT PER ITEM (bukan satu penulisan di akhir ronde).
+      //
+      // Hanya id item ini yang boleh hilang dari storage, dan hanya item ini
+      // yang boleh ditulis ulang. Karena itu, apa pun yang di-queue pengguna
+      // SELAGI ronde ini berjalan tidak dapat tersentuh: ia tidak ada di
+      // `removedIds`, dan commitQueueDelta bekerja dari isi storage terkini.
+      //
+      // Ini juga yang membuat "sudah terkirim" tidak bisa diputar ulang: begitu
+      // sebuah item selesai, ia langsung hilang dari storage. Proses yang
+      // dibunuh setelah commit ini tidak akan mem-POST-nya lagi (sisa F-02 yang
+      // menuntut idempotensi server-side dicatat di laporan, backend di luar
+      // lingkup perubahan ini).
+      try {
+        await commitQueueDelta({ removedIds: [action.id], upsert: remaining });
+      } catch (commitErr) {
+        // FAILURE ≠ EMPTY: kegagalan menulis antrean TIDAK ditelan. Item ini
+        // tetap ada di storage (akan dicoba lagi) dan jejaknya terlihat.
+        console.error("[OfflineQueue] Commit antrean gagal:", commitErr);
+      }
+    }
 
     // WAVE-0 CHECK-2b — sapu file bukti yatim (hasil promosi uri lama / crash
     // sebelum upload) SETELAH antrean final tersimpan. keep = semua uri yang
     // masih dirujuk item aktif + keranjang gagal (bukti tinjauan admin).
+    //
+    // F-01: keep-set WAJIB dibaca dari STORAGE, bukan dari array yang disusun
+    // ronde ini. Dua alasan, keduanya kehilangan data:
+    //   1. item yang di-queue pengguna SELAGI sync berjalan tidak pernah lewat
+    //      array ini — fotonya akan dianggap yatim lalu DIHAPUS dari perangkat;
+    //   2. item milik pengguna lain (MOB-02) sengaja tidak disentuh ronde ini,
+    //      jadi rujukannya juga tidak ada di array tersebut.
+    // Baca-gagal (null) diperlakukan seperti M-1: arah aman = SIMPAN.
     try {
       const referenced: string[] = [];
-      for (const item of remaining) {
-        const d: any = item.data || {};
-        for (const img of d.localImages || d.images || []) referenced.push(img.uri);
-      }
+      const storedQueue = await readQueueOrNull();
       const failedList = await readAllFailedAttendance();
-      if (failedList === null || failedBucketPartial) {
+      if (storedQueue === null) {
+        console.warn("[OfflineQueue] Sweep bukti yatim DILEWAT — antrean tidak terbaca (FAILURE ≠ EMPTY)");
+      } else if (failedList === null || failedBucketPartial) {
         // M-1: keranjang gagal gagal-terbaca (null) ATAU baru saja direpair
         // dari blob tak terbaca/gagal-tulis (parsial) ⇒ keep-set TIDAK
         // dipercaya. Arah aman = SIMPAN: lewati seluruh sweep, jangan pernah
         // menafsirkan 'gagal baca' sebagai 'kosong'.
         console.warn("[OfflineQueue] Sweep bukti yatim DILEWAT — keep-set tidak lengkap (M-1)");
       } else {
+        for (const item of storedQueue) {
+          const d: any = item.data || {};
+          for (const img of d.localImages || d.images || []) referenced.push(img.uri);
+        }
         for (const f of failedList) {
           const d: any = f?.data || {};
           for (const img of d.localImages || d.images || []) referenced.push(img.uri);
@@ -1154,12 +1375,19 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
     if (newlyFailedAttendance.length > 0) {
       const count = newlyFailedAttendance.length;
       const first = newlyFailedAttendance[0];
+      // F-03: label harus JUJUR. Sebelumnya setiap tipe selain check-in/check-out
+      // dilabeli "Bukti absensi"; untuk item STANDARD_REQUEST yang menyentuh
+      // /attendance/ itu salah — yang gagal adalah RECORD ABSENSINYA, bukan
+      // bukti. Label "Antrean lama" sekaligus menunjuk jalur yang melahirkannya
+      // (cabang NetInfo pra-1.0.34), supaya admin tahu ini bukan jalur normal.
       const jenis =
         first.type === "ATTENDANCE_CHECKIN"
           ? "Check-in"
           : first.type === "ATTENDANCE_CHECKOUT"
             ? "Check-out"
-            : "Bukti absensi";
+            : first.type === "ATTENDANCE_EVIDENCE"
+              ? "Bukti absensi"
+              : "Antrean lama";
       const message =
         first.errorCode === 409
           ? `Data absensi (${jenis}) tidak dapat disinkronkan karena presensi untuk Hari Operasional ini sudah terdaftar di server (batas cut-off pukul 04:00 WIB). Bukti kerja Anda tetap tersimpan aman di perangkat.`

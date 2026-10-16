@@ -97,7 +97,7 @@ export default function TicketingEditScreen() {
     openModal,
     closeModal,
     setImages,
-  } = useImagePicker();
+  } = useImagePicker("ticket");
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const submittingRef = useRef(false);
   const { user } = useAuthStore();

@@ -6,6 +6,7 @@ import {
   type ThemePreference,
 } from "@/hooks/use-theme-color";
 import { PersonFill } from "@/components/icon";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import { useToast } from "@/components/ui/toast";
 import { removeToken } from "@/lib/storage";
 import { useAuthStore } from "@/stores/auth";
@@ -68,7 +69,8 @@ export default function ProfileScreen() {
   const colors = useThemeColors();
   const isDark = useIsDarkTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
+  const tabInset = useTabBarInset();
+  const styles = useMemo(() => makeStyles(colors, insets, isDark), [colors, insets, isDark]);
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { showToast } = useToast();
@@ -263,7 +265,7 @@ export default function ProfileScreen() {
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={[colors.primary]}
-            tintColor={isDark ? "#38bdf8" : colors.primary}
+            tintColor={colors.refreshTint}
           />
         }
       >
@@ -408,7 +410,7 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Keluar</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 24 + tabInset }} />
       </ScrollView>
 
       {/* About App Modal */}
@@ -490,7 +492,7 @@ export default function ProfileScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: c.background,
@@ -500,49 +502,56 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 24,
     alignItems: "center",
-    backgroundColor: c.card,
+    backgroundColor: c.glassCard,
     borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    borderBottomColor: c.glassBorder,
   },
   avatarContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: c.accentSoft,
+    borderWidth: 2,
+    borderColor: c.accentPillBorder,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 3,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
   },
   avatarIcon: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
   },
   userName: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "800",
+    letterSpacing: -0.3,
     color: c.textStrong,
     marginBottom: 4,
   },
   userEmail: {
     fontSize: 13,
     color: c.textSecondary,
+    fontWeight: "500",
   },
   content: {
     flex: 1,
     padding: 16,
   },
   summaryCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: c.border,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: "#000",
+    borderColor: c.glassBorder,
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: "#081730",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: isDark ? 0.30 : 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -625,14 +634,14 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     color: c.primary,
   },
   menuCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: "#081730",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: isDark ? 0.30 : 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -721,13 +730,13 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: c.card,
+    backgroundColor: c.dangerGlass,
     marginTop: 20,
-    minHeight: 48,
+    minHeight: 50,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: c.danger,
+    borderColor: c.dangerGlassBorder,
   },
   logoutText: {
     fontSize: 15,

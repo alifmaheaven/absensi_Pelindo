@@ -22,7 +22,7 @@ const SkeletonBlock = ({ width, height, style }: { width?: number | string; heig
   return (
     <Animated.View
       style={[
-        { width: width ?? "100%", height: height ?? 16, opacity, borderRadius: 8 },
+        { width: width ?? "100%", height: height ?? 16, opacity, borderRadius: 12 },
         styles.block,
         style,
       ]}
@@ -48,19 +48,19 @@ export function FormSkeleton() {
         <SkeletonBlock
           key={i}
           height={56}
-          style={{ marginBottom: 8, borderRadius: 12 }}
+          style={{ marginBottom: 8, borderRadius: 14 }}
         />
       ))}
 
       {/* Notes placeholder */}
       <SkeletonBlock width="30%" height={16} style={{ marginTop: 16, marginBottom: 8 }} />
-      <SkeletonBlock height={44} style={{ borderRadius: 12, marginBottom: 16 }} />
+      <SkeletonBlock height={44} style={{ borderRadius: 14, marginBottom: 16 }} />
 
       {/* Image upload section placeholder */}
-      <SkeletonBlock height={80} style={{ borderRadius: 12, marginBottom: 12 }} />
+      <SkeletonBlock height={80} style={{ borderRadius: 14, marginBottom: 12 }} />
 
       {/* Submit button placeholder */}
-      <SkeletonBlock height={50} style={{ borderRadius: 25, marginTop: 8 }} />
+      <SkeletonBlock height={50} style={{ borderRadius: 14, marginTop: 8 }} />
     </View>
   );
 }
@@ -75,7 +75,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   mapPlaceholder: {
     height: 200,
-    borderRadius: 12,
+    borderRadius: 20,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: c.glassBorder,
   },
 });

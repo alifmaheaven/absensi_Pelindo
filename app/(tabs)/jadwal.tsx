@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { getWeekSchedule } from "@/services/schedule";
 import { syncShiftNotifications } from "@/services/notification-scheduler";
 import type { IWeekScheduleItem } from "@/types";
@@ -24,7 +24,8 @@ const DAY_MAP: Record<string, number> = {
 
 export default function JadwalScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const [schedules, setSchedules] = useState<IWeekScheduleItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -351,18 +352,18 @@ export default function JadwalScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     summaryBanner: {
-      backgroundColor: c.card,
-      borderRadius: 16,
+      backgroundColor: c.glassCard,
+      borderRadius: 18,
       borderWidth: 1,
-      borderColor: c.border,
-      padding: 16,
-      marginBottom: 18,
-      shadowColor: "#000",
+      borderColor: c.glassBorder,
+      padding: 14,
+      marginBottom: 14,
+      shadowColor: "#081730",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
+      shadowOpacity: isDark ? 0.30 : 0.04,
       shadowRadius: 8,
       elevation: 2,
     },
@@ -378,18 +379,22 @@ const makeStyles = (c: ThemeColors) =>
     summaryTitle: {
       fontSize: 17,
       fontWeight: "700",
+      letterSpacing: -0.2,
       color: c.textStrong,
       marginBottom: 2,
     },
     summarySubtitle: {
       fontSize: 13,
       color: c.textSecondary,
+      fontWeight: "500",
     },
     summaryIconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: c.primarySoft,
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accentSoftBorder,
       justifyContent: "center",
       alignItems: "center",
       marginLeft: 12,
@@ -404,10 +409,12 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      backgroundColor: c.primarySoft,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accentSoftBorder,
       paddingVertical: 10,
       paddingHorizontal: 12,
-      borderRadius: 10,
+      borderRadius: 14,
     },
     summaryChipPrimaryText: {
       fontSize: 13,
@@ -420,12 +427,12 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      backgroundColor: c.surface,
+      backgroundColor: c.glassCardSubtle,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
       paddingVertical: 10,
       paddingHorizontal: 12,
-      borderRadius: 10,
+      borderRadius: 14,
     },
     summaryChipNeutralText: {
       fontSize: 13,
@@ -435,30 +442,31 @@ const makeStyles = (c: ThemeColors) =>
     sectionTitle: {
       fontSize: 15,
       fontWeight: "700",
+      letterSpacing: -0.2,
       color: c.textStrong,
       marginBottom: 12,
     },
     scheduleCard: {
-      backgroundColor: c.card,
+      backgroundColor: c.glassCard,
       borderRadius: 16,
       borderWidth: 1,
-      borderColor: c.border,
-      padding: 14,
-      marginBottom: 12,
+      borderColor: c.glassBorder,
+      padding: 12,
+      marginBottom: 10,
       flexDirection: "row",
       alignItems: "center",
-      shadowColor: "#000",
+      shadowColor: "#081730",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
+      shadowOpacity: isDark ? 0.25 : 0.04,
       shadowRadius: 8,
       elevation: 2,
       position: "relative",
       overflow: "hidden",
     },
     todayCard: {
-      borderWidth: 2,
+      borderWidth: 1.5,
       borderColor: c.primary,
-      backgroundColor: c.primarySoft,
+      backgroundColor: c.accentSoft,
     },
     todayIndicatorBar: {
       position: "absolute",

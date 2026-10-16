@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { useToast } from "@/components/ui/toast";
 import { ITicketDevice } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,7 +37,8 @@ export default function DeviceDrawer({
 }: DeviceDrawerProps) {
 
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const { showToast } = useToast();
   const [devices, setDevices] = useState<ITicketDevice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -333,7 +334,7 @@ export default function DeviceDrawer({
                 <Text style={styles.title}>
                   {editDevice ? "Edit Device" : "Tambah Device Baru"}
                 </Text>
-                <TouchableOpacity onPress={() => setShowForm(false)}>
+                <TouchableOpacity onPress={() => setShowForm(false)} style={styles.cancelButton}>
                   <Text style={styles.cancelText}>Batal</Text>
                 </TouchableOpacity>
               </View>
@@ -416,17 +417,17 @@ export default function DeviceDrawer({
                     onPress={() => setServiceDropdownOpen(p => !p)}
                   >
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={formServiceId ? { color: colors.text } : { color: colors.textMuted }}>
+                      <Text style={formServiceId ? { color: colors.textStrong } : { color: colors.textMuted }}>
                         {serviceOptions?.find(s => s.id === formServiceId)?.name || "Pilih service"}
                       </Text>
                       <Ionicons name={serviceDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.textMuted} />
                     </View>
                   </TouchableOpacity>
                   {serviceDropdownOpen && (
-                    <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderStrong, borderRadius: 8, marginTop: 4 }}>
+                    <View style={{ backgroundColor: colors.glassCardSubtle, borderWidth: 1, borderColor: colors.glassBorder, borderRadius: 14, marginTop: 6, overflow: "hidden" }}>
                       {serviceOptions?.map(svc => (
-                        <TouchableOpacity key={svc.id} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }} onPress={() => { setFormServiceId(svc.id); setServiceDropdownOpen(false); }}>
-                          <Text style={{ fontSize: 14, color: colors.text }}>{svc.name}</Text>
+                        <TouchableOpacity key={svc.id} style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: colors.glassBorderSubtle }} onPress={() => { setFormServiceId(svc.id); setServiceDropdownOpen(false); }}>
+                          <Text style={{ fontSize: 14, color: colors.textStrong }}>{svc.name}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -456,7 +457,7 @@ export default function DeviceDrawer({
                   disabled={formSubmitting}
                 >
                   {formSubmitting ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={colors.onGradient} />
                   ) : (
                     <Text style={styles.submitFormText}>
                       {editDevice ? "Simpan Perubahan" : "Tambah Device"}
@@ -472,7 +473,7 @@ export default function DeviceDrawer({
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: c.overlay,
@@ -482,10 +483,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flex: 1,
   },
   container: {
-    backgroundColor: c.card,
+    backgroundColor: c.glassSheet,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
+    paddingHorizontal: 16,
     paddingBottom: 40,
     maxHeight: "80%",
   },
@@ -493,7 +496,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: c.border,
+    backgroundColor: c.borderStrong,
     alignSelf: "center",
     marginTop: 12,
     marginBottom: 8,
@@ -508,22 +511,34 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.textStrong,
   },
   addButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: c.accentPill,
+    borderWidth: 1,
+    borderColor: c.accentPillBorder,
   },
   addButtonText: {
     fontSize: 13,
     fontWeight: "600",
     color: c.primary,
   },
+  cancelButton: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+  },
   cancelText: {
     fontSize: 14,
     color: c.primary,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   listContainer: {
     maxHeight: 400,
@@ -533,7 +548,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    borderBottomColor: c.glassBorderSubtle,
   },
   deviceInfo: {
     flexDirection: "row",
@@ -541,10 +556,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flex: 1,
   },
   deviceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: c.primarySoft,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: c.accentSoft,
+    borderWidth: 1,
+    borderColor: c.accentSoftBorder,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -555,7 +572,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   deviceName: {
     fontSize: 15,
     fontWeight: "600",
-    color: c.text,
+    letterSpacing: -0.2,
+    color: c.textStrong,
   },
   deviceSub: {
     fontSize: 12,
@@ -567,7 +585,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     gap: 8,
   },
   actionBtn: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyContainer: {
     alignItems: "center",
@@ -593,26 +615,35 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: c.text,
+    color: c.textStrong,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: c.surface,
+    backgroundColor: c.glassCardSubtle,
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    borderRadius: 10,
+    borderColor: c.glassBorder,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: c.text,
+    color: c.textStrong,
   },
   textArea: {
     minHeight: 80,
   },
   submitFormButton: {
     backgroundColor: c.primaryAction,
+    minHeight: 48,
+    justifyContent: "center",
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: isDark ? 0.35 : 0.25,
+    shadowRadius: 6,
+    elevation: 3,
     alignItems: "center",
     marginTop: 8,
     marginBottom: 20,

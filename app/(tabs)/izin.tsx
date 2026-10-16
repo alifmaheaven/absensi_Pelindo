@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import {
   getAttendanceList,
   getAttendanceStatus,
@@ -105,7 +105,8 @@ export default function IzinScreen() {
   // SEC-01: langganan versi cache render-token agar bukti re-render saat token di-mint.
   useRenderTokenVersion();
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const { user } = useAuthStore();
   const userId = user?.id;
   const { showToast } = useToast();
@@ -1053,7 +1054,7 @@ export default function IzinScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     filterChipsWrapper: {
       marginBottom: 16,
@@ -1069,16 +1070,21 @@ const makeStyles = (c: ThemeColors) =>
       gap: 6,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 20,
+      borderRadius: 14,
       borderWidth: 1,
     },
     filterChipActive: {
       backgroundColor: c.primaryAction,
-      borderColor: c.primary,
+      borderColor: "rgba(255, 255, 255, 0.25)",
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 2,
     },
     filterChipInactive: {
-      backgroundColor: c.card,
-      borderColor: c.border,
+      backgroundColor: c.glassCardSubtle,
+      borderColor: c.glassBorder,
     },
     filterChipText: {
       fontSize: 13,
@@ -1128,15 +1134,15 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "500",
     },
     izinCard: {
-      backgroundColor: c.card,
+      backgroundColor: c.glassCard,
       borderRadius: 16,
-      padding: 15,
+      padding: 14,
       borderWidth: 1,
-      borderColor: c.border,
-      marginBottom: 12,
-      shadowColor: "#000",
+      borderColor: c.glassBorder,
+      marginBottom: 10,
+      shadowColor: "#081730",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
+      shadowOpacity: isDark ? 0.25 : 0.04,
       shadowRadius: 8,
       elevation: 2,
     },
@@ -1246,9 +1252,11 @@ const makeStyles = (c: ThemeColors) =>
       justifyContent: "flex-end",
     },
     modalContent: {
-      backgroundColor: c.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      backgroundColor: c.glassSheet,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderTopWidth: 1,
+      borderTopColor: c.glassSheetBorder,
       padding: 20,
       paddingBottom: 36,
       maxHeight: "88%",

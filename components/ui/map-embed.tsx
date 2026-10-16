@@ -38,7 +38,7 @@ export const MapEmbed: React.FC<MapEmbedProps> = ({
       !isNaN(radiusMeters) &&
       radiusMeters > 0;
 
-    const strokeColor = colors.primary || "#1e90ff";
+    const strokeColor = colors.primary;
 
     return `
       <!DOCTYPE html>
@@ -90,7 +90,16 @@ export const MapEmbed: React.FC<MapEmbedProps> = ({
   if (!location) return null;
 
   return (
-    <View style={{ width: "100%", height: 200 }}>
+    <View
+      style={{
+        width: "100%",
+        height: 200,
+        borderRadius: 20,
+        overflow: "hidden",
+        borderWidth: 1,
+        borderColor: colors.glassBorder,
+      }}
+    >
       <WebView
         ref={webViewRef}
         source={{ html: createMapHTML() }}

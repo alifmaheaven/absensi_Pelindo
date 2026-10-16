@@ -34,12 +34,14 @@ export default function NetworkStatusBar() {
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   banner: {
     backgroundColor: c.dangerAction,
-    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: c.glassOnGradientBorder,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     alignItems: "center",
   },
   text: {
-    color: "#FFFFFF",
+    color: c.onGradient,
     fontSize: 13,
     fontWeight: "600",
   },

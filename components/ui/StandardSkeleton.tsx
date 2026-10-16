@@ -7,7 +7,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 
 export interface StandardSkeletonProps {
   type?: "card-list" | "form" | "profile-summary";
@@ -21,7 +21,8 @@ export default function StandardSkeleton({
   style,
 }: StandardSkeletonProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const animatedValue = useAnimatedValue(0.3);
 
   useEffect(() => {
@@ -145,23 +146,23 @@ export default function StandardSkeleton({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     container: {
       paddingVertical: 12,
     },
     card: {
-      backgroundColor: c.card,
-      borderRadius: 16,
+      backgroundColor: c.glassCard,
+      borderRadius: 20,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: c.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
-      shadowRadius: 3,
-      elevation: 1,
+      borderColor: c.glassBorder,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 10,
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      elevation: 2,
     },
     headerRow: {
       flexDirection: "row",
@@ -172,7 +173,7 @@ const makeStyles = (c: ThemeColors) =>
     badgeSkeleton: {
       width: 84,
       height: 22,
-      borderRadius: 6,
+      borderRadius: 12,
       backgroundColor: c.borderStrong,
     },
     timeSkeleton: {
@@ -184,7 +185,7 @@ const makeStyles = (c: ThemeColors) =>
     titleBar: {
       width: "72%",
       height: 16,
-      borderRadius: 6,
+      borderRadius: 8,
       backgroundColor: c.borderStrong,
       marginBottom: 8,
     },
@@ -210,7 +211,7 @@ const makeStyles = (c: ThemeColors) =>
     actionSkeleton: {
       width: 70,
       height: 28,
-      borderRadius: 8,
+      borderRadius: 12,
       backgroundColor: c.borderStrong,
     },
     // Form styles
@@ -224,16 +225,16 @@ const makeStyles = (c: ThemeColors) =>
     inputSkeleton: {
       width: "100%",
       height: 48,
-      borderRadius: 12,
-      backgroundColor: c.surface,
+      borderRadius: 14,
+      backgroundColor: c.glassCardSubtle,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
       marginBottom: 16,
     },
     buttonSkeleton: {
       width: "100%",
       height: 48,
-      borderRadius: 12,
+      borderRadius: 14,
       backgroundColor: c.borderStrong,
       marginTop: 8,
     },
@@ -259,9 +260,9 @@ const makeStyles = (c: ThemeColors) =>
       flex: 1,
       minWidth: "45%",
       height: 54,
-      borderRadius: 12,
-      backgroundColor: c.surface,
+      borderRadius: 14,
+      backgroundColor: c.glassCardSubtle,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
     },
   });

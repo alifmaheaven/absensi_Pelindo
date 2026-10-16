@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, CheckRounded, Device } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { IMAGE_BASE_PATH, IMAGE_MAX_WIDTH, IMAGE_QUALITY } from "@/constants";
@@ -106,7 +106,8 @@ export default function DailyRoutineDetailScreen() {
   // Nama pengguna untuk baris keterangan watermark kamera.
   const watermarkName = useAuthStore((s) => s.user?.name ?? null);
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -1576,7 +1577,7 @@ export default function DailyRoutineDetailScreen() {
                 style={styles.backButton}
                 hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
               >
-                <ArrowLeft color="#fff" />
+                <ArrowLeft color={colors.onGradient} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Daily Routine</Text>
               <View style={{ width: 40 }} />
@@ -1816,7 +1817,7 @@ export default function DailyRoutineDetailScreen() {
                 {/* Submit / Completed Action Button (M6) */}
                 {isReadOnly ? (
                   <View style={styles.completedFooterBtn}>
-                    <CheckRounded width={18} height={18} color="#fff" style={{ marginRight: 8 }} />
+                    <CheckRounded width={18} height={18} color={colors.onGradient} style={{ marginRight: 8 }} />
                     <Text style={styles.completedFooterText}>
                       Daily Routine Telah Selesai
                     </Text>
@@ -1834,7 +1835,7 @@ export default function DailyRoutineDetailScreen() {
                     {submitting ? (
                       <ActivityIndicator
                         size="small"
-                        color="#fff"
+                        color={colors.onGradient}
                         style={{ marginRight: 8 }}
                       />
                     ) : null}
@@ -1865,7 +1866,7 @@ const ShadcnBadgeStyle = {
   overflow: "hidden" as const,
 };
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     headerGradient: {
       height: 140,
@@ -1875,29 +1876,39 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      paddingHorizontal: 20,
+      paddingHorizontal: 16,
       paddingTop: 10,
     },
     backButton: {
-      padding: 8,
-      borderRadius: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: c.glassOnGradient,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      alignItems: "center",
+      justifyContent: "center",
     },
     headerTitle: {
       fontSize: 18,
-      fontWeight: "600",
+      fontWeight: "700",
+      letterSpacing: -0.3,
       color: c.onGradient,
     },
     contentContainer: {
       flex: 1,
       marginTop: -20,
-      backgroundColor: c.card,
-      borderTopLeftRadius: 30,
-      borderTopRightRadius: 30,
+      backgroundColor: c.glassSheet,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderTopWidth: 1,
+      borderTopColor: c.glassSheetBorder,
       overflow: "hidden",
     },
     scrollContent: {
-      padding: 20,
-      paddingTop: 25,
+      paddingHorizontal: 16,
+      paddingTop: 18,
+      paddingBottom: 32,
     },
     frequencyBadgeRow: {
       flexDirection: "row",
@@ -1906,8 +1917,8 @@ const makeStyles = (c: ThemeColors) =>
     },
     frequencyBadge: {
       paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
+      paddingVertical: 4,
+      borderRadius: 12,
       borderWidth: 1,
       alignSelf: "flex-start",
     },
@@ -1916,8 +1927,8 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "600",
     },
     frequencyBadgeDaily: {
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
+      backgroundColor: c.glassChip,
+      borderColor: c.glassBorder,
     },
     frequencyBadgeDailyText: {
       fontSize: 11,
@@ -1925,8 +1936,8 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textSecondary,
     },
     frequencyBadgeWeekly: {
-      backgroundColor: c.primarySoft,
-      borderColor: c.primary,
+      backgroundColor: c.accentPill,
+      borderColor: c.accentPillBorder,
     },
     frequencyBadgeWeeklyText: {
       fontSize: 11,
@@ -1934,8 +1945,9 @@ const makeStyles = (c: ThemeColors) =>
       color: c.primary,
     },
     sectionTitle: {
-      fontSize: 16,
-      fontWeight: "bold",
+      fontSize: 18,
+      fontWeight: "700",
+      letterSpacing: -0.3,
       color: c.textStrong,
       marginBottom: 8,
     },
@@ -1948,7 +1960,7 @@ const makeStyles = (c: ThemeColors) =>
     divider: {
       width: "100%",
       height: 1,
-      backgroundColor: c.border,
+      backgroundColor: c.glassBorderSubtle,
       marginVertical: 16,
     },
 
@@ -1957,7 +1969,7 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.successSoft,
       borderWidth: 1,
       borderColor: c.success,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 14,
       marginBottom: 16,
       flexDirection: "row",
@@ -1977,10 +1989,12 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      backgroundColor: c.primarySoft,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accentSoftBorder,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 12,
+      borderRadius: 14,
       marginBottom: 12,
       marginTop: 4,
     },
@@ -1995,7 +2009,8 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "700",
       paddingHorizontal: 8,
       paddingVertical: 2,
-      borderRadius: 10,
+      borderRadius: 12,
+      fontVariant: ["tabular-nums"],
     },
     deviceProgressDone: {
       backgroundColor: c.successSoft,
@@ -2016,16 +2031,17 @@ const makeStyles = (c: ThemeColors) =>
       paddingHorizontal: 14,
       paddingVertical: 8,
       marginRight: 8,
-      borderRadius: 12,
-      backgroundColor: c.surface,
-      borderWidth: 1.5,
-      borderColor: c.borderStrong,
+      borderRadius: 14,
+      backgroundColor: c.glassChip,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
       minWidth: 84,
+      minHeight: 48,
       gap: 3,
     },
     deviceTabActive: {
-      backgroundColor: c.primarySoft,
-      borderColor: c.primary,
+      backgroundColor: c.accentPill,
+      borderColor: c.accentPillBorder,
     },
     deviceTabText: {
       fontSize: 11,
@@ -2042,8 +2058,9 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "700",
       paddingHorizontal: 6,
       paddingVertical: 1,
-      borderRadius: 8,
+      borderRadius: 10,
       overflow: "hidden",
+      fontVariant: ["tabular-nums"],
     },
     deviceTabDone: {
       backgroundColor: c.successSoft,
@@ -2060,20 +2077,23 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       justifyContent: "center",
       backgroundColor: c.successAction,
-      borderRadius: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 52,
       paddingVertical: 16,
       alignItems: "center",
       shadowColor: c.success,
-      shadowOffset: { width: 0, height: 6 },
+      shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.25,
-      shadowRadius: 10,
-      elevation: 6,
+      shadowRadius: 6,
+      elevation: 3,
       marginTop: 16,
     },
     submitButtonText: {
       color: c.onGradient,
       fontSize: 15,
-      fontWeight: "bold",
+      fontWeight: "700",
     },
     submitButtonDisabled: {
       opacity: 0.7,
@@ -2083,7 +2103,10 @@ const makeStyles = (c: ThemeColors) =>
       justifyContent: "center",
       alignItems: "center",
       backgroundColor: c.successAction,
-      borderRadius: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 52,
       paddingVertical: 16,
       marginTop: 16,
       opacity: 0.8,
@@ -2091,6 +2114,6 @@ const makeStyles = (c: ThemeColors) =>
     completedFooterText: {
       color: c.onGradient,
       fontSize: 15,
-      fontWeight: "bold",
+      fontWeight: "700",
     },
   });

@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { useAnimatedValue } from "@/hooks/use-animated-value";
 import {
   createContext,
@@ -27,7 +27,8 @@ interface ToastProps {
 export function Toast({ visible, message, type, duration = 3000, onHide }: ToastProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, insets, isDark), [colors, insets, isDark]);
   const fadeAnim = useAnimatedValue(0);
   const translateY = useAnimatedValue(-100);
 
@@ -175,24 +176,27 @@ export function useToast() {
   return ctx;
 }
 
-const makeStyles = (c: ThemeColors, insets?: { top: number }) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, insets?: { top: number }, isDark: boolean = false) => StyleSheet.create({
   // Toast Styles
   toastContainer: {
     position: "absolute",
     top: (insets?.top ?? 20) + 8,
     left: 20,
     right: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 12,
+    minHeight: 52,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     flexDirection: "row",
     alignItems: "center",
     zIndex: 99999,
     elevation: 10,
-    shadowColor: "#000",
+    shadowColor: c.shadowGlass,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: isDark ? 0.45 : 0.25,
+    shadowRadius: 10,
   },
   toastIcon: {
     color: c.onGradient,
@@ -202,14 +206,16 @@ const makeStyles = (c: ThemeColors, insets?: { top: number }) => StyleSheet.crea
   toastMessage: {
     color: c.onGradient,
     fontSize: 14,
-    fontWeight: "500",
+    fontWeight: "600",
     flex: 1,
   },
   toastIconContainer: {
-    backgroundColor: "rgba(255,255,255,0.2)",
-    width: 25,
-    height: 25,
-    borderRadius: 12,
+    backgroundColor: c.glassOnGradient,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,

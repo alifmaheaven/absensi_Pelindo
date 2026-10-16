@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { useToast } from "@/components/ui/toast";
 import InteractiveButton from "@/components/ui/InteractiveButton";
@@ -33,7 +33,8 @@ const APP_VERSION = Constants.expoConfig?.version ?? "unknown";
 
 export default function LoginScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -142,7 +143,11 @@ export default function LoginScreen() {
     <View style={styles.container}>
       {/* Header Gradient */}
       <LinearGradient
-        colors={[colors.primaryAction, colors.primaryActionEnd]}
+        colors={
+          isDark
+            ? ["#050A14", "#0D1E38", "#070D18"]
+            : ["#163578", "#2563EB", "#1D4ED8"]
+        }
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.headerGradient}
@@ -300,14 +305,14 @@ export default function LoginScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: c.background,
   },
 
   headerGradient: {
-    height: 180,
+    height: 220,
     width: "100%",
     position: "absolute",
     top: 0,
@@ -322,9 +327,16 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   formContainer: {
     flex: 1,
-    backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: c.glassSheet,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
+    shadowColor: "#081730",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: isDark ? 0.40 : 0.08,
+    shadowRadius: 24,
+    elevation: 8,
     paddingHorizontal: 24,
     paddingTop: 40,
     paddingBottom: 24,
@@ -353,13 +365,13 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    borderRadius: 12,
+    borderColor: c.glassBorder,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
-    color: c.text,
-    backgroundColor: c.inputBg,
+    fontSize: 15,
+    color: c.textStrong,
+    backgroundColor: c.glassCardSubtle,
   },
   captchaContainer: {
     marginBottom: 20,

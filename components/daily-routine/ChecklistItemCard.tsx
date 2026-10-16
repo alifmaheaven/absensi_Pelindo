@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { CheckRounded, DocumentCheck, ImageIcon } from "@/components/icon";
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { IDailyRoutineItem } from "@/types";
 import {
   EvidenceType,
@@ -106,7 +106,8 @@ export default function ChecklistItemCard({
   getImageUrl,
 }: ChecklistItemCardProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const isLoading = loadingEvidence ?? loadingImage ?? false;
   const effectiveEvidenceType = resolveEvidenceType(
@@ -201,7 +202,7 @@ export default function ChecklistItemCard({
             ]}
           >
             {state.is_checked && (
-              <CheckRounded width={16} height={16} color="#fff" />
+              <CheckRounded width={16} height={16} color={colors.onGradient} />
             )}
           </View>
         </TouchableOpacity>
@@ -371,7 +372,7 @@ export default function ChecklistItemCard({
                                     {isLoading ? (
                                       <ActivityIndicator
                                         size="small"
-                                        color="#fff"
+                                        color={colors.onGradient}
                                       />
                                     ) : (
                                       <Text style={styles.retryButtonText}>
@@ -837,7 +838,7 @@ export default function ChecklistItemCard({
                     fontSize: 11,
                     textAlign: "right",
                     marginTop: 4,
-                    color: state.notes.length >= 2000 ? "#ef4444" : "#f59e0b",
+                    color: state.notes.length >= 2000 ? colors.dangerText : colors.warningText,
                     fontWeight: state.notes.length >= 2000 ? "700" : "500",
                   }}
                 >
@@ -852,15 +853,20 @@ export default function ChecklistItemCard({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     checklistItem: {
-      backgroundColor: c.card,
-      borderRadius: 16,
+      backgroundColor: c.glassCard,
+      borderRadius: 20,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
       padding: 16,
       marginBottom: 12,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 10,
+      elevation: 2,
     },
     checklistItemChecked: {
       backgroundColor: c.successSoft,
@@ -877,12 +883,12 @@ const makeStyles = (c: ThemeColors) =>
     checkbox: {
       width: 24,
       height: 24,
-      borderRadius: 6,
+      borderRadius: 8,
       borderWidth: 2,
       borderColor: c.borderStrong,
       justifyContent: "center",
       alignItems: "center",
-      backgroundColor: c.surface,
+      backgroundColor: c.glassCardSubtle,
     },
     checkboxChecked: {
       backgroundColor: c.successAction,
@@ -924,20 +930,20 @@ const makeStyles = (c: ThemeColors) =>
     // Requirement Badge before checked
     requirementBadge: {
       paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 6,
+      paddingVertical: 3,
+      borderRadius: 12,
       borderWidth: 1,
     },
     badgePhoto: {
-      backgroundColor: c.primarySoft,
-      borderColor: c.primary,
+      backgroundColor: c.accentPill,
+      borderColor: c.accentPillBorder,
     },
     badgeFile: {
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
+      backgroundColor: c.glassChip,
+      borderColor: c.glassBorder,
     },
     badgeBoth: {
-      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      backgroundColor: c.successSoft,
       borderColor: c.success,
     },
     requirementBadgeText: {
@@ -959,7 +965,7 @@ const makeStyles = (c: ThemeColors) =>
       marginTop: 12,
       paddingTop: 12,
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: c.glassBorderSubtle,
     },
 
     // Evidence Section
@@ -970,35 +976,35 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-      backgroundColor: c.surface,
-      borderRadius: 12,
+      backgroundColor: c.glassCardSubtle,
+      borderRadius: 14,
       padding: 10,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
     },
     evidenceFailedBox: {
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
-      backgroundColor: c.dangerSoft,
-      borderRadius: 12,
+      backgroundColor: c.dangerGlass,
+      borderRadius: 14,
       padding: 10,
       borderWidth: 1,
-      borderColor: c.danger,
+      borderColor: c.dangerGlassBorder,
     },
     thumbnailWrapper: {
       width: 64,
       height: 64,
-      borderRadius: 10,
+      borderRadius: 12,
       overflow: "hidden",
-      backgroundColor: c.border,
+      backgroundColor: c.insetFill,
       justifyContent: "center",
       alignItems: "center",
     },
     evidenceThumbnail: {
       width: 64,
       height: 64,
-      borderRadius: 10,
+      borderRadius: 12,
     },
     evidenceThumbnailFailed: {
       borderWidth: 2,
@@ -1007,15 +1013,15 @@ const makeStyles = (c: ThemeColors) =>
     pdfThumbnail: {
       width: 64,
       height: 64,
-      borderRadius: 10,
-      backgroundColor: c.primarySoft,
+      borderRadius: 12,
+      backgroundColor: c.accentSoft,
       justifyContent: "center",
       alignItems: "center",
     },
     pdfThumbnailFailed: {
       width: 64,
       height: 64,
-      borderRadius: 10,
+      borderRadius: 12,
       backgroundColor: c.dangerSoft,
       justifyContent: "center",
       alignItems: "center",
@@ -1099,22 +1105,24 @@ const makeStyles = (c: ThemeColors) =>
     },
     retryButton: {
       backgroundColor: c.warningAction,
-      minHeight: 44,
-      paddingHorizontal: 12,
-      borderRadius: 8,
+      minHeight: 48,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
       justifyContent: "center",
       alignItems: "center",
     },
     retryButtonText: {
       fontSize: 12,
       fontWeight: "700",
-      color: "#ffffff",
+      color: c.onGradient,
     },
     failedBadge: {
       backgroundColor: c.dangerSoft,
       paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 4,
+      paddingVertical: 3,
+      borderRadius: 12,
       alignSelf: "flex-start",
     },
     failedBadgeText: {
@@ -1128,18 +1136,18 @@ const makeStyles = (c: ThemeColors) =>
       gap: 8,
     },
     pickerButton: {
-      minHeight: 44,
-      borderRadius: 12,
+      minHeight: 48,
+      borderRadius: 14,
       paddingVertical: 12,
       paddingHorizontal: 14,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      borderWidth: 1.5,
+      borderWidth: 1,
     },
     pickerButtonPhoto: {
-      backgroundColor: c.primarySoft,
-      borderColor: c.primary,
+      backgroundColor: c.accentPill,
+      borderColor: c.accentPillBorder,
     },
     pickerButtonPhotoText: {
       fontSize: 13,
@@ -1147,8 +1155,8 @@ const makeStyles = (c: ThemeColors) =>
       color: c.primary,
     },
     pickerButtonFile: {
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
+      backgroundColor: c.glassCardSubtle,
+      borderColor: c.glassBorder,
     },
     pickerButtonFileText: {
       fontSize: 13,
@@ -1200,8 +1208,8 @@ const makeStyles = (c: ThemeColors) =>
       marginTop: 8,
     },
     pickerButtonGallery: {
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
+      backgroundColor: c.glassCardSubtle,
+      borderColor: c.glassBorder,
     },
     pickerButtonGalleryText: {
       fontSize: 13,
@@ -1214,21 +1222,21 @@ const makeStyles = (c: ThemeColors) =>
       marginTop: 6,
     },
     notesInput: {
-      backgroundColor: c.inputBg,
-      borderRadius: 8,
+      backgroundColor: c.glassCardSubtle,
+      borderRadius: 14,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
       paddingVertical: 10,
       paddingHorizontal: 12,
       fontSize: 13,
-      color: c.text,
+      color: c.textStrong,
       minHeight: 80,
       textAlignVertical: "top",
     },
     notesContainerReadOnly: {
       marginTop: 6,
-      backgroundColor: c.surface,
-      borderRadius: 8,
+      backgroundColor: c.glassCardSubtle,
+      borderRadius: 14,
       padding: 10,
       borderLeftWidth: 3,
       borderLeftColor: c.primary,

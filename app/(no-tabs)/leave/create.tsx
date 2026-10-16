@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon } from "@/components/icon";
 import DatePicker from "@/components/ui/date-picker";
 import { useToast } from "@/components/ui/toast";
@@ -45,7 +45,8 @@ const imageUploadService = {
 
 export default function LeaveScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
   const { user } = useAuthStore();
@@ -293,7 +294,7 @@ export default function LeaveScreen() {
                 onPress={() => router.back()}
                 style={styles.backButton}
               >
-                <ArrowLeft color="#fff" />
+                <ArrowLeft color={colors.onGradient} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Izin/Cuti</Text>
               <View style={styles.notificationButtonPlaceholder}>
@@ -325,6 +326,7 @@ export default function LeaveScreen() {
                 <Ionicons
                   name={attendanceDropdownOpen ? "chevron-up" : "chevron-down"}
                   size={18}
+                  color={colors.textMuted}
                 />
               </TouchableOpacity>
 
@@ -493,7 +495,7 @@ export default function LeaveScreen() {
                   )}
                   {loadingImage && (
                     <View style={styles.imageLoadingOverlay}>
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={colors.onGradient} />
                     </View>
                   )}
                 </View>
@@ -534,7 +536,7 @@ export default function LeaveScreen() {
               {loadingSubmit ? (
                 <ActivityIndicator
                   size="small"
-                  color="#fff"
+                  color={colors.onGradient}
                   style={{ marginRight: 8 }}
                 />
               ) : null}
@@ -597,7 +599,7 @@ export default function LeaveScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   headerGradient: {
     height: 150, // Tinggi gradient
     paddingBottom: 30,
@@ -609,68 +611,95 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 10,
   },
   backButton: {
-    padding: 8,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: c.glassOnGradient,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.onGradient,
   },
   notificationButtonPlaceholder: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
 
   contentContainer: {
     flex: 1,
     marginTop: -40, // Overlap dengan header
-    backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: c.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
     overflow: "hidden",
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 25,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 32,
   },
 
   // Section Title
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.2,
     color: c.textStrong,
     marginBottom: 12,
   },
 
   dropdownWrapper: { position: "relative", marginBottom: 24 },
   selectInputDropdown: {
+    backgroundColor: c.glassCardSubtle,
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    borderRadius: 10,
-    padding: 12,
+    borderColor: c.glassBorder,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
   },
 
   dropdown: {
     position: "absolute",
-    top: 50,
+    top: 54,
     width: "100%",
-    backgroundColor: c.card,
-    borderRadius: 10,
+    backgroundColor: c.glassSheet,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     zIndex: 10,
+    overflow: "hidden",
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   placeholder: { color: c.textMuted },
-  value: { color: c.textStrong },
-  option: { padding: 12, flexDirection: "row", alignItems: "center" },
-  optionText: { fontSize: 14 },
+  value: { color: c.textStrong, fontWeight: "600" },
+  option: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  optionText: { fontSize: 14, color: c.textStrong },
 
   // Date Input & Range (R-LZ-3)
   datePickerRow: {
@@ -696,12 +725,15 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginBottom: 6,
   },
   dateContainer: {
-    backgroundColor: c.inputBg,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     marginBottom: 12,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    minHeight: 48,
+    justifyContent: "center",
   },
   dateRow: {
     flexDirection: "row",
@@ -710,17 +742,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   dateValue: {
     fontSize: 14,
-    color: c.text,
+    fontWeight: "600",
+    color: c.textStrong,
+    fontVariant: ["tabular-nums"],
   },
   datePlaceholder: {
     fontSize: 14,
     color: c.textMuted,
   },
   previewContainer: {
-    backgroundColor: c.primarySoft,
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: c.primary,
-    borderRadius: 14,
+    borderColor: c.accentSoftBorder,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 20,
   },
@@ -754,17 +788,17 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
 
   // Notes
   notesContainer: {
-    backgroundColor: c.inputBg,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     marginBottom: 24,
   },
   notesInput: {
     padding: 16,
     height: 100,
     fontSize: 14,
-    color: c.text,
+    color: c.textStrong,
   },
 
   // Image Upload
@@ -780,7 +814,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: c.border,
+    backgroundColor: c.glassCardSubtle,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
   },
   imagePreview: {
     width: "100%",
@@ -797,7 +833,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: c.onGradient,
+    borderColor: c.glassOnGradientBorder,
   },
   removeImageText: {
     color: c.onGradient,
@@ -809,12 +845,13 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     borderRadius: 16,
     padding: 16,
+    minHeight: 52,
     marginBottom: 30,
     borderStyle: "dashed",
-    backgroundColor: c.inputBg,
+    backgroundColor: c.glassCardSubtle,
   },
   uploadButtonIcon: {
     marginRight: 8,
@@ -831,29 +868,32 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: c.primaryAction, // Modern blue
-    borderRadius: 16,
-    paddingVertical: 18,
+    backgroundColor: c.primaryAction,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    borderRadius: 14,
+    minHeight: 52,
+    paddingVertical: 14,
     alignItems: "center",
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   submitButtonText: {
     color: c.onGradient,
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
     textTransform: "capitalize",
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
   },
   submitButtonDisabled: {
     opacity: 0.7,
   },
   uploadButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: c.surface,
+    backgroundColor: c.glassCardSubtle,
   },
   imageLoadingOverlay: {
     position: "absolute",
@@ -861,7 +901,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: c.overlay,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -873,9 +913,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: c.glassSheet,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
     padding: 24,
     paddingBottom: 40,
   },
@@ -889,28 +931,44 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     textAlign: "center",
     marginBottom: 24,
     color: c.textStrong,
   },
   modalButtonPrimary: {
     backgroundColor: c.primaryAction,
-    padding: 18,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    minHeight: 52,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   modalButtonTextPrimary: {
     color: c.onGradient,
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: c.surface,
-    padding: 18,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    minHeight: 52,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
   },
   modalButtonTextCancel: {
     color: c.textSecondary,

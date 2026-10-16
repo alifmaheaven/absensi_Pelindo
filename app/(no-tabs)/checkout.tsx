@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { useToast } from "@/components/ui/toast";
@@ -120,7 +120,8 @@ async function uploadSingleCheckoutEvidence(
 
 export default function CheckoutScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
   const { user } = useAuthStore();
@@ -567,7 +568,7 @@ export default function CheckoutScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Kembali"
               >
-                <ArrowLeft color="#fff" />
+                <ArrowLeft color={colors.onGradient} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Check Out</Text>
               <View style={styles.notificationButtonPlaceholder}>
@@ -847,7 +848,7 @@ export default function CheckoutScreen() {
                       )}
                       {loadingImage && (
                         <View style={styles.imageLoadingOverlay}>
-                          <ActivityIndicator size="small" color="#fff" />
+                          <ActivityIndicator size="small" color={colors.onGradient} />
                         </View>
                       )}
                     </View>
@@ -890,7 +891,7 @@ export default function CheckoutScreen() {
               {loadingSubmit ? (
                 <ActivityIndicator
                   size="small"
-                  color="#fff"
+                  color={colors.onGradient}
                   style={{ marginRight: 8 }}
                 />
               ) : null}
@@ -950,83 +951,100 @@ export default function CheckoutScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+// Bayangan kartu kaca (resep Liquid Glass) — nilai numerik saja yang bercabang isDark.
+const glassShadow = (c: ThemeColors, isDark: boolean) => ({
+  shadowColor: c.shadowGlass,
+  shadowOffset: { width: 0, height: 4 },
+  shadowRadius: 10,
+  shadowOpacity: isDark ? 0.25 : 0.05,
+  elevation: 2,
+});
+// Bayangan tombol berisi biru.
+const actionShadow = (c: ThemeColors) => ({
+  shadowColor: c.primary,
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+  elevation: 4,
+});
+
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   headerGradient: { height: 150, paddingBottom: 30 },
   headerSafeArea: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 10 },
-  backButton: { padding: 8, borderRadius: 20 },
-  headerTitle: { fontSize: 20, fontWeight: "bold", color: c.onGradient },
-  notificationButtonPlaceholder: { width: 40, height: 40 },
-  contentContainer: { flex: 1, marginTop: -40, backgroundColor: c.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: "hidden" },
-  scrollContent: { padding: 20, paddingTop: 25 },
-  mapContainer: { height: 180, borderRadius: 20, overflow: "hidden", marginBottom: 24, backgroundColor: c.surface, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.glassOnGradient, borderWidth: 1, borderColor: c.glassOnGradientBorder, justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 20, fontWeight: "700", letterSpacing: -0.3, color: c.onGradient },
+  notificationButtonPlaceholder: { width: 44, height: 44 },
+  contentContainer: { flex: 1, marginTop: -40, backgroundColor: c.background, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTopWidth: 1, borderTopColor: c.glassSheetBorder, overflow: "hidden" },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 32 },
+  mapContainer: { height: 180, borderRadius: 18, overflow: "hidden", marginBottom: 16, backgroundColor: c.glassCard, borderWidth: 1, borderColor: c.glassBorder, ...glassShadow(c, isDark) },
   map: { width: "100%", height: "100%" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 10, color: c.textSecondary },
+  loadingText: { marginTop: 10, color: c.textSecondary, textAlign: "center", paddingHorizontal: 16 },
   // Keluarga locationDenied* (Emoji/Title/Text) DIHAPUS ALL — idem checkin.tsx.
-  retryButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 10, minHeight: 48 },
-  retryButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
-  settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48 },
+  retryButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1, borderColor: c.glassOnGradientBorder, marginBottom: 10, minHeight: 48, alignItems: "center", justifyContent: "center", ...actionShadow(c) },
+  retryButtonText: { color: c.onGradient, fontWeight: "700", fontSize: 14 },
+  settingsButton: { paddingVertical: 10, paddingHorizontal: 24, minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: c.glassBorder, backgroundColor: c.glassCardSubtle, alignItems: "center", justifyContent: "center" },
   settingsButtonText: { color: c.primary, fontWeight: "600", fontSize: 14 },
   // GPS-01 — kartu diagnosis di luar kontainer peta; kontras tinggi (c.text*).
-  locationFailureCard: { backgroundColor: c.surface, borderColor: c.danger, borderWidth: 1, borderRadius: 16, padding: 18, marginBottom: 24 },
-  locationFailureTitle: { fontSize: 16, fontWeight: "bold", color: c.textStrong, marginBottom: 8 },
+  locationFailureCard: { backgroundColor: c.dangerGlass, borderColor: c.dangerGlassBorder, borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 16, ...glassShadow(c, isDark) },
+  locationFailureTitle: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2, color: c.textStrong, marginBottom: 8 },
   locationFailureBody: { fontSize: 14, lineHeight: 20, color: c.text, marginBottom: 12 },
   locationFailureSteps: { marginBottom: 12, gap: 4 },
   locationFailureStep: { fontSize: 14, lineHeight: 20, color: c.text },
   locationFailureActions: { gap: 8 },
-  enableServicesButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, minHeight: 48, alignSelf: "flex-start" },
-  enableServicesButtonText: { color: c.onGradient, fontWeight: "bold", fontSize: 14 },
-  locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
-  locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600" },
-  sectionTitle: { fontSize: 15, fontWeight: "bold", color: c.textStrong, marginBottom: 10 },
+  enableServicesButton: { backgroundColor: c.primaryAction, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 14, borderWidth: 1, borderColor: c.glassOnGradientBorder, minHeight: 48, alignSelf: "flex-start", alignItems: "center", justifyContent: "center", ...actionShadow(c) },
+  enableServicesButtonText: { color: c.onGradient, fontWeight: "700", fontSize: 14 },
+  locationOverlay: { position: "absolute", bottom: 10, left: 10, right: 10, backgroundColor: c.glassCard, borderColor: c.glassBorder, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 14, ...glassShadow(c, isDark) },
+  locationOverlayText: { fontSize: 10, color: c.textStrong, textAlign: "center", fontWeight: "600", fontVariant: ["tabular-nums"] },
+  sectionTitle: { fontSize: 15, fontWeight: "700", letterSpacing: -0.2, color: c.textStrong, marginBottom: 10 },
   requiredSectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
   requiredBadge: { fontSize: 12, fontWeight: "700", color: c.danger },
-  locationOption: { flexDirection: "row", padding: 16, borderWidth: 1.5, borderColor: c.border, borderRadius: 16, marginBottom: 20, backgroundColor: c.card },
-  locationOptionSelected: { borderColor: c.primary, backgroundColor: c.primarySoft },
-  locationIconContainer: { marginRight: 14, marginTop: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: c.primarySoft, justifyContent: "center", alignItems: "center" },
+  locationOption: { flexDirection: "row", padding: 14, borderWidth: 1, borderColor: c.glassBorder, borderRadius: 16, marginBottom: 14, backgroundColor: c.glassCard, ...glassShadow(c, isDark) },
+  locationOptionSelected: { borderColor: c.primary, backgroundColor: c.accentSoft },
+  locationIconContainer: { marginRight: 14, marginTop: 2, width: 40, height: 40, borderRadius: 12, backgroundColor: c.accentSoft, borderWidth: 1, borderColor: c.accentSoftBorder, justifyContent: "center", alignItems: "center" },
   locationTextContainer: { flex: 1 },
-  locationTitle: { fontSize: 14, fontWeight: "bold", color: c.text, marginBottom: 4 },
-  locationCoords: { fontSize: 10, color: c.textMuted },
-  readOnlyCard: { backgroundColor: c.surface, borderRadius: 14, borderWidth: 1, borderColor: c.borderStrong, padding: 14, marginBottom: 20 },
+  locationTitle: { fontSize: 14, fontWeight: "700", color: c.textStrong, marginBottom: 4 },
+  locationCoords: { fontSize: 10, color: c.textMuted, fontVariant: ["tabular-nums"] },
+  readOnlyCard: { backgroundColor: c.glassCardSubtle, borderRadius: 14, borderWidth: 1, borderColor: c.glassBorder, padding: 14, marginBottom: 20 },
   readOnlyText: { fontSize: 13, color: c.textSecondary, lineHeight: 18 },
-  notesContainer: { backgroundColor: c.inputBg, borderRadius: 16, borderWidth: 1, borderColor: c.border, marginBottom: 20 },
-  notesInput: { padding: 14, height: 80, fontSize: 14, color: c.text },
+  notesContainer: { backgroundColor: c.glassCardSubtle, borderRadius: 14, borderWidth: 1, borderColor: c.glassBorder, marginBottom: 20 },
+  notesInput: { padding: 14, height: 80, fontSize: 14, color: c.textStrong },
   imageGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },
-  imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: c.border },
+  imagePreviewContainer: { width: 100, height: 100, borderRadius: 16, overflow: "hidden", position: "relative", backgroundColor: c.glassCardSubtle, borderWidth: 1, borderColor: c.glassBorder },
   imagePreview: { width: "100%", height: "100%" },
-  imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "rgba(30, 144, 255, 0.88)", paddingVertical: 4, flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  imageLockedBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: c.primaryAction, paddingVertical: 4, flexDirection: "row", alignItems: "center", justifyContent: "center" },
   imageLockedText: { color: c.onGradient, fontSize: 9, fontWeight: "700" },
-  emptyEvidenceCard: { backgroundColor: c.inputBg, borderRadius: 12, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: c.border },
+  emptyEvidenceCard: { backgroundColor: c.glassCardSubtle, borderRadius: 14, padding: 14, alignItems: "center", marginBottom: 20, borderWidth: 1, borderColor: c.glassBorder },
   emptyEvidenceText: { fontSize: 12, color: c.textMuted },
   removeImageButton: { position: "absolute", top: 6, right: 6, backgroundColor: c.overlay, width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: c.onGradient },
   removeImageText: { color: c.onGradient, fontSize: 10, fontWeight: "bold" },
-  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: c.primary, borderRadius: 16, padding: 16, marginBottom: 24, borderStyle: "dashed", backgroundColor: c.primarySoft },
+  uploadButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: c.accentPillBorder, borderRadius: 14, padding: 16, minHeight: 52, marginBottom: 24, borderStyle: "dashed", backgroundColor: c.accentSoft },
   uploadButtonIcon: { marginRight: 8, fontSize: 18 },
   uploadButtonText: { fontSize: 14, color: c.primary, fontWeight: "700" },
-  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: c.primaryAction, borderRadius: 16, paddingVertical: 18, alignItems: "center", shadowColor: "#3B82F6", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
-  submitButtonText: { color: c.onGradient, fontSize: 16, fontWeight: "bold", textTransform: "capitalize", letterSpacing: 0.5 },
+  submitButton: { display: "flex", flexDirection: "row", justifyContent: "center", backgroundColor: c.primaryAction, borderRadius: 14, borderWidth: 1, borderColor: c.glassOnGradientBorder, paddingVertical: 16, minHeight: 52, alignItems: "center", ...actionShadow(c) },
+  submitButtonText: { color: c.onGradient, fontSize: 16, fontWeight: "700", textTransform: "capitalize", letterSpacing: 0.3 },
   submitButtonDisabled: { opacity: 0.7 },
-  uploadButtonDisabled: { opacity: 0.7, backgroundColor: c.surface },
-  imageLoadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  uploadButtonDisabled: { opacity: 0.7, backgroundColor: c.glassCardSubtle },
+  imageLoadingOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.overlay, justifyContent: "center", alignItems: "center" },
   modalOverlay: { flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end" },
-  modalContent: { backgroundColor: c.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40 },
-  modalIndicator: { width: 40, height: 4, backgroundColor: c.border, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
-  modalTitle: { fontSize: 18, fontWeight: "bold", textAlign: "center", marginBottom: 24, color: c.textStrong },
-  modalButtonPrimary: { backgroundColor: c.primaryAction, padding: 18, borderRadius: 16, alignItems: "center", marginBottom: 12 },
-  modalButtonTextPrimary: { color: c.onGradient, fontWeight: "bold", fontSize: 15 },
-  modalButtonCancel: { backgroundColor: c.surface, padding: 18, borderRadius: 16, alignItems: "center" },
+  modalContent: { backgroundColor: c.glassSheet, borderTopLeftRadius: 28, borderTopRightRadius: 28, borderTopWidth: 1, borderTopColor: c.glassSheetBorder, padding: 24, paddingBottom: 40 },
+  modalIndicator: { width: 40, height: 4, backgroundColor: c.borderStrong, borderRadius: 2, alignSelf: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 18, fontWeight: "700", letterSpacing: -0.3, textAlign: "center", marginBottom: 24, color: c.textStrong },
+  modalButtonPrimary: { backgroundColor: c.primaryAction, padding: 16, minHeight: 52, borderRadius: 14, borderWidth: 1, borderColor: c.glassOnGradientBorder, alignItems: "center", justifyContent: "center", marginBottom: 12, ...actionShadow(c) },
+  modalButtonTextPrimary: { color: c.onGradient, fontWeight: "700", fontSize: 15 },
+  modalButtonCancel: { backgroundColor: c.glassCardSubtle, padding: 16, minHeight: 52, borderRadius: 14, borderWidth: 1, borderColor: c.glassBorder, alignItems: "center", justifyContent: "center" },
   modalButtonTextCancel: { color: c.textSecondary, fontWeight: "600", fontSize: 15 },
-  emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: c.card, borderRadius: 16, borderWidth: 1.5, borderColor: c.border, marginBottom: 24, borderStyle: "dashed" },
+  emptyStateContainer: { alignItems: "center", justifyContent: "center", padding: 30, backgroundColor: c.glassCard, borderRadius: 20, borderWidth: 1, borderColor: c.glassBorder, marginBottom: 24, borderStyle: "dashed" },
   emptyStateEmoji: { fontSize: 40, marginBottom: 10 },
-  emptyStateText: { fontSize: 16, fontWeight: "bold", color: c.text, textAlign: "center", marginBottom: 4 },
+  emptyStateText: { fontSize: 16, fontWeight: "700", color: c.textStrong, textAlign: "center", marginBottom: 4 },
   multiSessionBanner: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: c.warningSoft,
-    borderColor: c.warning,
+    borderColor: c.warningBorder,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 16,
     gap: 10,
@@ -1045,22 +1063,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
   },
   completedCard: {
-    backgroundColor: c.card,
-    borderRadius: 20,
+    backgroundColor: c.glassCard,
+    borderRadius: 24,
     padding: 24,
     width: "100%",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: c.borderStrong,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    ...glassShadow(c, isDark),
   },
   completedCardTitle: {
     fontSize: 18,
     fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.textStrong,
     marginBottom: 8,
     textAlign: "center",
@@ -1074,12 +1089,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   completedDetailBox: {
     width: "100%",
-    backgroundColor: c.surface,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     gap: 8,
   },
   completedDetailRow: {
@@ -1095,16 +1110,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: c.textStrong,
+    fontVariant: ["tabular-nums"],
   },
   completedBackButton: {
     backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
+    ...actionShadow(c),
   },
   completedBackButtonText: {
     color: c.onGradient,

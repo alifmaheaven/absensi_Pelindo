@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 
 export interface ScreenContainerProps {
   title?: string;
@@ -46,7 +47,8 @@ export default function ScreenContainer({
   const colors = useThemeColors();
   const isDark = useIsDarkTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const tabInset = useTabBarInset();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const handleRefresh = () => {
     if (!onRefresh) return;
@@ -102,7 +104,7 @@ export default function ScreenContainer({
             {
               paddingHorizontal: contentPadding,
               paddingTop: hasHeader ? 12 : Math.max(insets.top, 12),
-              paddingBottom: 24 + Math.max(insets.bottom, 16),
+              paddingBottom: 24 + (tabInset || Math.max(insets.bottom, 16)),
             },
             contentContainerStyle,
           ]}
@@ -114,7 +116,7 @@ export default function ScreenContainer({
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
                 colors={[colors.primary]}
-                tintColor={isDark ? "#38bdf8" : colors.primary}
+                tintColor={colors.refreshTint}
               />
             ) : undefined
           }
@@ -128,7 +130,7 @@ export default function ScreenContainer({
             {
               paddingHorizontal: contentPadding,
               paddingTop: hasHeader ? 12 : Math.max(insets.top, 12),
-              paddingBottom: 24 + Math.max(insets.bottom, 16),
+              paddingBottom: 24 + (tabInset || Math.max(insets.bottom, 16)),
             },
             contentContainerStyle,
           ]}
@@ -140,7 +142,7 @@ export default function ScreenContainer({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -151,9 +153,14 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      backgroundColor: c.background,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
+      backgroundColor: c.glassBar,
+      borderBottomWidth: 1,
+      borderBottomColor: c.glassBorder,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
     },
     headerLeft: {
       flexDirection: "row",
@@ -161,11 +168,15 @@ const makeStyles = (c: ThemeColors) =>
       flex: 1,
     },
     backButton: {
-      minWidth: 44,
-      minHeight: 44,
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: c.insetFill,
+      borderWidth: 1,
+      borderColor: c.insetBorder,
       justifyContent: "center",
       alignItems: "center",
-      marginRight: 8,
+      marginRight: 10,
     },
     titleWrap: {
       flex: 1,
@@ -173,12 +184,14 @@ const makeStyles = (c: ThemeColors) =>
     titleText: {
       fontSize: 18,
       fontWeight: "700",
+      letterSpacing: -0.3,
       color: c.textStrong,
     },
     subtitleText: {
-      fontSize: 13,
+      fontSize: 12.5,
       color: c.textSecondary,
-      marginTop: 3,
+      marginTop: 2,
+      fontWeight: "500",
     },
     rightActionWrap: {
       marginLeft: 12,

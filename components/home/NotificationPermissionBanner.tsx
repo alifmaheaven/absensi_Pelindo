@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
@@ -17,7 +17,8 @@ export default function NotificationPermissionBanner({
   onDismiss,
 }: NotificationPermissionBannerProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const handleOpenSettings = async () => {
     try {
@@ -60,22 +61,34 @@ export default function NotificationPermissionBanner({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     banner: {
       flexDirection: "row",
       alignItems: "flex-start",
       backgroundColor: c.warningSoft,
-      borderColor: c.warning,
+      borderColor: c.warningBorder,
       borderWidth: 1,
-      borderRadius: 12,
+      borderRadius: 20,
       padding: 12,
       marginHorizontal: 16,
       marginTop: 10,
       marginBottom: 6,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 10,
+      elevation: 2,
     },
     iconWrap: {
-      marginTop: 2,
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.glassCardSubtle,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
       marginRight: 10,
     },
     textWrap: {
@@ -85,6 +98,7 @@ const makeStyles = (c: ThemeColors) =>
     title: {
       fontSize: 14,
       fontWeight: "700",
+      letterSpacing: -0.2,
       color: c.textStrong,
       marginBottom: 2,
     },
@@ -96,11 +110,13 @@ const makeStyles = (c: ThemeColors) =>
     },
     settingButton: {
       alignSelf: "flex-start",
-      paddingVertical: 5,
-      paddingHorizontal: 12,
-      borderRadius: 6,
-      backgroundColor: c.card,
-      borderColor: c.borderStrong,
+      minHeight: 36,
+      justifyContent: "center",
+      paddingVertical: 6,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      backgroundColor: c.glassCardSubtle,
+      borderColor: c.glassBorder,
       borderWidth: 1,
     },
     settingButtonText: {
@@ -109,6 +125,13 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textStrong,
     },
     closeButton: {
-      padding: 2,
+      width: 32,
+      height: 32,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: c.insetFill,
+      borderWidth: 1,
+      borderColor: c.insetBorder,
     },
   });

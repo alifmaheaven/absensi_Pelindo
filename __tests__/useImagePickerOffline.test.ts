@@ -150,7 +150,7 @@ describe("useImagePicker - Offline Photo Preservation (MOB-01 / P0-7)", () => {
       async () => "file:///document/attendance-evidence/online-durable.jpg",
     );
 
-    const { result } = renderHook(() => useImagePicker());
+    const { result } = renderHook(() => useImagePicker("attendance"));
 
     await act(async () => {
       await result.current.pickImage("camera", mockUploadService);

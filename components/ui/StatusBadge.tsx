@@ -114,18 +114,18 @@ const makeStyles = (c: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      borderRadius: 6,
+      borderRadius: 12,
       borderWidth: 1,
       alignSelf: "flex-start",
     },
     badgeSmall: {
-      paddingVertical: 2,
-      paddingHorizontal: 6,
+      paddingVertical: 3,
+      paddingHorizontal: 8,
       gap: 4,
     },
     badgeMedium: {
-      paddingVertical: 3,
-      paddingHorizontal: 8,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
       gap: 5,
     },
     iconContainer: {
@@ -134,6 +134,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     text: {
       fontWeight: "700",
+      letterSpacing: 0.2,
     },
     textSmall: {
       fontSize: 11,

@@ -127,12 +127,15 @@ export default function AttendanceCard({
   const statusColors = mapTimeToColor(time, type, shift, colors, shiftDate);
   const formattedTime = getHourMinute(time);
 
-  // Default styles based on type (fallback if time is null/empty)
-  // Khusus overdue pada checkout belum selesai: tampilkan styling alert
+  // Liquid Glass surface colors with sapphire tint
   const isOverdueAlert = isOverdue && type === "checkout" && !time;
-  const backgroundColor = time ? statusColors.container : isOverdueAlert ? colors.dangerSoft : colors.surface;
+  const backgroundColor = time
+    ? statusColors.container
+    : isOverdueAlert
+    ? colors.dangerSoft
+    : (colors.glassCard || colors.card || colors.surface);
   const textColor = time ? statusColors.text : isOverdueAlert ? colors.dangerText : colors.text;
-  const buttonColor = time ? statusColors.button : isOverdueAlert ? colors.dangerAction : colors.primaryAction;
+  const buttonColor = time ? statusColors.button : isOverdueAlert ? colors.dangerAction : (colors.primaryAction || colors.primary);
 
   const cardTitle = type === "checkin" ? "Check in" : "Check out";
 
@@ -142,7 +145,12 @@ export default function AttendanceCard({
         styles.card,
         {
           backgroundColor,
-          borderColor: colors.borderStrong,
+          borderColor: colors.glassBorder || colors.borderStrong || colors.border,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.12,
+          shadowRadius: 10,
+          elevation: 2,
         },
       ]}
       accessible={true}
@@ -162,8 +170,15 @@ export default function AttendanceCard({
           styles.badge,
           {
             backgroundColor: disabled ? colors.surface : buttonColor,
-            borderColor: disabled ? colors.borderStrong : undefined,
-            borderWidth: disabled ? 1 : 0,
+            borderColor: disabled
+              ? (colors.borderStrong || colors.border)
+              : "rgba(255, 255, 255, 0.25)",
+            borderWidth: 1,
+            shadowColor: buttonColor,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: disabled ? 0 : 0.25,
+            shadowRadius: 6,
+            elevation: disabled ? 0 : 2,
           },
           disabled && styles.badgeDisabled,
         ]}
@@ -179,7 +194,7 @@ export default function AttendanceCard({
           style={[
             styles.badgeText,
             {
-              color: disabled ? colors.textSecondary : colors.onGradient,
+              color: disabled ? colors.textSecondary : (colors.onGradient || "#ffffff"),
             },
           ]}
         >
@@ -199,45 +214,53 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     justifyContent: "space-between",
-    borderWidth: 1.5,
+    borderWidth: 1,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "500",
+    fontSize: 11.5,
+    fontWeight: "600",
     marginBottom: 4,
-    opacity: 0.9,
-    textTransform: "capitalize",
+    opacity: 0.85,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   time: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 26,
+    fontWeight: "700",
     marginBottom: 4,
+    fontVariant: ["tabular-nums"],
+    letterSpacing: 0.5,
   },
   subtitle: {
-    fontSize: 10,
-    opacity: 0.8,
+    fontSize: 11,
+    opacity: 0.85,
     marginBottom: 2,
+    fontWeight: "500",
   },
   badge: {
-    borderRadius: 8,
+    borderRadius: 12,
     paddingVertical: 10,
-    minHeight: 48,
+    minHeight: 46,
     minWidth: 48,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: "bold",
+    fontSize: 12.5,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
-  badgeDisabled: {},
+  badgeDisabled: {
+    opacity: 0.7,
+  },
   disabledReason: {
-    fontSize: 10,
-    opacity: 0.8,
+    fontSize: 9.5,
     marginTop: 6,
     textAlign: "center",
+    fontWeight: "500",
+    opacity: 0.85,
   },
 });

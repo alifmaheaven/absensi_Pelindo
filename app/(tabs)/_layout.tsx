@@ -3,8 +3,9 @@ import React, { useEffect, useMemo } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { HapticTab } from "@/components/haptic-tab";
+import GlassSurface from "@/components/ui/GlassSurface";
 import { Calender, DocumentCheck, GalleryIcon, Home, Person, CheckRounded } from "@/components/icon";
 import { useAuthGuard } from "@/hooks/use-auth-guard";
 import { getToken } from "@/lib/storage";
@@ -14,15 +15,15 @@ import { SvgProps } from "react-native-svg";
 
 const iconStyles = StyleSheet.create({
   container: {
-    width: 36,
-    height: 28,
-    borderRadius: 14,
+    width: 40,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
   },
 });
 
-// Custom Tab Bar Icon Component
+// Custom Tab Bar Icon Component - Apple Liquid Glass Pod
 function TabIcon({
   icon: Icon,
   focused,
@@ -31,21 +32,28 @@ function TabIcon({
   focused: boolean;
 }) {
   const colors = useThemeColors();
+  const isDark = useIsDarkTheme();
+
   return (
     <View
       style={[
         iconStyles.container,
         focused && {
-          backgroundColor: colors.primarySoft,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: colors.borderStrong,
+          backgroundColor: colors.accentPill,
+          borderWidth: 1,
+          borderColor: colors.accentPillBorder,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 6,
+          elevation: 2,
         },
       ]}
     >
       <Icon
         color={focused ? colors.primaryText : colors.textSecondary}
-        width={22}
-        height={22}
+        width={21}
+        height={21}
       />
     </View>
   );
@@ -53,6 +61,7 @@ function TabIcon({
 
 export default function TabLayout() {
   const colors = useThemeColors();
+  const isDark = useIsDarkTheme();
   const insets = useSafeAreaInsets();
   const { checking } = useAuthGuard("auth");
 
@@ -70,7 +79,7 @@ export default function TabLayout() {
     initAuth();
   }, []);
 
-  const styles = useMemo(() => makeStyles(colors, insets), [colors, insets]);
+  const styles = useMemo(() => makeStyles(colors, insets, isDark), [colors, insets, isDark]);
 
   if (checking) {
     return (
@@ -88,13 +97,15 @@ export default function TabLayout() {
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: styles.tabBar,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarBackground: () => <GlassSurface style={StyleSheet.absoluteFill} />,
         tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Dashboard",
+          title: "Beranda",
           tabBarIcon: ({ focused }) => (
             <TabIcon icon={Home} focused={focused} />
           ),
@@ -155,25 +166,30 @@ export default function TabLayout() {
   );
 }
 
-const makeStyles = (c: ThemeColors, insets?: { bottom: number }) => {
+const makeStyles = (c: ThemeColors, insets?: { bottom: number }, isDark: boolean = false) => {
   const bottomInset = (insets?.bottom ?? 0) > 0 ? insets!.bottom : 10;
   return StyleSheet.create({
     tabBar: {
-      backgroundColor: c.tabBar,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.border,
-      elevation: 8,
-      shadowColor: c.textStrong,
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      height: 58 + bottomInset,
-      paddingTop: 5,
+      position: "absolute",
+      backgroundColor: "transparent",
+      borderTopWidth: 1,
+      borderTopColor: c.glassBorder,
+      elevation: 10,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: isDark ? 0.35 : 0.08,
+      shadowRadius: 12,
+      height: 60 + bottomInset,
+      paddingTop: 6,
       paddingBottom: Math.max(bottomInset, 6),
     },
+    tabBarItem: {
+      paddingHorizontal: 0,
+    },
     tabBarLabel: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: "600",
+      letterSpacing: -0.2,
       marginTop: 2,
     },
   });

@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect , useMemo } from "react";
 import {
@@ -29,7 +29,8 @@ export default function ForceUpdateModal({
 }: ForceUpdateModalProps) {
 
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   useEffect(() => {
     if (!visible) return;
 
@@ -64,7 +65,7 @@ export default function ForceUpdateModal({
     >
       <View style={styles.container}>
         <LinearGradient
-          colors={["#0052cc", colors.primary, "#4fc3f7"]}
+          colors={[colors.accentBlueDeep, colors.primary, colors.accentBlue]}
           style={styles.headerGradient}
         >
           <View style={styles.iconCircle}>
@@ -117,10 +118,10 @@ export default function ForceUpdateModal({
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: c.card,
+    backgroundColor: c.background,
   },
   headerGradient: {
     height: 240,
@@ -133,12 +134,14 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: c.card,
+    backgroundColor: c.glassSheet,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
+    shadowColor: c.shadowGlass,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
+    shadowOpacity: isDark ? 0.45 : 0.2,
     shadowRadius: 10,
     elevation: 8,
   },
@@ -151,7 +154,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "700",
-    color: c.text,
+    letterSpacing: -0.3,
+    color: c.textStrong,
     textAlign: "center",
     marginBottom: 10,
   },
@@ -164,16 +168,21 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   versionBox: {
     flexDirection: "row",
-    backgroundColor: c.surface,
-    borderRadius: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     width: "100%",
     justifyContent: "space-around",
     alignItems: "center",
     marginBottom: 20,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
   versionRow: {
     alignItems: "center",
@@ -182,29 +191,33 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     color: c.textSecondary,
     marginBottom: 4,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   versionValueCurrent: {
     fontSize: 16,
     fontWeight: "700",
     color: c.dangerText,
+    fontVariant: ["tabular-nums"],
   },
   versionValueLatest: {
     fontSize: 16,
     fontWeight: "700",
     color: c.successText,
+    fontVariant: ["tabular-nums"],
   },
   divider: {
     width: 1,
     height: 32,
-    backgroundColor: c.borderStrong,
+    backgroundColor: c.glassBorder,
   },
   notesBox: {
     width: "100%",
-    backgroundColor: c.primarySoft,
-    borderRadius: 12,
+    backgroundColor: c.accentSoft,
+    borderRadius: 16,
     padding: 14,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: c.accentSoftBorder,
     borderLeftWidth: 4,
     borderLeftColor: c.primary,
   },
@@ -225,14 +238,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginBottom: 36,
   },
   updateButton: {
+    minHeight: 52,
     paddingVertical: 16,
     borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     alignItems: "center",
+    justifyContent: "center",
     shadowColor: c.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   updateButtonText: {
     color: c.onGradient,

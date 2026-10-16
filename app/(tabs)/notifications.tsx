@@ -1,4 +1,5 @@
 import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -67,6 +68,7 @@ function renderTypeIcon(type: string, c: ThemeColors) {
 
 export default function NotificationsScreen() {
   const colors = useThemeColors();
+  const tabInset = useTabBarInset();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -128,20 +130,31 @@ export default function NotificationsScreen() {
   const renderNotification = ({ item }: { item: Notification }) => (
     <TouchableOpacity
       onPress={() => handlePressNotif(item)}
+      activeOpacity={0.7}
       style={{
         flexDirection: "row",
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        backgroundColor: item.is_read ? colors.card : colors.primarySoft,
+        marginHorizontal: 16,
+        marginTop: 10,
+        padding: 14,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: item.is_read ? (colors.glassCard || colors.card) : colors.primarySoft,
+        shadowColor: "#081730",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 1,
       }}
     >
       <View
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
+          width: 42,
+          height: 42,
+          borderRadius: 14,
           backgroundColor: getTypeColor(item.type, colors) + "20",
+          borderWidth: 1,
+          borderColor: getTypeColor(item.type, colors) + "35",
           justifyContent: "center",
           alignItems: "center",
           marginRight: 12,
@@ -150,22 +163,24 @@ export default function NotificationsScreen() {
         {renderTypeIcon(item.type, colors)}
       </View>
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <Text
             style={{
-              fontWeight: item.is_read ? "400" : "700",
+              fontWeight: item.is_read ? "600" : "800",
               fontSize: 14,
+              color: colors.textStrong,
               flex: 1,
+              letterSpacing: -0.2,
             }}
           >
             {item.title}
           </Text>
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8 }}>
+          <Text style={{ fontSize: 11, color: colors.textMuted, marginLeft: 8, fontVariant: ["tabular-nums"] }}>
             {formatTime(item.created_at)}
           </Text>
         </View>
         <Text
-          style={{ fontSize: 13, color: colors.textSecondary, marginTop: 4 }}
+          style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 4, lineHeight: 17 }}
           numberOfLines={2}
         >
           {item.message}
@@ -181,15 +196,17 @@ export default function NotificationsScreen() {
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: 16,
+          paddingHorizontal: 20,
+          paddingVertical: 14,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
+          backgroundColor: colors.glassCard || colors.card,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: "700" }}>Notifikasi</Text>
+        <Text style={{ fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: colors.textStrong }}>Notifikasi</Text>
         {unreadCount > 0 && (
           <TouchableOpacity onPress={handleMarkAllRead}>
-            <Text style={{ color: colors.primary, fontSize: 14 }}>
+            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600" }}>
               Tandai semua sudah dibaca
             </Text>
           </TouchableOpacity>
@@ -204,7 +221,7 @@ export default function NotificationsScreen() {
           data={notifications}
           renderItem={renderNotification}
           keyExtractor={(item) => item.id}
-          getItemLayout={(_data, index) => ({ length: 76, offset: 76 * index, index })}
+          contentContainerStyle={{ paddingBottom: tabInset + 16 }}
           windowSize={5}
           removeClippedSubviews
           refreshControl={

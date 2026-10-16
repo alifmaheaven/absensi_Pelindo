@@ -1,4 +1,5 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import { getAttendanceList } from "@/services/attendance";
 import { useAuthStore } from "@/stores/auth";
 import {
@@ -19,7 +20,6 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import AttendanceDetailModal from "@/components/attendance/AttendanceDetailModal";
 import { ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useState, useMemo } from "react";
 import {
@@ -42,7 +42,9 @@ const initialMeta: IMeta = {
 
 export default function AttendanceTabScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const tabInset = useTabBarInset();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const { user } = useAuthStore();
   const currentWIB = useMemo(() => parseDateParts(todayWIB()), []);
   const [filterYear, setFilterYear] = useState<number>(currentWIB.year);
@@ -525,19 +527,14 @@ export default function AttendanceTabScreen() {
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[colors.primaryAction, colors.primaryActionEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView style={{ flex: 1 }}>
-          <View style={styles.header}>
+      <SafeAreaView edges={["top"]} style={styles.safeHeader}>
+        <View style={styles.header}>
+          <View style={styles.headerTitleWrap}>
             <Text style={styles.headerTitle}>Riwayat Absensi</Text>
-            <View style={{ width: 40 }} />
+            <Text style={styles.headerSubtitle}>Catatan riwayat kehadiran & status kerja</Text>
           </View>
-        </SafeAreaView>
-      </LinearGradient>
+        </View>
+      </SafeAreaView>
 
       <View style={styles.content}>
         {loading && !attendanceData.length ? (
@@ -554,9 +551,9 @@ export default function AttendanceTabScreen() {
                 ? {
                     flexGrow: 1,
                     justifyContent: "center",
-                    paddingBottom: 36,
+                    paddingBottom: 36 + tabInset,
                   }
-                : { paddingBottom: 36 }
+                : { paddingBottom: 36 + tabInset }
             }
             onEndReached={handleGetList}
             onEndReachedThreshold={0.5}
@@ -626,26 +623,43 @@ export default function AttendanceTabScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
-    container: { flex: 1 },
-    headerGradient: { height: 140, paddingBottom: 30 },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 20,
-      paddingTop: 10,
+    container: { flex: 1, backgroundColor: c.background },
+    safeHeader: {
+      backgroundColor: c.glassCard,
+      borderBottomWidth: 1,
+      borderBottomColor: c.glassBorder,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
     },
-    headerTitle: { fontSize: 18, fontWeight: "600", color: c.onGradient },
+    header: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    headerTitleWrap: {
+      justifyContent: "center",
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+      color: c.textStrong,
+    },
+    headerSubtitle: {
+      fontSize: 12.5,
+      color: c.textSecondary,
+      marginTop: 2,
+      fontWeight: "500",
+    },
     content: {
       flex: 1,
-      backgroundColor: c.primarySoft,
-      marginTop: -20,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      backgroundColor: c.background,
       paddingHorizontal: 16,
-      paddingTop: 16,
+      paddingTop: 14,
     },
     metricsWrapper: {
       marginBottom: 14,
@@ -707,6 +721,7 @@ const makeStyles = (c: ThemeColors) =>
       paddingVertical: 7,
       borderRadius: 12,
       borderWidth: 1,
+      flexShrink: 0,
     },
     metricIconWrap: {
       justifyContent: "center",
@@ -769,15 +784,15 @@ const makeStyles = (c: ThemeColors) =>
       color: c.dangerText,
     },
     card: {
-      backgroundColor: c.card,
-      borderRadius: 18,
-      padding: 16,
-      marginBottom: 12,
+      backgroundColor: c.glassCard,
+      borderRadius: 16,
+      padding: 14,
+      marginBottom: 10,
       borderWidth: 1,
-      borderColor: c.border,
-      shadowColor: "#000",
+      borderColor: c.glassBorder,
+      shadowColor: "#081730",
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
+      shadowOpacity: isDark ? 0.25 : 0.04,
       shadowRadius: 8,
       elevation: 2,
     },

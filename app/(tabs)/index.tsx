@@ -1,5 +1,6 @@
 import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import AttendanceCard from "@/components/home/AttendanceCard";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import {
   Bell,
   Calender,
@@ -61,6 +62,7 @@ export default function HomeScreen() {
   const colors = useThemeColors();
   const isDark = useIsDarkTheme();
   const insets = useSafeAreaInsets();
+  const tabInset = useTabBarInset();
   const styles = useMemo(() => makeStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const { user } = useAuthStore();
@@ -664,14 +666,18 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.primaryAction, colors.primaryActionEnd]}
+        colors={
+          isDark
+            ? ["#050A14", "#0D1E38", "#070D18"]
+            : ["#163578", "#2563EB", "#1D4ED8"]
+        }
         start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        end={{ x: 0, y: 0.85 }}
         style={styles.gradient}
       >
         <ScrollView
           style={styles.content}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 40 + tabInset }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -1021,7 +1027,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
     </LinearGradient>
 
@@ -1065,7 +1071,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: Math.max(insets.top + 12, 24),
   },
   topBar: {
@@ -1075,25 +1081,34 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     marginBottom: 20,
   },
   greeting: {
-    fontSize: 22,
-    fontWeight: "bold",
+    fontSize: 13,
+    fontWeight: "600",
     color: c.onGradient,
-    marginBottom: 2,
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
+    opacity: 0.85,
+    marginBottom: 3,
   },
   userName: {
-    fontSize: 14,
+    fontSize: 22,
+    fontWeight: "800",
     color: c.onGradient,
-    opacity: 0.9,
+    letterSpacing: -0.4,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: c.glassOnGradient,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
+    borderColor: c.glassOnGradientBorder,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
   },
   avatarIcon: {
     width: 22,
@@ -1106,7 +1121,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     justifyContent: "space-between",
     backgroundColor: c.warningSoft,
     borderWidth: 1,
-    borderColor: isDark ? "#b45309" : "#d97706",
+    borderColor: c.warningBorder,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1150,19 +1165,19 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     fontSize: 12,
     fontWeight: "700",
   },
-  // Ringkasan Card
+  // Ringkasan Card - Apple Liquid Glass Container
   ringkasanCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
+    padding: 15,
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: 20,
+    borderColor: c.glassSheetBorder,
+    shadowColor: "#081730",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.35 : 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 16,
   },
   ringkasanHeader: {
     flexDirection: "row",
@@ -1175,26 +1190,29 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   },
   ringkasanLabel: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: c.text,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: c.textStrong,
     marginRight: 12,
   },
   ringkasanDate: {
     fontSize: 12,
+    fontWeight: "500",
     color: c.textSecondary,
     flex: 1,
     textAlign: "right",
     marginRight: 10,
+    fontVariant: ["tabular-nums"],
   },
   dayBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: c.surface,
+    backgroundColor: c.glassChip,
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
   },
   dayIcon: {
     fontSize: 12,
@@ -1203,7 +1221,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   dayText: {
     fontSize: 12,
     fontWeight: "600",
-    color: c.text,
+    color: c.textStrong,
   },
   // Laporan 248: Shift Context Badge
   shiftContextRow: {
@@ -1254,7 +1272,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   expiredBanner: {
     backgroundColor: c.warningSoft,
     borderWidth: 1,
-    borderColor: isDark ? "#b45309" : "#d97706",
+    borderColor: c.warningBorder,
     borderRadius: 16,
     padding: 14,
     marginTop: 14,
@@ -1262,7 +1280,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
   expiredTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: isDark ? c.warning : "#92400e",
+    color: c.warningText,
     letterSpacing: 0.5,
   },
   expiredSubtitle: {
@@ -1302,7 +1320,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     marginTop: 2,
   },
   bannerDetailBox: {
-    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+    backgroundColor: c.insetFill,
     borderRadius: 8,
     padding: 8,
     marginVertical: 6,
@@ -1322,7 +1340,7 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     flexDirection: "row",
     gap: 8,
     marginTop: 6,
-    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+    backgroundColor: c.insetFill,
     borderRadius: 10,
     padding: 8,
   },
@@ -1357,16 +1375,20 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     textAlign: "center",
     fontStyle: "italic",
   },
-  // Clock Section
+  // Clock Section - Apple Watch Frosted Capsule
   clockSection: {
     alignItems: "center",
-    marginBottom: 20,
-    backgroundColor: c.surface,
+    marginBottom: 16,
+    backgroundColor: c.glassCardSubtle,
     borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.accentPill,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.16 : 0.04,
+    shadowRadius: 8,
   },
   clockIconRow: {
     flexDirection: "row",
@@ -1379,53 +1401,63 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     color: c.primary,
   },
   clockSmall: {
-    fontSize: 14,
-    color: c.text,
+    fontSize: 13,
+    color: c.primaryText,
     fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: 0.5,
   },
   digitalClock: {
-    fontSize: 40,
-    fontWeight: "bold",
+    fontSize: 42,
+    fontWeight: "800",
     color: c.textStrong,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
+    fontVariant: ["tabular-nums"],
   },
   // Attendance Cards
   attendanceRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   // Content
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: c.text,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: c.textStrong,
     marginBottom: 12,
   },
   aksesGrid: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   aksesItem: {
     flex: 1,
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     alignItems: "center",
+    backgroundColor: c.glassCardSubtle,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
     flexDirection: "row",
     gap: 10,
   },
   aksesIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   aksesTextContainer: {
     flex: 1,
@@ -1435,23 +1467,25 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     fontSize: 14,
     fontWeight: "700",
     color: c.textStrong,
+    letterSpacing: -0.1,
   },
   aksesSubtext: {
     fontSize: 11,
     color: c.textSecondary,
     marginTop: 2,
+    fontWeight: "500",
   },
   aksesCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
+    padding: 15,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassSheetBorder,
     marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowColor: "#081730",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.35 : 0.06,
+    shadowRadius: 12,
     elevation: 2,
   },
   rightActions: {
@@ -1463,12 +1497,17 @@ const makeStyles = (c: ThemeColors, insets: EdgeInsets, isDark: boolean = false)
     position: "relative",
     width: 44,
     height: 44,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: c.glassOnGradient,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.25)",
+    borderColor: c.glassOnGradientBorder,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
   },
   notificationBadge: {
     position: "absolute",

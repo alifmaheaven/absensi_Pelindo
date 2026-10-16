@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import { useState , useMemo } from "react";
 import {
@@ -29,7 +29,8 @@ interface Props {
 export default function DatePicker({ visible, value, onConfirm, onClose, disabledDates = [] }: Props) {
 
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   // ponytail: Hindari Date instan absolut untuk komponen kalender.
   // Ekstraksi komponen kalender (YYYY-MM-DD) secara langsung untuk mencegah
   // pergeseran tanggal pada perangkat non-WIB (BUG-266-04).
@@ -87,8 +88,8 @@ export default function DatePicker({ visible, value, onConfirm, onClose, disable
         <TouchableOpacity style={styles.content} activeOpacity={1}>
           <View style={styles.header}>
             <Text style={styles.title}>Pilih Tanggal</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -160,7 +161,7 @@ export default function DatePicker({ visible, value, onConfirm, onClose, disable
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: c.overlay,
@@ -169,11 +170,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     padding: 24,
   },
   content: {
-    backgroundColor: c.card,
-    borderRadius: 20,
+    backgroundColor: c.glassSheet,
+    borderRadius: 24,
     padding: 20,
     width: "100%",
     maxWidth: 360,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    elevation: 2,
   },
   header: {
     flexDirection: "row",
@@ -183,8 +191,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.textStrong,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: c.insetFill,
+    borderWidth: 1,
+    borderColor: c.insetBorder,
   },
   monthNav: {
     flexDirection: "row",
@@ -193,12 +212,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginBottom: 16,
   },
   navButton: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: c.glassCardSubtle,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
   },
   monthLabel: {
     fontSize: 16,
-    fontWeight: "600",
-    color: c.text,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    color: c.textStrong,
   },
   dayHeaderRow: {
     flexDirection: "row",
@@ -224,21 +251,38 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   dayCellSelected: {
     backgroundColor: c.primaryAction,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   dayText: {
     fontSize: 14,
     color: c.text,
+    fontVariant: ["tabular-nums"],
   },
   dayTextSelected: {
     color: c.onGradient,
-    fontWeight: "600",
+    fontWeight: "700",
   },
   confirmButton: {
     marginTop: 16,
+    minHeight: 48,
     backgroundColor: c.primaryAction,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
+    shadowColor: c.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   confirmText: {
     color: c.onGradient,
@@ -246,7 +290,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontWeight: "600",
   },
   dayCellDisabled: {
-    backgroundColor: c.surface,
+    backgroundColor: c.insetFill,
     opacity: 0.5,
   },
   dayTextDisabled: {
@@ -267,11 +311,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     marginTop: 10,
     paddingVertical: 8,
     backgroundColor: c.warningSoft,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   disabledHintText: {
     fontSize: 11,
     color: c.warningText,
-    fontWeight: "500",
+    fontWeight: "600",
   },
 });

@@ -1,11 +1,12 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useMemo } from "react";
 import { useAnimatedValue } from "@/hooks/use-animated-value";
 import { Animated, StyleSheet, View } from "react-native";
 
 export default function ScheduleSkeleton({ count = 5 }: { count?: number }) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const animatedValue = useAnimatedValue(0.3);
 
   useEffect(() => {
@@ -42,27 +43,29 @@ export default function ScheduleSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   container: {
     paddingVertical: 0,
   },
   card: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: c.card,
-    borderRadius: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
     elevation: 2,
   },
   dateBox: {
     width: 55,
     height: 55,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: c.borderStrong,
   },
   infoBox: {
@@ -72,7 +75,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   line1: {
     width: "50%",
     height: 16,
-    borderRadius: 6,
+    borderRadius: 8,
     backgroundColor: c.borderStrong,
     marginBottom: 8,
   },

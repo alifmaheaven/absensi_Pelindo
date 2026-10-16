@@ -107,11 +107,11 @@ const makeStyles = (c: ThemeColors) =>
       gap: 12,
     },
     skeletonCard: {
-      backgroundColor: c.card,
-      borderRadius: 16,
+      backgroundColor: c.glassCard,
+      borderRadius: 20,
       padding: 16,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
     },
     skeletonHeaderRow: {
       flexDirection: "row",
@@ -129,7 +129,7 @@ const makeStyles = (c: ThemeColors) =>
       height: 20,
       width: 60,
       backgroundColor: c.borderStrong,
-      borderRadius: 6,
+      borderRadius: 12,
     },
     skeletonDescBar: {
       height: 12,
@@ -147,7 +147,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     skeletonDivider: {
       height: 1,
-      backgroundColor: c.border,
+      backgroundColor: c.glassBorderSubtle,
       marginBottom: 12,
     },
     skeletonInfoRow: {
@@ -162,9 +162,9 @@ const makeStyles = (c: ThemeColors) =>
       borderRadius: 3,
     },
     skeletonButton: {
-      height: 38,
+      height: 48,
       backgroundColor: c.borderStrong,
-      borderRadius: 10,
+      borderRadius: 14,
       marginTop: 12,
     },
   });

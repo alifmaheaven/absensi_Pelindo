@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
@@ -22,7 +22,8 @@ export default function NotificationRationaleModal({
   onDismiss,
 }: NotificationRationaleModalProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   return (
     <Modal
@@ -74,7 +75,7 @@ export default function NotificationRationaleModal({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
@@ -86,21 +87,25 @@ const makeStyles = (c: ThemeColors) =>
     card: {
       width: "100%",
       maxWidth: 360,
-      backgroundColor: c.card,
+      backgroundColor: c.glassSheet,
       borderRadius: 24,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
       padding: 24,
       alignItems: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.15,
-      shadowRadius: 16,
-      elevation: 8,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 10,
+      elevation: 2,
     },
     iconCircle: {
       width: 64,
       height: 64,
-      borderRadius: 32,
-      backgroundColor: c.primarySoft,
+      borderRadius: 20,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accentSoftBorder,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 16,
@@ -108,6 +113,7 @@ const makeStyles = (c: ThemeColors) =>
     title: {
       fontSize: 18,
       fontWeight: "700",
+      letterSpacing: -0.3,
       color: c.textStrong,
       textAlign: "center",
       marginBottom: 10,
@@ -125,12 +131,19 @@ const makeStyles = (c: ThemeColors) =>
     },
     primaryButton: {
       width: "100%",
-      borderRadius: 12,
-      overflow: "hidden",
+      borderRadius: 14,
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 2,
     },
     gradientBtn: {
       minHeight: 48,
       paddingVertical: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -143,14 +156,16 @@ const makeStyles = (c: ThemeColors) =>
       width: "100%",
       minHeight: 48,
       paddingVertical: 12,
-      borderRadius: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: c.surface,
+      backgroundColor: c.glassCardSubtle,
     },
     secondaryText: {
       color: c.textSecondary,
       fontSize: 14,
-      fontWeight: "500",
+      fontWeight: "600",
     },
   });

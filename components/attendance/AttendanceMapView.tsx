@@ -414,7 +414,8 @@ export function buildMapHTML(params: {
   if (checkin) {
     markers.push(
       `L.circleMarker([${checkin.lat}, ${checkin.lng}], ${circleMarkerOptions(
-        colors.success
+        colors.success,
+        colors.onGradient
       )}).addTo(map).bindPopup('Check-in');`
     );
     boundsPoints.push(`[${checkin.lat}, ${checkin.lng}]`);
@@ -423,7 +424,8 @@ export function buildMapHTML(params: {
   if (checkout) {
     markers.push(
       `L.circleMarker([${checkout.lat}, ${checkout.lng}], ${circleMarkerOptions(
-        colors.danger
+        colors.danger,
+        colors.onGradient
       )}).addTo(map).bindPopup('Check-out');`
     );
     boundsPoints.push(`[${checkout.lat}, ${checkout.lng}]`);
@@ -432,7 +434,8 @@ export function buildMapHTML(params: {
   if (site) {
     markers.push(
       `L.circleMarker([${site.lat}, ${site.lng}], ${circleMarkerOptions(
-        colors.primary
+        colors.primary,
+        colors.onGradient
       )}).addTo(map).bindPopup('Titik Site');`
     );
     boundsPoints.push(`[${site.lat}, ${site.lng}]`);
@@ -510,10 +513,10 @@ export function buildMapHTML(params: {
   `;
 }
 
-function circleMarkerOptions(color: string): string {
+function circleMarkerOptions(color: string, ringColor: string): string {
   return `{
           radius: 8,
-          color: '#ffffff',
+          color: '${ringColor}',
           weight: 2,
           fillColor: '${color}',
           fillOpacity: 1
@@ -532,10 +535,10 @@ const makeStyles = (c: ThemeColors) =>
     },
     mapFrame: {
       width: "100%",
-      borderRadius: 12,
+      borderRadius: 16,
       overflow: "hidden",
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
       backgroundColor: c.surface,
     },
     webview: {
@@ -547,7 +550,7 @@ const makeStyles = (c: ThemeColors) =>
       padding: 12,
       gap: 6,
       justifyContent: "center",
-      backgroundColor: c.surface,
+      backgroundColor: c.glassCardSubtle,
     },
     fallbackHeader: {
       flexDirection: "row",
@@ -574,19 +577,26 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 12,
       color: c.textStrong,
       fontWeight: "600",
+      fontVariant: ["tabular-nums"],
       flexShrink: 1,
     },
     legend: {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
-      gap: 14,
+      gap: 8,
       paddingHorizontal: 2,
     },
     legendItem: {
       flexDirection: "row",
       alignItems: "center",
       gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      backgroundColor: c.glassChip,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
     },
     legendDot: {
       width: 10,
@@ -595,10 +605,16 @@ const makeStyles = (c: ThemeColors) =>
     },
     legendText: {
       fontSize: 12,
+      fontWeight: "600",
       color: c.textSecondary,
     },
     statusList: {
-      gap: 6,
+      gap: 8,
+      padding: 10,
+      borderRadius: 16,
+      backgroundColor: c.glassCardSubtle,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
     },
     statusRow: {
       flexDirection: "row",
@@ -620,5 +636,6 @@ const makeStyles = (c: ThemeColors) =>
     statusDistance: {
       fontSize: 12,
       color: c.textSecondary,
+      fontVariant: ["tabular-nums"],
     },
   });

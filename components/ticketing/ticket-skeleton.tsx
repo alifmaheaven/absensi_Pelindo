@@ -13,8 +13,8 @@ export default function TicketSkeleton() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* Header */}
-        <SkeletonBox height={22} width="40%" />
-        <SkeletonBox height={14} width="60%" style={{ marginTop: 8 }} />
+        <SkeletonBox height={22} width="40%" borderRadius={8} />
+        <SkeletonBox height={14} width="60%" borderRadius={6} style={{ marginTop: 8 }} />
 
         <SkeletonDivider />
 
@@ -46,7 +46,7 @@ export default function TicketSkeleton() {
         <SkeletonLabel />
         <View style={styles.imageGrid}>
           {[1, 2, 3].map((i) => (
-            <SkeletonBox key={i} height={80} width={80} borderRadius={8} />
+            <SkeletonBox key={i} height={80} width={80} borderRadius={14} />
           ))}
         </View>
 
@@ -69,7 +69,7 @@ export default function TicketSkeleton() {
 function SkeletonBox({
   height,
   width = "100%",
-  borderRadius = 6,
+  borderRadius = 14,
   style,
 }: {
   height: number;
@@ -85,7 +85,7 @@ function SkeletonBox({
           height,
           width,
           borderRadius,
-          backgroundColor: colors.border,
+          backgroundColor: colors.glassChip,
         },
         style,
       ]}
@@ -94,7 +94,7 @@ function SkeletonBox({
 }
 
 function SkeletonLabel() {
-  return <SkeletonBox height={14} width="30%" style={{ marginBottom: 6 }} />;
+  return <SkeletonBox height={14} width="30%" borderRadius={6} style={{ marginBottom: 6 }} />;
 }
 
 function SkeletonInput({ height = 48 }: { height?: number }) {
@@ -107,7 +107,7 @@ function SkeletonDivider() {
     <View
       style={{
         height: 1,
-        backgroundColor: colors.border,
+        backgroundColor: colors.glassBorder,
         marginVertical: 12,
       }}
     />
@@ -116,7 +116,7 @@ function SkeletonDivider() {
 
 function SkeletonButton({ height = 44 }: { height?: number }) {
   return (
-    <SkeletonBox height={height} borderRadius={8} style={{ marginTop: 16 }} />
+    <SkeletonBox height={height} borderRadius={14} style={{ marginTop: 16 }} />
   );
 }
 
@@ -127,10 +127,7 @@ function SkeletonButton({ height = 44 }: { height?: number }) {
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   contentContainer: {
     flex: 1,
-    marginTop: -40, // Overlap dengan header
     backgroundColor: c.background,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
     overflow: "hidden",
   },
   scrollContent: {

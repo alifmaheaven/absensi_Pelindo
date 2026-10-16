@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, EyeOutline, EyeOffOutline } from "@/components/icon";
 import { useToast } from "@/components/ui/toast";
 import { changePassword } from "@/services/auth";
@@ -21,7 +21,8 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function ChangePasswordScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,7 @@ export default function ChangePasswordScreen() {
               style={styles.backButton}
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
-              <ArrowLeft color="#fff" />
+              <ArrowLeft color={colors.onGradient} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Ubah Password</Text>
             <View style={{ width: 60 }} />
@@ -158,7 +159,7 @@ export default function ChangePasswordScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={colors.onGradient} />
             ) : (
               <Text style={styles.saveButtonText}>Simpan Password</Text>
             )}
@@ -169,10 +170,10 @@ export default function ChangePasswordScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: c.surface,
+    backgroundColor: c.background,
   },
   headerGradient: {
     height: 140,
@@ -187,21 +188,28 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.onGradient,
   },
   backButton: {
-    padding: 8,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: c.glassOnGradient,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
     flex: 1,
     marginTop: -20,
-    backgroundColor: c.primarySoft,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    backgroundColor: c.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   iconSection: {
     alignItems: "center",
@@ -210,8 +218,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   iconContainer: {
     width: 80,
     height: 80,
-    borderRadius: 40,
-    backgroundColor: c.primaryAction,
+    borderRadius: 24,
+    backgroundColor: c.accentSoft,
+    borderWidth: 1,
+    borderColor: c.accentSoftBorder,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -222,13 +232,15 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     textAlign: "center",
   },
   formCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    backgroundColor: c.glassCard,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    borderRadius: 18,
+    padding: 16,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
     elevation: 2,
   },
   fieldGroup: {
@@ -237,43 +249,51 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: c.text,
+    color: c.textStrong,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: c.surface,
+    backgroundColor: c.glassCardSubtle,
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    borderRadius: 12,
+    borderColor: c.glassBorder,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    minHeight: 48,
     fontSize: 15,
-    color: c.text,
+    color: c.textStrong,
   },
   showPasswordButton: {
     alignSelf: "flex-end",
+    minHeight: 44,
+    justifyContent: "center",
     paddingVertical: 4,
   },
   showPasswordText: {
     fontSize: 13,
     color: c.primary,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   saveButton: {
-    backgroundColor: c.successAction,
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: c.primaryAction,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    borderRadius: 14,
+    minHeight: 52,
+    paddingVertical: 14,
+    justifyContent: "center",
     alignItems: "center",
     marginTop: 24,
-    shadowColor: c.success,
+    shadowColor: c.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   saveButtonText: {
     color: c.onGradient,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
 });

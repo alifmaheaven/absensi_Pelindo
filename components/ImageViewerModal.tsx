@@ -38,14 +38,14 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <StatusBar barStyle="light-content" backgroundColor={colors.viewerBackdrop} />
       <View style={styles.backdrop}>
         <TouchableOpacity
           style={styles.closeBtn}
           onPress={onClose}
           hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
         >
-          <Ionicons name="close" size={32} color="#fff" />
+          <Ionicons name="close" size={32} color={colors.onGradient} />
         </TouchableOpacity>
         {uri && (
           <Image
@@ -63,7 +63,7 @@ export default function ImageViewerModal({ visible, uri, onClose }: Props) {
 const makeStyles = (c: ThemeColors) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
+    backgroundColor: c.viewerScrim,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -72,10 +72,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     top: 50,
     right: 20,
     zIndex: 10,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 20,
-    width: 40,
-    height: 40,
+    backgroundColor: c.glassOnGradient,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    borderRadius: 22,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -86,7 +88,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   hint: {
     position: "absolute",
     bottom: 40,
-    color: "rgba(255,255,255,0.5)",
+    color: c.onGradient,
+    opacity: 0.6,
     fontSize: 12,
+    fontWeight: "600",
   },
 });

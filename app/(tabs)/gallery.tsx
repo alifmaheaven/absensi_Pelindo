@@ -1,4 +1,5 @@
 import { useThemeColors } from "@/hooks/use-theme-color";
+import { useTabBarInset } from "@/hooks/use-tab-bar-inset";
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
@@ -28,6 +29,7 @@ const PAGE_SIZE = 20;
 
 export default function GalleryScreen() {
   const colors = useThemeColors();
+  const tabInset = useTabBarInset();
   const [folders, setFolders] = useState<IGalleryFolder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -179,15 +181,15 @@ export default function GalleryScreen() {
         width: CARD_SIZE,
         marginLeft: GRID_GAP,
         marginBottom: GRID_GAP,
-        backgroundColor: colors.card,
-        borderRadius: 12,
+        backgroundColor: colors.glassCard || colors.card,
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: colors.border,
-        padding: 14,
-        shadowColor: "#000",
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
-        shadowOffset: { width: 0, height: 2 },
+        borderColor: colors.glassBorder || colors.border,
+        padding: 15,
+        shadowColor: "#081730",
+        shadowOpacity: 0.08,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
         elevation: 2,
       }}
     >
@@ -196,8 +198,10 @@ export default function GalleryScreen() {
           style={{
             width: 48,
             height: 48,
-            borderRadius: 12,
-            backgroundColor: `${colors.primary}15`,
+            borderRadius: 14,
+            backgroundColor: `${colors.primary}18`,
+            borderWidth: 1,
+            borderColor: `${colors.primary}30`,
             justifyContent: "center",
             alignItems: "center",
           }}
@@ -209,10 +213,12 @@ export default function GalleryScreen() {
             onPress={() => handleOpenRename(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: `${colors.primary}10`,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: `${colors.primary}12`,
+              borderWidth: 1,
+              borderColor: `${colors.primary}25`,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -223,10 +229,12 @@ export default function GalleryScreen() {
             onPress={() => handleDelete(item)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 15,
-              backgroundColor: `${colors.danger}10`,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: `${colors.danger}12`,
+              borderWidth: 1,
+              borderColor: `${colors.danger}25`,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -235,10 +243,10 @@ export default function GalleryScreen() {
           </TouchableOpacity>
         </View>
       </View>
-      <Text style={{ fontSize: 15, fontWeight: "600", marginTop: 12 }} numberOfLines={1}>
+      <Text style={{ fontSize: 15, fontWeight: "700", color: colors.textStrong, letterSpacing: -0.2, marginTop: 12 }} numberOfLines={1}>
         {item.name}
       </Text>
-      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>
+      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2, fontWeight: "500", fontVariant: ["tabular-nums"] }}>
         {item.photo_count || 0} file
       </Text>
     </TouchableOpacity>
@@ -251,12 +259,14 @@ export default function GalleryScreen() {
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: 16,
+          paddingHorizontal: 20,
+          paddingVertical: 14,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
+          backgroundColor: colors.glassCard || colors.card,
         }}
       >
-        <Text style={{ fontSize: 18, fontWeight: "700" }}>Gallery</Text>
+        <Text style={{ fontSize: 18, fontWeight: "700", letterSpacing: -0.3, color: colors.textStrong }}>Gallery</Text>
         {!isAccessDenied && (
           <TouchableOpacity
             onPress={() => setShowCreate(true)}
@@ -264,10 +274,17 @@ export default function GalleryScreen() {
               backgroundColor: colors.primaryAction,
               paddingHorizontal: 16,
               paddingVertical: 8,
-              borderRadius: 8,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.22)",
+              shadowColor: colors.primary,
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 6,
+              elevation: 2,
             }}
           >
-            <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 14 }}>+ Folder</Text>
+            <Text style={{ color: colors.onGradient, fontWeight: "700", fontSize: 13, letterSpacing: 0.2 }}>+ Folder</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -283,7 +300,7 @@ export default function GalleryScreen() {
           numColumns={GRID_COLS}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          contentContainerStyle={folders.length === 0 ? { flexGrow: 1, justifyContent: "center" } : { paddingTop: GRID_GAP }}
+          contentContainerStyle={folders.length === 0 ? { flexGrow: 1, justifyContent: "center", paddingBottom: tabInset } : { paddingTop: GRID_GAP, paddingBottom: tabInset + GRID_GAP }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
           }

@@ -46,7 +46,9 @@ export default function OfflineBanner() {
         style={{
           backgroundColor: colors.dangerAction,
           paddingHorizontal: 16,
-          paddingVertical: 8,
+          paddingVertical: 10,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.glassOnGradientBorder,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
@@ -67,7 +69,9 @@ export default function OfflineBanner() {
       style={{
         backgroundColor: isOffline ? colors.warningAction : colors.successAction,
         paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.glassOnGradientBorder,
       }}
     >
       <Text style={{ color: colors.onGradient, fontSize: 12, textAlign: "center", fontWeight: "600" }}>

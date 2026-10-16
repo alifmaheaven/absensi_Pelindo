@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, ImageIcon, InfoOutlineRounded } from "@/components/icon";
 import { MapEmbed } from "@/components/ui/map-embed";
 import { useToast } from "@/components/ui/toast";
@@ -80,7 +80,8 @@ const imageUploadService = {
 
 export default function CheckinScreen() {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
   const [location, setLocation] = useState<Location.LocationObject | null>(
@@ -658,7 +659,7 @@ export default function CheckinScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Kembali"
               >
-                <ArrowLeft color="#fff" />
+                <ArrowLeft color={colors.onGradient} />
               </TouchableOpacity>
               <Text style={styles.headerTitle}>Check In</Text>
               <View style={styles.notificationButtonPlaceholder}>
@@ -979,7 +980,7 @@ export default function CheckinScreen() {
                   )}
                   {loadingImage && (
                     <View style={styles.imageLoadingOverlay}>
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={colors.onGradient} />
                     </View>
                   )}
                 </View>
@@ -1020,7 +1021,7 @@ export default function CheckinScreen() {
               {loadingSubmit ? (
                 <ActivityIndicator
                   size="small"
-                  color="#fff"
+                  color={colors.onGradient}
                   style={{ marginRight: 8 }}
                 />
               ) : null}
@@ -1080,7 +1081,24 @@ export default function CheckinScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+// Bayangan kartu kaca (resep Liquid Glass) — nilai numerik saja yang bercabang isDark.
+const glassShadow = (c: ThemeColors, isDark: boolean) => ({
+  shadowColor: c.shadowGlass,
+  shadowOffset: { width: 0, height: 4 },
+  shadowRadius: 10,
+  shadowOpacity: isDark ? 0.25 : 0.05,
+  elevation: 2,
+});
+// Bayangan tombol berisi biru.
+const actionShadow = (c: ThemeColors) => ({
+  shadowColor: c.primary,
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+  elevation: 4,
+});
+
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   headerGradient: {
     height: 150, // Tinggi gradient
     paddingBottom: 30,
@@ -1096,17 +1114,24 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingTop: 10,
   },
   backButton: {
-    padding: 8,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: c.glassOnGradient,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.onGradient,
   },
   notificationButtonPlaceholder: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
   },
 
   contentContainer: {
@@ -1115,26 +1140,26 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.background,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
     overflow: "hidden",
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 25,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 32,
   },
 
   // Map
   mapContainer: {
     height: 180,
-    borderRadius: 20,
+    borderRadius: 18,
     overflow: "hidden",
-    marginBottom: 24,
-    backgroundColor: c.surface,
-    // Shadow for map container
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 16,
+    backgroundColor: c.glassCard,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    ...glassShadow(c, isDark),
   },
   loadingContainer: {
     flex: 1,
@@ -1144,6 +1169,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   loadingText: {
     marginTop: 10,
     color: c.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 16,
   },
   // Keluarga locationDenied* (Emoji/Title/Text) DIHAPUS ALL — peninggalan
   // panel pra-GPS-01 dengan 0 rujukan; diagnosis kini wholly di
@@ -1152,19 +1179,30 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     marginBottom: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    ...actionShadow(c),
     // WAVE-0 UI/UX: target sentuh minimal 48dp (steer #2.4)
     minHeight: 48,
   },
   retryButtonText: {
     color: c.onGradient,
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 14,
   },
   settingsButton: {
     paddingVertical: 10,
     paddingHorizontal: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    backgroundColor: c.glassCardSubtle,
+    alignItems: "center",
+    justifyContent: "center",
     // WAVE-0 UI/UX: target sentuh minimal 48dp (steer #2.4)
     minHeight: 48,
   },
@@ -1175,16 +1213,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   // GPS-01 — kartu diagnosis di luar kontainer peta; kontras tinggi (c.text*).
   locationFailureCard: {
-    backgroundColor: c.surface,
-    borderColor: c.danger,
+    backgroundColor: c.dangerGlass,
+    borderColor: c.dangerGlassBorder,
     borderWidth: 1,
     borderRadius: 16,
-    padding: 18,
-    marginBottom: 24,
+    padding: 14,
+    marginBottom: 16,
+    ...glassShadow(c, isDark),
   },
   locationFailureTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.2,
     color: c.textStrong,
     marginBottom: 8,
   },
@@ -1210,13 +1250,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     minHeight: 48,
     alignSelf: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
+    ...actionShadow(c),
   },
   enableServicesButtonText: {
     color: c.onGradient,
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 14,
   },
   locationOverlay: {
@@ -1224,29 +1269,27 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     bottom: 10,
     left: 10,
     right: 10,
-    backgroundColor: c.card,
-    borderColor: c.border,
+    backgroundColor: c.glassCard,
+    borderColor: c.glassBorder,
     borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 14,
+    ...glassShadow(c, isDark),
   },
   locationOverlayText: {
     fontSize: 10,
     color: c.textStrong,
     textAlign: "center",
     fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
 
   // Section Title
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.2,
     color: c.textStrong,
     marginBottom: 12,
   },
@@ -1255,15 +1298,16 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   locationOption: {
     flexDirection: "row",
     padding: 16,
-    borderWidth: 1.5,
-    borderColor: c.border,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    borderRadius: 20,
     marginBottom: 12,
-    backgroundColor: c.card,
+    backgroundColor: c.glassCard,
+    ...glassShadow(c, isDark),
   },
   locationOptionSelected: {
     borderColor: c.primary,
-    backgroundColor: c.primarySoft,
+    backgroundColor: c.accentSoft,
   },
   locationOptionOutOfRange: {
     opacity: 0.6,
@@ -1301,17 +1345,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   locationTitle: {
     fontSize: 14,
-    fontWeight: "bold",
-    color: c.text,
+    fontWeight: "700",
+    color: c.textStrong,
     flex: 1,
   },
   outOfRangeBadge: {
     fontSize: 10,
     color: c.warningText,
     backgroundColor: c.warningSoft,
+    borderWidth: 1,
+    borderColor: c.warningBorder,
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
     overflow: "hidden",
     fontWeight: "600",
   },
@@ -1324,17 +1370,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   locationCoords: {
     fontSize: 10,
     color: c.textMuted,
+    fontVariant: ["tabular-nums"],
   },
 
   // Info Card
   infoCard: {
-    backgroundColor: c.primarySoft, // Hijau muda/Biru muda yang lembut
+    backgroundColor: c.glassCard,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    marginTop: 8,
+    padding: 14,
+    marginBottom: 16,
+    marginTop: 6,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
+    ...glassShadow(c, isDark),
   },
   infoRow: {
     flexDirection: "row",
@@ -1352,7 +1400,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   infoDivider: {
     height: 1,
-    backgroundColor: "rgba(30, 144, 255, 0.1)",
+    backgroundColor: c.glassBorderSubtle,
     marginBottom: 12,
   },
   infoDetailRow: {
@@ -1372,17 +1420,17 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
 
   // Notes
   notesContainer: {
-    backgroundColor: c.inputBg,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     marginBottom: 24,
   },
   notesInput: {
     padding: 16,
     height: 100,
     fontSize: 14,
-    color: c.text,
+    color: c.textStrong,
   },
 
   // Image Upload
@@ -1398,7 +1446,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     position: "relative",
-    backgroundColor: c.border,
+    backgroundColor: c.glassCardSubtle,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
   },
   imagePreview: {
     width: "100%",
@@ -1426,13 +1476,14 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: c.borderStrong,
-    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.accentPillBorder,
+    borderRadius: 14,
     padding: 16,
+    minHeight: 52,
     marginBottom: 30,
     borderStyle: "dashed",
-    backgroundColor: c.inputBg,
+    backgroundColor: c.glassCardSubtle,
   },
   uploadButtonIcon: {
     marginRight: 8,
@@ -1449,29 +1500,28 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
-    backgroundColor: c.primaryAction, // Modern blue
-    borderRadius: 16,
-    paddingVertical: 18,
+    backgroundColor: c.primaryAction,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    paddingVertical: 16,
+    minHeight: 52,
     alignItems: "center",
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    ...actionShadow(c),
   },
   submitButtonText: {
     color: c.onGradient,
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "700",
     textTransform: "capitalize",
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   submitButtonDisabled: {
     opacity: 0.7,
   },
   uploadButtonDisabled: {
     opacity: 0.7,
-    backgroundColor: c.surface,
+    backgroundColor: c.glassCardSubtle,
   },
   imageLoadingOverlay: {
     position: "absolute",
@@ -1479,7 +1529,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: c.overlay,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1491,47 +1541,57 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: c.card,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    backgroundColor: c.glassSheet,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    borderTopColor: c.glassSheetBorder,
     padding: 24,
     paddingBottom: 40,
   },
   modalIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: c.border,
+    backgroundColor: c.borderStrong,
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 20,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "700",
+    letterSpacing: -0.3,
     textAlign: "center",
     marginBottom: 24,
     color: c.textStrong,
   },
   modalButtonPrimary: {
     backgroundColor: c.primaryAction,
-    padding: 18,
-    borderRadius: 16,
+    padding: 16,
+    minHeight: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
+    ...actionShadow(c),
   },
   modalButtonTextPrimary: {
     color: c.onGradient,
-    fontWeight: "bold",
+    fontWeight: "700",
     fontSize: 15,
   },
   modalButtonSecondary: {
-    backgroundColor: c.card,
-    padding: 18,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    padding: 16,
+    minHeight: 52,
+    borderRadius: 14,
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: c.border,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
   },
   modalButtonTextSecondary: {
     color: c.text,
@@ -1539,10 +1599,14 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 15,
   },
   modalButtonCancel: {
-    backgroundColor: c.surface,
-    padding: 18,
-    borderRadius: 16,
+    backgroundColor: c.glassCardSubtle,
+    padding: 16,
+    minHeight: 52,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
     alignItems: "center",
+    justifyContent: "center",
   },
   modalButtonTextCancel: {
     color: c.textSecondary,
@@ -1554,10 +1618,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 30,
-    backgroundColor: c.card,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: c.border,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
     marginBottom: 24,
     borderStyle: "dashed",
   },
@@ -1581,9 +1645,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: c.warningSoft,
-    borderColor: c.warning,
+    borderColor: c.warningBorder,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 16,
     gap: 10,
@@ -1601,12 +1665,17 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   checkoutNavButton: {
     backgroundColor: c.warningAction,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
+    alignItems: "center",
+    justifyContent: "center",
   },
   checkoutNavButtonText: {
-    color: "#fff",
+    color: c.onGradient,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -1617,10 +1686,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: c.card,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -1641,10 +1710,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: c.textStrong,
   },
   statusDropdownMenu: {
-    backgroundColor: c.card,
-    borderRadius: 12,
+    backgroundColor: c.glassCard,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     marginTop: 6,
     overflow: "hidden",
   },
@@ -1654,10 +1723,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    borderBottomColor: c.glassBorderSubtle,
   },
   statusOptionItemSelected: {
-    backgroundColor: c.primarySoft,
+    backgroundColor: c.accentSoft,
   },
   statusOptionText: {
     fontSize: 13,
@@ -1666,10 +1735,10 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   statusCardSingle: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: c.card,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
@@ -1687,22 +1756,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
   },
   completedCard: {
-    backgroundColor: c.card,
-    borderRadius: 20,
+    backgroundColor: c.glassCard,
+    borderRadius: 24,
     padding: 24,
     width: "100%",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: c.borderStrong,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    ...glassShadow(c, isDark),
   },
   completedCardTitle: {
     fontSize: 18,
     fontWeight: "700",
+    letterSpacing: -0.3,
     color: c.textStrong,
     marginBottom: 8,
     textAlign: "center",
@@ -1716,12 +1782,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   completedDetailBox: {
     width: "100%",
-    backgroundColor: c.surface,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     gap: 8,
   },
   completedDetailRow: {
@@ -1737,16 +1803,20 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: c.textStrong,
+    fontVariant: ["tabular-nums"],
   },
   completedBackButton: {
     backgroundColor: c.primaryAction,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.glassOnGradientBorder,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
+    ...actionShadow(c),
   },
   completedBackButtonText: {
     color: c.onGradient,

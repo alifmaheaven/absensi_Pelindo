@@ -116,8 +116,8 @@ export default function InteractiveButton({
 const makeStyles = (c: ThemeColors) =>
   StyleSheet.create({
     baseButton: {
-      minHeight: 48,
-      borderRadius: 12,
+      minHeight: 50,
+      borderRadius: 14,
       paddingHorizontal: 20,
       paddingVertical: 12,
       flexDirection: "row",
@@ -139,7 +139,8 @@ const makeStyles = (c: ThemeColors) =>
     },
     baseText: {
       fontSize: 15,
-      fontWeight: "600",
+      fontWeight: "700",
+      letterSpacing: 0.2,
       textAlign: "center",
     },
     disabled: {
@@ -148,14 +149,26 @@ const makeStyles = (c: ThemeColors) =>
     // Variants
     btnPrimary: {
       backgroundColor: c.primaryAction,
+      borderWidth: 1,
+      borderColor: "rgba(255, 255, 255, 0.22)",
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.28,
+      shadowRadius: 8,
+      elevation: 3,
     },
     btnPrimaryText: {
       color: c.onGradient,
     },
     btnSecondary: {
-      backgroundColor: c.surface,
+      backgroundColor: c.glassCard || c.surface,
       borderWidth: 1,
-      borderColor: c.borderStrong,
+      borderColor: c.glassBorder || c.borderStrong,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 6,
+      elevation: 1,
     },
     btnSecondaryText: {
       color: c.textStrong,

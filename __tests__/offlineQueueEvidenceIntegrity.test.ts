@@ -141,7 +141,12 @@ jest.mock("../lib/evidenceStorage", () => ({
     return durable;
   }),
   removePersistedEvidence: jest.fn(async (uris: (string | null | undefined)[]) => {
-    for (const u of uris || []) mockEvidenceState.removed.push(u as string);
+    for (const u of uris || []) {
+      if (typeof u === "string") {
+        mockEvidenceState.removed.push(u);
+        mockEvidenceState.deviceFiles.delete(u);
+      }
+    }
   }),
   /**
    * ⭐ Dulu: hanya mencatat `keep`, tidak pernah menghapus → test buta.
@@ -198,6 +203,9 @@ async function seedQueue(actions: OfflineAction[]): Promise<void> {
 }
 
 function checkInAction(images: { uri: string; name: string; type: string }[]): OfflineAction {
+  for (const img of images) {
+    if (img.uri) mockEvidenceState.deviceFiles.add(img.uri);
+  }
   return {
     id: "checkin_t1",
     type: "ATTENDANCE_CHECKIN",
@@ -218,6 +226,9 @@ function checkInAction(images: { uri: string; name: string; type: string }[]): O
 }
 
 function evidenceAction(images: { uri: string; name: string; type: string }[]): OfflineAction {
+  for (const img of images) {
+    if (img.uri) mockEvidenceState.deviceFiles.add(img.uri);
+  }
   return {
     id: "evidence_t1",
     type: "ATTENDANCE_EVIDENCE",

@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
@@ -78,7 +78,8 @@ export default function GalleryFolderScreen() {
   // Nama pengguna untuk baris keterangan watermark kamera.
   const watermarkName = useAuthStore((s) => s.user?.name ?? null);
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
 
   const [currentFolderName, setCurrentFolderName] = useState(name || "Folder");
@@ -590,7 +591,7 @@ export default function GalleryFolderScreen() {
               isSelected ? { backgroundColor: colors.primary, borderColor: colors.primary } : null,
             ]}
           >
-            {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+            {isSelected && <Ionicons name="checkmark" size={14} color={colors.onGradient} />}
           </View>
         )}
       </TouchableOpacity>
@@ -601,7 +602,7 @@ export default function GalleryFolderScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Top App Bar */}
       {isSelectionMode ? (
@@ -636,11 +637,11 @@ export default function GalleryFolderScreen() {
               ]}
             >
               {deletingBulk ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={colors.onGradient} />
               ) : (
                 <>
-                  <Ionicons name="trash-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+                  <Ionicons name="trash-outline" size={16} color={colors.onGradient} style={{ marginRight: 4 }} />
+                  <Text style={{ color: colors.onGradient, fontWeight: "700", fontSize: 13 }}>
                     Hapus ({selectedIds.size})
                   </Text>
                 </>
@@ -650,8 +651,12 @@ export default function GalleryFolderScreen() {
         </View>
       ) : (
         <View style={styles.appBar}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 8, padding: 4 }}>
-            <Ionicons name="chevron-back" size={24} color={colors.primary} />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.textStrong} />
           </TouchableOpacity>
 
           <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -710,7 +715,14 @@ export default function GalleryFolderScreen() {
           contentContainerStyle={{ padding: GAP }}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.refreshTint}
+            />
+          }
           ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 16, alignItems: "center" }}>
@@ -722,7 +734,7 @@ export default function GalleryFolderScreen() {
             isAccessDenied ? (
               <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 24 }}>
                 <Ionicons name="lock-closed-outline" size={48} color={colors.dangerText} />
-                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textStrong, marginTop: 12 }}>
                   Akses Ditolak
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: 6 }}>
@@ -732,7 +744,7 @@ export default function GalleryFolderScreen() {
             ) : isError ? (
               <View style={{ alignItems: "center", paddingTop: 80, paddingHorizontal: 24 }}>
                 <Ionicons name="cloud-offline-outline" size={48} color={colors.dangerText} />
-                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textStrong, marginTop: 12 }}>
                   Koneksi Bermasalah
                 </Text>
                 <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: "center", marginTop: 6 }}>
@@ -762,7 +774,7 @@ export default function GalleryFolderScreen() {
         onRequestClose={() => setViewerVisible(false)}
         statusBarTranslucent
       >
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <StatusBar barStyle="light-content" backgroundColor={colors.viewerBackdrop} />
         <View style={styles.viewerContainer}>
           {/* Top Overlay */}
           <SafeAreaView style={styles.viewerTopBar}>
@@ -771,7 +783,7 @@ export default function GalleryFolderScreen() {
               style={styles.viewerIconButton}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
-              <Ionicons name="close" size={26} color="#fff" />
+              <Ionicons name="close" size={26} color={colors.onGradient} />
             </TouchableOpacity>
 
             <Text style={styles.viewerCounter}>
@@ -784,7 +796,7 @@ export default function GalleryFolderScreen() {
                 style={styles.viewerIconButton}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <Ionicons name="trash-outline" size={22} color="#ff4d4f" />
+                <Ionicons name="trash-outline" size={22} color={colors.dangerOnDark} />
               </TouchableOpacity>
             )}
           </SafeAreaView>
@@ -836,7 +848,7 @@ export default function GalleryFolderScreen() {
               }}
               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
             >
-              <Ionicons name="chevron-back" size={28} color="#fff" />
+              <Ionicons name="chevron-back" size={28} color={colors.onGradient} />
             </TouchableOpacity>
           )}
 
@@ -850,7 +862,7 @@ export default function GalleryFolderScreen() {
               }}
               hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
             >
-              <Ionicons name="chevron-forward" size={28} color="#fff" />
+              <Ionicons name="chevron-forward" size={28} color={colors.onGradient} />
             </TouchableOpacity>
           )}
 
@@ -881,11 +893,11 @@ export default function GalleryFolderScreen() {
                 accessibilityLabel="Unduh foto ini"
               >
                 {downloadingId === currentViewerPhoto.id ? (
-                  <ActivityIndicator size="small" color="#fff" style={{ marginRight: 4 }} />
+                  <ActivityIndicator size="small" color={colors.onGradient} style={{ marginRight: 4 }} />
                 ) : (
-                  <Ionicons name="download-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                  <Ionicons name="download-outline" size={16} color={colors.onGradient} style={{ marginRight: 4 }} />
                 )}
-                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>
+                <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 13 }}>
                   {downloadingId === currentViewerPhoto.id ? "Mengunduh…" : "Unduh"}
                 </Text>
               </TouchableOpacity>
@@ -894,8 +906,8 @@ export default function GalleryFolderScreen() {
                 onPress={() => openCategoryModal(currentViewerPhoto)}
                 style={styles.categoryEditBtn}
               >
-                <Ionicons name="pricetag-outline" size={15} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={{ color: "#fff", fontWeight: "600", fontSize: 13 }}>Ubah Kategori</Text>
+                <Ionicons name="pricetag-outline" size={15} color={colors.onGradient} style={{ marginRight: 4 }} />
+                <Text style={{ color: colors.onGradient, fontWeight: "600", fontSize: 13 }}>Ubah Kategori</Text>
               </TouchableOpacity>
             </SafeAreaView>
           )}
@@ -970,7 +982,7 @@ export default function GalleryFolderScreen() {
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
                 onPress={() => setCategoryTarget(null)}
-                style={{ paddingVertical: 10, paddingHorizontal: 16 }}
+                style={{ paddingVertical: 10, paddingHorizontal: 16, minHeight: 44, justifyContent: "center" }}
               >
                 <Text style={{ color: colors.textSecondary }}>Batal</Text>
               </TouchableOpacity>
@@ -1005,7 +1017,7 @@ export default function GalleryFolderScreen() {
             <View style={styles.modalActionsRow}>
               <TouchableOpacity
                 onPress={() => setShowRenameModal(false)}
-                style={{ paddingVertical: 10, paddingHorizontal: 16 }}
+                style={{ paddingVertical: 10, paddingHorizontal: 16, minHeight: 44, justifyContent: "center" }}
               >
                 <Text style={{ color: colors.textSecondary }}>Batal</Text>
               </TouchableOpacity>
@@ -1089,7 +1101,7 @@ export default function GalleryFolderScreen() {
               }}
               disabled={uploading}
             >
-              <Ionicons name="images-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />
+              <Ionicons name="images-outline" size={18} color={colors.textStrong} style={{ marginRight: 8 }} />
               <Text style={styles.modalButtonTextSecondary}>Pilih Dari Galeri Foto</Text>
             </TouchableOpacity>
 
@@ -1101,7 +1113,7 @@ export default function GalleryFolderScreen() {
               }}
               disabled={uploading}
             >
-              <Ionicons name="document-attach-outline" size={18} color={colors.text} style={{ marginRight: 8 }} />
+              <Ionicons name="document-attach-outline" size={18} color={colors.textStrong} style={{ marginRight: 8 }} />
               <Text style={styles.modalButtonTextSecondary}>Dokumen (PDF / DOCX / XLSX)</Text>
             </TouchableOpacity>
 
@@ -1118,7 +1130,7 @@ export default function GalleryFolderScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     appBar: {
       flexDirection: "row",
@@ -1127,40 +1139,77 @@ const makeStyles = (c: ThemeColors) =>
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: c.border,
-      backgroundColor: c.background,
+      borderBottomColor: c.glassBorder,
+      backgroundColor: c.glassBar,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0.25 : 0.04,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    backButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: c.insetFill,
+      borderWidth: 1,
+      borderColor: c.insetBorder,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 10,
     },
     barTitle: {
       fontSize: 17,
       fontWeight: "700",
-      color: c.text,
+      letterSpacing: -0.3,
+      color: c.textStrong,
       flex: 1,
     },
     barButton: {
+      minWidth: 44,
+      minHeight: 44,
       paddingHorizontal: 8,
       paddingVertical: 6,
+      alignItems: "center",
+      justifyContent: "center",
     },
     addBtn: {
       backgroundColor: c.primaryAction,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 4,
     },
     bulkDeleteBtn: {
       backgroundColor: c.dangerAction,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 44,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 14,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
     },
     cell: {
       width: CELL_SIZE,
       height: CELL_SIZE,
       margin: GAP,
-      borderRadius: 6,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
       overflow: "hidden",
-      backgroundColor: c.border,
+      backgroundColor: c.glassCardSubtle,
       position: "relative",
     },
     cellImage: {
@@ -1172,7 +1221,7 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
       padding: 6,
-      backgroundColor: c.card,
+      backgroundColor: c.glassCard,
     },
     cellDocText: {
       fontSize: 10,
@@ -1185,13 +1234,13 @@ const makeStyles = (c: ThemeColors) =>
       bottom: 4,
       left: 4,
       right: 4,
-      backgroundColor: "rgba(0,0,0,0.65)",
-      paddingHorizontal: 5,
+      backgroundColor: c.overlay,
+      paddingHorizontal: 6,
       paddingVertical: 2,
-      borderRadius: 4,
+      borderRadius: 12,
     },
     categoryBadgeText: {
-      color: "#fff",
+      color: c.onGradient,
       fontSize: 9,
       fontWeight: "600",
       textAlign: "center",
@@ -1204,15 +1253,15 @@ const makeStyles = (c: ThemeColors) =>
       height: 22,
       borderRadius: 11,
       borderWidth: 2,
-      borderColor: "#fff",
-      backgroundColor: "rgba(0,0,0,0.35)",
+      borderColor: c.onGradient,
+      backgroundColor: c.overlay,
       justifyContent: "center",
       alignItems: "center",
     },
     // Fullscreen Viewer
     viewerContainer: {
       flex: 1,
-      backgroundColor: "#000",
+      backgroundColor: c.viewerBackdrop,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1227,18 +1276,21 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       paddingHorizontal: 16,
       paddingVertical: 12,
-      backgroundColor: "rgba(0,0,0,0.6)",
+      backgroundColor: c.overlay,
     },
     viewerCounter: {
-      color: "#fff",
+      color: c.onGradient,
       fontSize: 15,
       fontWeight: "600",
+      fontVariant: ["tabular-nums"],
     },
     viewerIconButton: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: "rgba(255,255,255,0.15)",
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: c.glassOnGradient,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1259,7 +1311,9 @@ const makeStyles = (c: ThemeColors) =>
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: c.glassOnGradient,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1274,24 +1328,29 @@ const makeStyles = (c: ThemeColors) =>
       justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingVertical: 16,
-      backgroundColor: "rgba(0,0,0,0.75)",
+      backgroundColor: c.overlay,
     },
     viewerOriginalName: {
-      color: "#fff",
+      color: c.onGradient,
       fontSize: 14,
       fontWeight: "600",
     },
     viewerMetaText: {
-      color: "rgba(255,255,255,0.7)",
+      color: c.onGradient,
+      opacity: 0.7,
       fontSize: 12,
     },
     categoryEditBtn: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       backgroundColor: c.primaryAction,
-      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 44,
+      paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 8,
+      borderRadius: 14,
     },
     // Center Card Modal (Category & Rename)
     modalOverlayCenter: {
@@ -1301,14 +1360,17 @@ const makeStyles = (c: ThemeColors) =>
       padding: 24,
     },
     categoryModalCard: {
-      backgroundColor: c.card,
-      borderRadius: 16,
+      backgroundColor: c.glassSheet,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
+      borderRadius: 24,
       padding: 20,
     },
     modalHeading: {
       fontSize: 17,
       fontWeight: "700",
-      color: c.text,
+      letterSpacing: -0.3,
+      color: c.textStrong,
       marginBottom: 4,
     },
     modalSubheading: {
@@ -1324,24 +1386,29 @@ const makeStyles = (c: ThemeColors) =>
     },
     presetChip: {
       borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 20,
+      borderColor: c.glassBorder,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      backgroundColor: c.surface,
+      minHeight: 44,
+      justifyContent: "center",
+      backgroundColor: c.glassChip,
     },
     presetChipText: {
       fontSize: 13,
-      color: c.text,
-      fontWeight: "500",
+      color: c.textStrong,
+      fontWeight: "600",
     },
     customCategoryInput: {
       borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 8,
-      padding: 12,
+      borderColor: c.glassBorder,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      minHeight: 48,
       fontSize: 14,
-      color: c.text,
+      color: c.textStrong,
+      backgroundColor: c.glassCardSubtle,
       marginBottom: 16,
     },
     modalActionsRow: {
@@ -1352,9 +1419,19 @@ const makeStyles = (c: ThemeColors) =>
     },
     saveBtn: {
       backgroundColor: c.primaryAction,
-      paddingHorizontal: 16,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 48,
+      paddingHorizontal: 18,
       paddingVertical: 10,
-      borderRadius: 8,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 4,
     },
     // Bottom Sheet Modal (Upload Source)
     bottomModalOverlay: {
@@ -1363,9 +1440,11 @@ const makeStyles = (c: ThemeColors) =>
       justifyContent: "flex-end",
     },
     bottomModalContent: {
-      backgroundColor: c.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      backgroundColor: c.glassSheet,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderTopWidth: 1,
+      borderTopColor: c.glassSheetBorder,
       padding: 20,
       paddingBottom: 36,
     },
@@ -1380,9 +1459,10 @@ const makeStyles = (c: ThemeColors) =>
     modalTitle: {
       fontSize: 17,
       fontWeight: "700",
+      letterSpacing: -0.3,
       textAlign: "center",
       marginBottom: 16,
-      color: c.text,
+      color: c.textStrong,
     },
     uploadCategoryLabel: {
       fontSize: 12,
@@ -1398,24 +1478,36 @@ const makeStyles = (c: ThemeColors) =>
     },
     uploadChip: {
       borderWidth: 1,
-      borderColor: c.borderStrong,
-      borderRadius: 16,
-      paddingHorizontal: 10,
+      borderColor: c.glassBorder,
+      borderRadius: 14,
+      paddingHorizontal: 12,
       paddingVertical: 6,
-      backgroundColor: c.surface,
+      minHeight: 44,
+      justifyContent: "center",
+      backgroundColor: c.glassChip,
     },
     uploadChipText: {
       fontSize: 12,
-      color: c.text,
+      fontWeight: "600",
+      color: c.textStrong,
     },
     modalButtonPrimary: {
       backgroundColor: c.primaryAction,
-      padding: 15,
-      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      minHeight: 48,
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      borderRadius: 14,
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "center",
       marginBottom: 10,
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 4,
     },
     modalButtonTextPrimary: {
       color: c.onGradient,
@@ -1423,26 +1515,33 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 14,
     },
     modalButtonSecondary: {
-      backgroundColor: c.card,
-      padding: 15,
-      borderRadius: 12,
+      backgroundColor: c.glassCardSubtle,
+      minHeight: 48,
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      borderRadius: 14,
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "center",
       marginBottom: 10,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.glassBorder,
     },
     modalButtonTextSecondary: {
-      color: c.text,
+      color: c.textStrong,
       fontWeight: "600",
       fontSize: 14,
     },
     modalButtonCancel: {
-      backgroundColor: c.surface,
-      padding: 15,
-      borderRadius: 12,
+      backgroundColor: c.glassCardSubtle,
+      borderWidth: 1,
+      borderColor: c.glassBorder,
+      minHeight: 48,
+      paddingHorizontal: 15,
+      paddingVertical: 12,
+      borderRadius: 14,
       alignItems: "center",
+      justifyContent: "center",
       marginTop: 4,
     },
     modalButtonTextCancel: {

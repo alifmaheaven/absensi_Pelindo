@@ -1,4 +1,4 @@
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { ArrowLeft, Device, InfoOutlineRounded, Ticket } from "@/components/icon";
 import EmptyState from "@/components/ui/EmptyState";
 import InteractiveButton from "@/components/ui/InteractiveButton";
@@ -19,7 +19,6 @@ import {
   ITicketUser,
 } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
@@ -93,7 +92,8 @@ const initialMeta: IMeta = {
 
 const TicketingScreen = () => {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const [ticketDatas, setTicketDatas] = useState<TicketData[]>([]);
   const [ticketMeta, setTicketMeta] = useState<IMeta>(initialMeta);
@@ -306,13 +306,8 @@ const TicketingScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <LinearGradient
-        colors={[colors.primaryAction, colors.primaryActionEnd]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView style={{ flex: 1 }}>
+      <View style={styles.headerBar}>
+        <SafeAreaView>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={() => {
@@ -325,15 +320,15 @@ const TicketingScreen = () => {
               style={styles.backButton}
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
-              <ArrowLeft color="#fff" />
+              <ArrowLeft color={colors.textStrong} />
             </TouchableOpacity>
 
             <Text style={styles.headerTitle}>Tiket Kendala</Text>
 
-            <View style={{ width: 60 }} />
+            <View style={{ width: 38 }} />
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
 
       {/* Content */}
       <View style={styles.card}>
@@ -464,7 +459,8 @@ const TicketItem = ({
   incidentOwners,
 }: TicketItemProps & { incidentOwners?: IIncidentOwner[] }) => {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const variantStatus = status.toLowerCase() as BadgeVariant;
   const variantProgress = progress.toLowerCase() as BadgeVariant;
 
@@ -490,8 +486,8 @@ const TicketItem = ({
       {incidentOwners && incidentOwners.length > 0 && (
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
           {incidentOwners.map((owner) => (
-            <View key={owner.id} style={{ backgroundColor: colors.primarySoft, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
-              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "500" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
+            <View key={owner.id} style={{ backgroundColor: colors.accentPill, borderWidth: 1, borderColor: colors.accentPillBorder, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 }}>
+              <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>{owner.name}{owner.phone ? ` - ${owner.phone}` : ''}</Text>
             </View>
           ))}
         </View>
@@ -514,7 +510,8 @@ const TicketItem = ({
 
 const Badge = ({ text, variant }: BadgeProps) => {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const style = badgeVariant(colors)[variant] ?? {
     bg: colors.border,
     color: colors.textSecondary,
@@ -529,15 +526,21 @@ const Badge = ({ text, variant }: BadgeProps) => {
 
 /* ================= STYLES ================= */
 
-const makeStyles = (c: ThemeColors) => StyleSheet.create({
+const makeStyles = (c: ThemeColors, isDark: boolean = false) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: c.background,
   },
 
-  headerGradient: {
-    height: 130,
-    paddingBottom: 24,
+  headerBar: {
+    backgroundColor: c.glassCard,
+    borderBottomWidth: 1,
+    borderBottomColor: c.glassBorder,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: isDark ? 0.25 : 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   header: {
@@ -546,17 +549,23 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingTop: 8,
+    paddingBottom: 12,
   },
 
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: c.onGradient,
+    letterSpacing: -0.3,
+    color: c.textStrong,
   },
 
   backButton: {
-    minWidth: 44,
-    minHeight: 44,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: c.insetFill,
+    borderWidth: 1,
+    borderColor: c.insetBorder,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -564,11 +573,8 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: c.background,
-    marginTop: -20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 16,
   },
 
   sectionHeader: {
@@ -581,6 +587,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "700",
+    letterSpacing: -0.2,
     color: c.textStrong,
   },
 
@@ -591,16 +598,16 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
 
   ticketCard: {
-    backgroundColor: c.card,
-    borderRadius: 16,
+    backgroundColor: c.glassCard,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowColor: c.shadowGlass,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
     elevation: 2,
   },
 
@@ -611,9 +618,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
 
   badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
 
   badgeText: {
@@ -624,6 +631,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   ticketTitle: {
     fontSize: 15,
     fontWeight: "700",
+    letterSpacing: -0.2,
     color: c.textStrong,
     marginBottom: 4,
   },
@@ -655,6 +663,7 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   dateText: {
     fontSize: 12,
     color: c.textSecondary,
+    fontVariant: ["tabular-nums"],
   },
 
   detailButton: {
@@ -662,11 +671,11 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     gap: 4,
     paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    backgroundColor: c.surface,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: c.glassCardSubtle,
     borderWidth: 1,
-    borderColor: c.border,
+    borderColor: c.glassBorder,
   },
 
   detailText: {
@@ -685,17 +694,17 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: c.surface,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: c.text,
+    color: c.textStrong,
     paddingVertical: 0,
   },
   statusFilterWrapper: {
@@ -705,12 +714,12 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   statusFilterButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: c.surface,
-    borderRadius: 12,
+    backgroundColor: c.glassCardSubtle,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    height: 42,
+    height: 44,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
     gap: 6,
     minWidth: 100,
     justifyContent: "space-between",
@@ -721,32 +730,33 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   statusFilterText: {
     fontSize: 14,
-    color: c.text,
-    fontWeight: "500",
+    color: c.textStrong,
+    fontWeight: "600",
   },
   statusDropdown: {
     position: "absolute",
-    top: 48,
+    top: 50,
     right: 0,
     minWidth: 150,
-    backgroundColor: c.card,
-    borderRadius: 12,
+    backgroundColor: c.glassSheet,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: c.borderStrong,
-    shadowColor: "#000",
+    borderColor: c.glassBorder,
+    overflow: "hidden",
+    shadowColor: c.shadowGlass,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowOpacity: isDark ? 0.25 : 0.05,
+    shadowRadius: 10,
     elevation: 8,
   },
   statusOption: {
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: c.border,
+    borderBottomColor: c.glassBorderSubtle,
   },
   statusOptionActive: {
-    backgroundColor: c.primarySoft,
+    backgroundColor: c.accentPill,
   },
   statusOptionText: {
     fontSize: 14,

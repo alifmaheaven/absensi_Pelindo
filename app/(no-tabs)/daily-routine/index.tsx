@@ -29,7 +29,7 @@ interface IErrorState {
 export default function DailyRoutineListScreen() {
   const colors = useThemeColors();
   const isDark = useIsDarkTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -169,7 +169,7 @@ export default function DailyRoutineListScreen() {
               style={styles.backButton}
               hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
             >
-              <ArrowLeft color="#fff" />
+              <ArrowLeft color={colors.onGradient} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Daily Routine</Text>
             <View style={{ width: 40 }} />
@@ -179,14 +179,14 @@ export default function DailyRoutineListScreen() {
 
       <ScrollView
         style={styles.card}
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => fetchData(true)}
             colors={[colors.primary]}
-            tintColor={isDark ? "#38bdf8" : colors.primary}
+            tintColor={colors.refreshTint}
           />
         }
       >
@@ -317,7 +317,7 @@ export default function DailyRoutineListScreen() {
                         {isStarting ? (
                           <ActivityIndicator
                             size="small"
-                            color="#fff"
+                            color={colors.onGradient}
                             style={{ marginRight: 8 }}
                           />
                         ) : null}
@@ -343,7 +343,7 @@ export default function DailyRoutineListScreen() {
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -363,11 +363,16 @@ const makeStyles = (c: ThemeColors) =>
     headerTitle: {
       fontSize: 18,
       fontWeight: "700",
+      letterSpacing: -0.3,
       color: c.onGradient,
     },
     backButton: {
-      minWidth: 44,
-      minHeight: 44,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: c.glassOnGradient,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -375,20 +380,22 @@ const makeStyles = (c: ThemeColors) =>
       flex: 1,
       backgroundColor: c.background,
       marginTop: -20,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      borderTopWidth: 1,
+      borderTopColor: c.glassSheetBorder,
     },
     routineCard: {
-      backgroundColor: c.card,
+      backgroundColor: c.glassCard,
       borderRadius: 16,
-      padding: 20,
+      padding: 14,
       marginBottom: 16,
       borderWidth: 1,
-      borderColor: c.border,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
+      borderColor: c.glassBorder,
+      shadowColor: c.shadowGlass,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowRadius: 10,
       elevation: 2,
     },
     routineHeader: {
@@ -404,8 +411,8 @@ const makeStyles = (c: ThemeColors) =>
     },
     frequencyBadge: {
       paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
+      paddingVertical: 4,
+      borderRadius: 12,
       borderWidth: 1,
       alignSelf: "flex-start",
     },
@@ -414,8 +421,8 @@ const makeStyles = (c: ThemeColors) =>
       fontWeight: "600",
     },
     frequencyBadgeDaily: {
-      backgroundColor: c.surface,
-      borderColor: c.borderStrong,
+      backgroundColor: c.glassChip,
+      borderColor: c.glassBorder,
     },
     frequencyBadgeDailyText: {
       fontSize: 11,
@@ -423,8 +430,8 @@ const makeStyles = (c: ThemeColors) =>
       color: c.textSecondary,
     },
     frequencyBadgeWeekly: {
-      backgroundColor: c.primarySoft,
-      borderColor: c.primary,
+      backgroundColor: c.accentPill,
+      borderColor: c.accentPillBorder,
     },
     frequencyBadgeWeeklyText: {
       fontSize: 11,
@@ -434,6 +441,7 @@ const makeStyles = (c: ThemeColors) =>
     routineName: {
       fontSize: 17,
       fontWeight: "700",
+      letterSpacing: -0.2,
       color: c.textStrong,
       lineHeight: 22,
     },
@@ -449,7 +457,7 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       paddingVertical: 8,
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: c.glassBorderSubtle,
     },
     itemCountLabel: {
       fontSize: 13,
@@ -458,7 +466,8 @@ const makeStyles = (c: ThemeColors) =>
     itemCountValue: {
       fontSize: 13,
       fontWeight: "600",
-      color: c.text,
+      color: c.textStrong,
+      fontVariant: ["tabular-nums"],
     },
     progressRow: {
       flexDirection: "row",
@@ -466,7 +475,7 @@ const makeStyles = (c: ThemeColors) =>
       alignItems: "center",
       paddingVertical: 8,
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: c.glassBorderSubtle,
     },
     progressLabel: {
       fontSize: 13,
@@ -476,12 +485,13 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 13,
       fontWeight: "700",
       color: c.primary,
+      fontVariant: ["tabular-nums"],
     },
     completedBadge: {
       backgroundColor: c.successSoft,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor: c.success,
     },
@@ -491,12 +501,12 @@ const makeStyles = (c: ThemeColors) =>
       color: c.successText,
     },
     inProgressBadge: {
-      backgroundColor: c.primarySoft,
+      backgroundColor: c.accentPill,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.primary,
+      borderColor: c.accentPillBorder,
     },
     inProgressBadgeText: {
       fontSize: 12,
@@ -507,9 +517,9 @@ const makeStyles = (c: ThemeColors) =>
       backgroundColor: c.warningSoft,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: c.warning,
+      borderColor: c.warningBorder,
     },
     pendingBadgeText: {
       fontSize: 12,
@@ -518,8 +528,16 @@ const makeStyles = (c: ThemeColors) =>
     },
     startButton: {
       backgroundColor: c.successAction,
+      minHeight: 48,
       paddingVertical: 14,
-      borderRadius: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      shadowColor: c.success,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 3,
       alignItems: "center",
       justifyContent: "center",
       flexDirection: "row",
@@ -531,9 +549,18 @@ const makeStyles = (c: ThemeColors) =>
     },
     viewButton: {
       backgroundColor: c.primaryAction,
+      minHeight: 48,
       paddingVertical: 14,
-      borderRadius: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      shadowColor: c.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 3,
       alignItems: "center",
+      justifyContent: "center",
     },
     viewButtonText: {
       color: c.onGradient,

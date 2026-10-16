@@ -11,7 +11,7 @@ interface Props {
 
 // Netral mengikuti tema (fallback bila severity tanpa warna).
 const defaultSeverityColor = (c: ThemeColors) => ({
-  bg: "rgba(150,150,150,0.15)",
+  bg: c.glassChip,
   border: c.textMuted,
   text: c.textSecondary,
 });
@@ -78,14 +78,18 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   },
   severityButton: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: c.borderStrong,
+    borderColor: c.glassBorder,
+    backgroundColor: c.glassCardSubtle,
     alignItems: "center",
+    justifyContent: "center",
   },
   severityText: {
     fontSize: 13,
+    fontWeight: "600",
     color: c.textSecondary,
   },
   emptyText: {

@@ -6,7 +6,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { useThemeColors, type ThemeColors } from "@/hooks/use-theme-color";
+import { useThemeColors, useIsDarkTheme, type ThemeColors } from "@/hooks/use-theme-color";
 import { CheckRounded, ClockOutline, InfoOutlineRounded } from "@/components/icon";
 import { ITodayRoutineResponse } from "@/types";
 import { parseWIBDate } from "@/utils/utils";
@@ -163,7 +163,8 @@ export default function RoutineProgressCard({
   style,
 }: RoutineProgressCardProps) {
   const colors = useThemeColors();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const isDark = useIsDarkTheme();
+  const styles = useMemo(() => makeStyles(colors, isDark), [colors, isDark]);
 
   const summary = useMemo(() => calculateRoutineProgress(routines), [routines]);
   const dateStr = useMemo(() => {
@@ -346,20 +347,20 @@ export default function RoutineProgressCard({
   );
 }
 
-const makeStyles = (c: ThemeColors) =>
+const makeStyles = (c: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
     card: {
-      backgroundColor: c.card,
-      borderRadius: 20,
+      backgroundColor: c.glassCard,
+      borderRadius: 24,
       padding: 20,
       marginBottom: 20,
       borderWidth: 1,
-      borderColor: c.border,
-      shadowColor: "#000",
+      borderColor: c.glassBorder,
+      shadowColor: c.shadowGlass,
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.05,
+      shadowOpacity: isDark ? 0.25 : 0.05,
       shadowRadius: 10,
-      elevation: 4,
+      elevation: 2,
     },
     headerRow: {
       flexDirection: "row",
@@ -374,10 +375,12 @@ const makeStyles = (c: ThemeColors) =>
       marginRight: 8,
     },
     iconCheckWrapper: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
-      backgroundColor: c.primarySoft,
+      width: 28,
+      height: 28,
+      borderRadius: 10,
+      backgroundColor: c.accentSoft,
+      borderWidth: 1,
+      borderColor: c.accentSoftBorder,
       alignItems: "center",
       justifyContent: "center",
       marginRight: 8,
@@ -392,6 +395,7 @@ const makeStyles = (c: ThemeColors) =>
       fontSize: 13,
       fontWeight: "600",
       color: c.textSecondary,
+      fontVariant: ["tabular-nums"],
     },
     summaryRow: {
       flexDirection: "row",
@@ -402,21 +406,24 @@ const makeStyles = (c: ThemeColors) =>
     summaryCountText: {
       fontSize: 16,
       fontWeight: "700",
+      letterSpacing: -0.2,
       color: c.textStrong,
+      fontVariant: ["tabular-nums"],
     },
     summaryPercentageText: {
       fontSize: 13,
       fontWeight: "700",
       color: c.primary,
+      fontVariant: ["tabular-nums"],
     },
     progressBarTrack: {
       height: 8,
-      backgroundColor: c.surface,
+      backgroundColor: c.insetFill,
       borderRadius: 4,
       overflow: "hidden",
       marginBottom: 14,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.insetBorder,
     },
     progressBarFill: {
       height: "100%",
@@ -446,7 +453,7 @@ const makeStyles = (c: ThemeColors) =>
     },
     checklistRow: {
       borderTopWidth: 1,
-      borderTopColor: c.border,
+      borderTopColor: c.glassBorderSubtle,
       paddingTop: 10,
       marginTop: 8,
     },
@@ -457,18 +464,21 @@ const makeStyles = (c: ThemeColors) =>
     checklistValue: {
       fontWeight: "600",
       color: c.textStrong,
+      fontVariant: ["tabular-nums"],
     },
 
     // Warning / Belum Check-in State
     warningCard: {
       backgroundColor: c.warningSoft,
-      borderColor: c.warning,
+      borderColor: c.warningBorder,
     },
     warningIconWrapper: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(245, 158, 11, 0.15)",
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      backgroundColor: c.glassCardSubtle,
+      borderWidth: 1,
+      borderColor: c.warningBorder,
       alignItems: "center",
       justifyContent: "center",
       marginRight: 10,
@@ -487,27 +497,35 @@ const makeStyles = (c: ThemeColors) =>
     },
     checkInButton: {
       backgroundColor: c.warningAction,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      borderRadius: 10,
+      minHeight: 48,
+      paddingHorizontal: 20,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.glassOnGradientBorder,
+      shadowColor: c.warningAction,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 3,
       alignSelf: "flex-start",
       alignItems: "center",
       justifyContent: "center",
     },
     checkInButtonText: {
-      color: "#ffffff",
+      color: c.onGradient,
       fontSize: 13,
       fontWeight: "700",
     },
 
     // Error State
     errorCard: {
-      borderColor: c.danger,
+      backgroundColor: c.dangerGlass,
+      borderColor: c.dangerGlassBorder,
     },
     errorIconWrapper: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: 36,
+      height: 36,
+      borderRadius: 12,
       backgroundColor: c.dangerSoft,
       alignItems: "center",
       justifyContent: "center",
@@ -527,10 +545,11 @@ const makeStyles = (c: ThemeColors) =>
     },
     retryButton: {
       borderWidth: 1,
-      borderColor: c.primary,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 8,
+      borderColor: c.glassBorder,
+      backgroundColor: c.glassCardSubtle,
+      minHeight: 48,
+      paddingHorizontal: 20,
+      borderRadius: 14,
       alignSelf: "flex-start",
       alignItems: "center",
       justifyContent: "center",
@@ -549,7 +568,7 @@ const makeStyles = (c: ThemeColors) =>
     successIconWrapper: {
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: 14,
       backgroundColor: c.successSoft,
       alignItems: "center",
       justifyContent: "center",
@@ -564,8 +583,10 @@ const makeStyles = (c: ThemeColors) =>
       paddingHorizontal: 8,
     },
     neutralRefreshButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
+      minHeight: 44,
+      paddingHorizontal: 16,
+      alignItems: "center",
+      justifyContent: "center",
     },
     neutralRefreshButtonText: {
       color: c.primary,

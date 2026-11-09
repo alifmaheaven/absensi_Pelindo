@@ -144,6 +144,41 @@ beforeEach(async () => {
 });
 
 describe("F-01 — penulisan antrean saat sync berjalan", () => {
+  it.each([
+    ["queueRequest", async () => {
+      const { queueRequest } = require("../lib/offlineQueue");
+      await queueRequest("/api/v2/later", "post", { description: "later" });
+    }],
+    ["queueOfflineCheckIn", async () => {
+      await queueOfflineCheckIn(checkInPayload("later"));
+    }],
+    ["queueOfflineCheckOut", async () => {
+      const { queueOfflineCheckOut } = require("../lib/offlineQueue");
+      await queueOfflineCheckOut({ user_id: "u1", checkout: "2026-10-15 17:00:00" } as any);
+    }],
+    ["queueOfflineEvidence", async () => {
+      const { queueOfflineEvidence } = require("../lib/offlineQueue");
+      await queueOfflineEvidence({ attendance_id: "att-1", images: [] } as any);
+    }],
+  ])("enqueue %s rejects without overwriting an unreadable existing queue", async (_name, enqueue) => {
+    const existingAction = seededAction("preserve-me");
+    existingAction.id = "preserve-me";
+    const existing = JSON.stringify([existingAction]);
+    await AsyncStorage.setItem("@offline_queue", existing);
+    const originalGetItem = (AsyncStorage.getItem as jest.Mock).getMockImplementation();
+    try {
+      (AsyncStorage.getItem as jest.Mock).mockImplementation(async (key: string) => {
+        if (key === "@offline_queue") throw new Error("Transient storage failure");
+        return originalGetItem?.(key);
+      });
+      await expect(enqueue()).rejects.toThrow("Antrean tidak terbaca");
+    } finally {
+      (AsyncStorage.getItem as jest.Mock).mockImplementation(originalGetItem!);
+    }
+    expect(await AsyncStorage.getItem("@offline_queue")).toBe(existing);
+    expect((await getQueue()).map((action) => action.id)).toEqual(["preserve-me"]);
+  });
+
   it("item yang di-queue SELAGI sync TIDAK hilang (dulu: saveQueue(remaining) menimpanya)", async () => {
     let releaseSlow!: () => void;
     const slowGate = new Promise<void>((resolve) => { releaseSlow = resolve; });

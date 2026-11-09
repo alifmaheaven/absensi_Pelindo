@@ -548,6 +548,44 @@ describe("WAVE-0 CHECK-3 — integritas bukti saat sync antrean", () => {
     expect(evidenceStorageMock.cleanupOrphanedEvidence).not.toHaveBeenCalled();
   });
 
+  it("transient failed-bucket read does not overwrite existing data or drop the failed action", async () => {
+    const existingFailure = {
+      id: "existing-failure",
+      type: "ATTENDANCE_CHECKIN",
+      data: { localImages: [] },
+      timestamp: Date.now(),
+      failedAt: Date.now(),
+      errorCode: 409,
+      errorMessage: "existing record",
+    };
+    await AsyncStorage.setItem("@failed_attendance_queue", JSON.stringify([existingFailure]));
+    await seedQueue([checkInAction([])]);
+    (apiClient.post as jest.Mock).mockRejectedValueOnce(
+      Object.assign(new Error("duplicate"), { response: { status: 409 } }),
+    );
+
+    const getItemMock = AsyncStorage.getItem as jest.Mock;
+    const originalGetItem = getItemMock.getMockImplementation()!;
+    let rejectOnce = true;
+    getItemMock.mockImplementation(async (key: string) => {
+      if (key === "@failed_attendance_queue" && rejectOnce) {
+        rejectOnce = false;
+        throw new Error("temporary storage read failure");
+      }
+      return originalGetItem(key);
+    });
+
+    const outcome = await syncQueuedRequests();
+    getItemMock.mockImplementation(originalGetItem);
+
+    expect(outcome.synced).toBe(0);
+    expect(
+      (AsyncStorage as unknown as { __INTERNAL_MOCK_STORAGE__: Record<string, string> })
+        .__INTERNAL_MOCK_STORAGE__["@failed_attendance_queue"],
+    ).toBe(JSON.stringify([existingFailure]));
+    expect(await getQueue()).toHaveLength(1);
+  });
+
   it("M-1: bucket korup + repair-write saat sync → keep parsial → sweep tetap DILEWAT, record tetap tersimpan", async () => {
     await AsyncStorage.setItem("@failed_attendance_queue", "{korupsi-pasca-crash");
     const stale = checkInAction([

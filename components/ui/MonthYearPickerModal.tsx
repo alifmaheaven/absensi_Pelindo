@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Modal,
   StyleSheet,
@@ -52,13 +52,20 @@ export default function MonthYearPickerModal({
 
   const [selectedYear, setSelectedYear] = useState<number>(initialYear);
   const [selectedMonth, setSelectedMonth] = useState<number>(initialMonth);
+  const [previousProps, setPreviousProps] = useState({ visible, year, month });
 
-  useEffect(() => {
-    if (visible) {
-      setSelectedYear(year ?? currentWIB.year);
-      setSelectedMonth(month ?? (currentWIB.month + 1));
-    }
-  }, [visible, year, month]);
+  // Reset when the modal is opened or its requested month changes. A guarded
+  // render-time adjustment avoids scheduling state updates from an effect.
+  if (
+    visible &&
+    (!previousProps.visible || previousProps.year !== year || previousProps.month !== month)
+  ) {
+    setPreviousProps({ visible, year, month });
+    setSelectedYear(year ?? currentWIB.year);
+    setSelectedMonth(month ?? (currentWIB.month + 1));
+  } else if (previousProps.visible !== visible) {
+    setPreviousProps({ visible, year, month });
+  }
 
   const handlePrevYear = () => {
     try {

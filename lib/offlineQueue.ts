@@ -251,15 +251,29 @@ export function isActionEligibleFor(
  * sebagai "keep-set tidak lengkap" — menafsirkan gagal-baca sebagai [] akan
  * menghapus SEMUA bukti keranjang gagal secara senyap.
  */
-async function readAllFailedAttendance(): Promise<FailedAttendanceItem[] | null> {
+async function readFailedAttendanceBucket(): Promise<{
+  list: FailedAttendanceItem[] | null;
+  malformed: boolean;
+}> {
+  let raw: string | null;
   try {
-    const raw = await AsyncStorage.getItem(FAILED_ATTENDANCE_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list : null;
+    raw = await AsyncStorage.getItem(FAILED_ATTENDANCE_KEY);
   } catch {
-    return null;
+    return { list: null, malformed: false };
   }
+  if (!raw) return { list: [], malformed: false };
+  try {
+    const list = JSON.parse(raw);
+    return Array.isArray(list)
+      ? { list, malformed: false }
+      : { list: null, malformed: true };
+  } catch {
+    return { list: null, malformed: true };
+  }
+}
+
+async function readAllFailedAttendance(): Promise<FailedAttendanceItem[] | null> {
+  return (await readFailedAttendanceBucket()).list;
 }
 
 /**
@@ -298,22 +312,30 @@ export async function getFailedAttendance(): Promise<FailedAttendanceItem[]> {
  * `false` = bucket sehat. Pemanggil lama yang mengabaikan nilai kembali
  * tetap kompil (boolean hanya berarti bagi sync yang menyapu).
  */
-export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<boolean> {
+async function persistFailedAttendance(item: FailedAttendanceItem): Promise<{ incomplete: boolean; persisted: boolean }> {
   try {
-    const existing = await readAllFailedAttendance();
-    if (existing === null) {
+    const { list: existing, malformed } = await readFailedAttendanceBucket();
+    if (existing === null && !malformed) {
+      console.error("[OfflineQueue] Keranjang gagal tidak dapat dibaca; write dibatalkan");
+      return { incomplete: true, persisted: false };
+    }
+    if (malformed) {
       console.warn(
-        "[OfflineQueue] Blob keranjang gagal lama tidak terbaca — digantikan record baru; bukti milik record lama TIDAK boleh disapu ronde ini (M-1)",
+        "[OfflineQueue] Blob keranjang gagal korup — digantikan record baru; sweep bukti dilewati ronde ini (M-1)",
       );
     }
     const list = existing ?? [];
     list.push(item);
     await AsyncStorage.setItem(FAILED_ATTENDANCE_KEY, JSON.stringify(list));
-    return existing === null;
+    return { incomplete: malformed, persisted: true };
   } catch (e) {
     console.error("[OfflineQueue] Gagal menyimpan absensi gagal:", e);
-    return true; // record mungkin tidak tersimpan → keep-set tidak lengkap
+    return { incomplete: true, persisted: false };
   }
+}
+
+export async function saveFailedAttendance(item: FailedAttendanceItem): Promise<boolean> {
+  return (await persistFailedAttendance(item)).incomplete;
 }
 
 export async function clearFailedAttendance(): Promise<void> {
@@ -617,7 +639,8 @@ export async function queueRequest(url: string, method: string, data?: any) {
   // F-01: read-modify-write di dalam mutex — tanpa ini sync yang sedang
   // berjalan dapat menulis-balik snapshot lamanya di atas item ini.
   await withQueueLock(async () => {
-    const queue = (await readQueueOrNull()) ?? [];
+    const queue = await readQueueOrNull();
+    if (queue === null) throw new Error("Antrean tidak terbaca — penyimpanan dibatalkan");
     queue.push(action);
     await saveQueue(queue);
   });
@@ -638,7 +661,8 @@ export async function queueOfflineCheckIn(payload: OfflineCheckInPayload): Promi
   };
   // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
   await withQueueLock(async () => {
-    const queue = (await readQueueOrNull()) ?? [];
+    const queue = await readQueueOrNull();
+    if (queue === null) throw new Error("Antrean tidak terbaca — penyimpanan dibatalkan");
     queue.push(action);
     await saveQueue(queue);
   });
@@ -659,7 +683,8 @@ export async function queueOfflineCheckOut(payload: OfflineCheckOutPayload): Pro
   };
   // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
   await withQueueLock(async () => {
-    const queue = (await readQueueOrNull()) ?? [];
+    const queue = await readQueueOrNull();
+    if (queue === null) throw new Error("Antrean tidak terbaca — penyimpanan dibatalkan");
     queue.push(action);
     await saveQueue(queue);
   });
@@ -686,7 +711,8 @@ export async function queueOfflineEvidence(payload: OfflineEvidenceRetryPayload)
   };
   // F-01: lihat queueRequest — mutasi antrean WAJIB lewat mutex.
   await withQueueLock(async () => {
-    const queue = (await readQueueOrNull()) ?? [];
+    const queue = await readQueueOrNull();
+    if (queue === null) throw new Error("Antrean tidak terbaca — penyimpanan dibatalkan");
     queue.push(action);
     await saveQueue(queue);
   });
@@ -1012,8 +1038,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
-              newlyFailedAttendance.push(lostItem);
+              const saved = await persistFailedAttendance(lostItem);
+              failedBucketPartial = saved.incomplete || failedBucketPartial;
+              if (!saved.persisted) remaining.push(action);
+              else newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
           }
@@ -1109,8 +1137,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
-              newlyFailedAttendance.push(lostItem);
+              const saved = await persistFailedAttendance(lostItem);
+              failedBucketPartial = saved.incomplete || failedBucketPartial;
+              if (!saved.persisted) remaining.push(action);
+              else newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
           } else if (images.length) {
@@ -1191,8 +1221,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 errorMessage: `${acc.lostImages.length} foto bukti hilang dari perangkat sebelum sempat terunggah`,
                 owner_user_id: getStampedOwner(action) ?? undefined,
               };
-              failedBucketPartial = (await saveFailedAttendance(lostItem)) || failedBucketPartial;
-              newlyFailedAttendance.push(lostItem);
+              const saved = await persistFailedAttendance(lostItem);
+              failedBucketPartial = saved.incomplete || failedBucketPartial;
+              if (!saved.persisted) remaining.push(action);
+              else newlyFailedAttendance.push(lostItem);
               evidenceLost += acc.lostImages.length;
             }
             if (acc.retryImages.length) {
@@ -1251,8 +1283,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
               // a count or a banner describing A's abandoned evidence.
               owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
             };
-            failedBucketPartial = (await saveFailedAttendance(failedItem)) || failedBucketPartial;
-            newlyFailedAttendance.push(failedItem);
+            const saved = await persistFailedAttendance(failedItem);
+            failedBucketPartial = saved.incomplete || failedBucketPartial;
+            if (!saved.persisted) remaining.push(action);
+            else newlyFailedAttendance.push(failedItem);
             console.error(
               `[OfflineQueue] Absensi offline gagal permanen (status ${statusCode}):`,
               action.type,
@@ -1293,8 +1327,10 @@ export async function syncQueuedRequests(): Promise<SyncOutcome> {
                 "Belum berhasil terkirim setelah 48 jam — perangkat tidak terhubung kembali ke server",
               owner_user_id: getStampedOwner(action) ?? getPayloadOwner(action) ?? undefined,
             };
-            failedBucketPartial = (await saveFailedAttendance(expiredItem)) || failedBucketPartial;
-            newlyFailedAttendance.push(expiredItem);
+            const saved = await persistFailedAttendance(expiredItem);
+            failedBucketPartial = saved.incomplete || failedBucketPartial;
+            if (!saved.persisted) remaining.push(action);
+            else newlyFailedAttendance.push(expiredItem);
             expiredAttendance++;
             console.error(
               "[OfflineQueue] Item attendance kadaluarsa 48 jam → keranjang gagal:",

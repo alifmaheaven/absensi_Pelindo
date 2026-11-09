@@ -44,3 +44,26 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Agent instruction overlays. Personal, machine-specific, and never shared.
+AGENTS.local.md
+CLAUDE.local.md
+
+# GSD planning state and the graphify knowledge graph. Large and regenerable.
+.planning/
+graphify-out/
+
+# Agent tool state.
+.agents/worktrees/
+.claude/settings.local.json
+.claude/commands/
+.claude/launch.json
+
+# Plan and scratch output some agents write to the repository root.
+.plan/
+plans/
+*.plan.md
+
+# Agent working notes: plans, briefs, and cross-agent discussion. Scratch space,
+# not durable documentation. See the `team:` section of AGENTS.md.
+team/

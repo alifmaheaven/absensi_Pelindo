@@ -14,7 +14,7 @@ import { compressImage } from "@/utils/utils";
 import { applyCameraWatermark } from "@/utils/watermark";
 import NetInfo from "@react-native-community/netinfo";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Alert,
   Linking,
@@ -59,6 +59,7 @@ export function useImagePicker(feature: FormEvidenceFeature = "form") {
   // memerahkan suite Jest yang tidak menyentuh auth).
   const userName = useAuthStore((s) => s.user?.name ?? null);
   const [images, setImages] = useState<IImage[]>([]);
+  const fallbackImageTimestamp = useRef<number | null>(null);
   const [loadingImage, setLoadingImage] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
 
@@ -302,7 +303,10 @@ export function useImagePicker(feature: FormEvidenceFeature = "form") {
 
   const localImages = images.map((img) => ({
     uri: img.uri,
-    name: img.path || img.name || `image-${Date.now()}.jpg`,
+    name:
+      img.path ||
+      img.name ||
+      `image-${(fallbackImageTimestamp.current ??= Date.now())}.jpg`,
     type: img.type || "image/jpeg",
   }));
 
